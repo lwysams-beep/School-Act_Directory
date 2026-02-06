@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, Phone, CheckSquare, Square, RefreshCcw, X, Plus, Edit2, FileSpreadsheet } from 'lucide-react';
+import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, Phone, CheckSquare, Square, RefreshCcw, X, Plus, Edit2, FileSpreadsheet, BarChart, History, TrendingUp, Filter } from 'lucide-react';
 
 // =============================================================================
 //  CONFIGURATION: FIREBASE SETUP
@@ -31,7 +31,7 @@ const mockAuth = {
 };
 
 // -----------------------------------------------------------------------------
-// 1. MASTER DATA (Default fallback)
+// 1. MASTER DATA
 // -----------------------------------------------------------------------------
 const RAW_CSV_CONTENT = `
 1A,1,CHAN CHIT HIM JAYDON,陳哲謙,M
@@ -56,7 +56,6 @@ const RAW_CSV_CONTENT = `
 6D,13,LIN HEI CHIT,連希哲,M
 `;
 
-// A=Class(0), B=No(1), C=EngName(2), D=ChiName(3), E=Sex(4)
 const parseMasterCSV = (csvText) => {
   const lines = csvText.trim().split('\n');
   return lines.map(line => {
@@ -92,6 +91,9 @@ const App = () => {
   const [activities, setActivities] = useState([]); 
   const [pendingImports, setPendingImports] = useState(PDF_IMPORT_MOCK);
   
+  // V2.6: Logs Data
+  const [queryLogs, setQueryLogs] = useState([]);
+
   // Import Form State
   const [bulkInput, setBulkInput] = useState('');
   const [importActivity, setImportActivity] = useState('無人機班');
@@ -102,12 +104,14 @@ const App = () => {
   const [tempDateInput, setTempDateInput] = useState('');
 
   // Admin UI State
-  const [adminTab, setAdminTab] = useState('import'); 
+  const [adminTab, setAdminTab] = useState('import'); // 'import' | 'manage_db' | 'stats'
   const [selectedMatchIds, setSelectedMatchIds] = useState(new Set());
-  
-  // V2.2: CSV Encoding State
   const [csvEncoding, setCsvEncoding] = useState('Big5'); 
   const fileInputRef = useRef(null); 
+
+  // Stats UI State (V2.6)
+  const [statsSort, setStatsSort] = useState('most'); // 'most', 'least'
+  const [statsActivityFilter, setStatsActivityFilter] = useState('');
 
   // DB Editing State
   const [editingId, setEditingId] = useState(null);
@@ -140,7 +144,7 @@ const App = () => {
       setCurrentView('student'); 
   };
 
-  // Logic: Master CSV Upload (V2.2 Updated with Encoding)
+  // Logic: Master CSV Upload
   const handleMasterUploadTrigger = () => {
       fileInputRef.current.click();
   };
@@ -148,12 +152,8 @@ const App = () => {
   const handleMasterFileChange = (e) => {
       const file = e.target.files[0];
       if (!file) return;
-
       const reader = new FileReader();
-      
-      // V2.2: 使用選定的編碼讀取
       reader.readAsText(file, csvEncoding);
-
       reader.onload = (event) => {
           const text = event.target.result;
           try {
@@ -162,7 +162,7 @@ const App = () => {
                   setMasterList(newMaster);
                   alert(`成功更新真理數據庫！\n共載入 ${newMaster.length} 筆學生資料。\n(使用編碼: ${csvEncoding})`);
               } else {
-                  alert(`無法識別資料。可能是編碼問題 (${csvEncoding}) 或 CSV 格式不符。\n請嘗試切換編碼後重新上載。`);
+                  alert(`無法識別資料。可能是編碼問題 (${csvEncoding}) 或 CSV 格式不符。`);
               }
           } catch (err) {
               alert("解析 CSV 失敗: " + err.message);
@@ -170,7 +170,7 @@ const App = () => {
       };
   };
 
-  // Logic: Multi-Date Management
+  // Logic: Date Management
   const handleAddDate = () => {
       if (tempDateInput && !importDates.includes(tempDateInput)) {
           const newDates = [...importDates, tempDateInput].sort();
@@ -237,7 +237,7 @@ const App = () => {
           setBulkInput('');
           alert(`成功識別並載入 ${newItems.length} 筆資料！`);
       } else {
-          alert("無法識別資料。請確保每行包含班別(如 4A) 和 中文姓名。");
+          alert("無法識別資料。");
       }
   };
 
@@ -250,7 +250,6 @@ const App = () => {
           conflicts.push({ ...item, status: 'manual_conflict' });
           return;
       }
-
       let student = masterList.find(s => s.classCode === item.rawClass && s.chiName === item.rawName);
       if (!student && item.rawClassNo !== '00') {
           student = masterList.find(s => s.classCode === item.rawClass && s.classNo === item.rawClassNo);
@@ -259,7 +258,6 @@ const App = () => {
         const potential = masterList.filter(s => s.chiName === item.rawName);
         if (potential.length === 1) student = potential[0];
       }
-
       if (student) {
         matched.push({
           ...item,
@@ -297,10 +295,7 @@ const App = () => {
 
   const handlePublish = () => {
     const toPublish = matched.filter(m => selectedMatchIds.has(m.id));
-    if (toPublish.length === 0) {
-        alert("請至少選擇一筆資料進行發布");
-        return;
-    }
+    if (toPublish.length === 0) { alert("請選擇資料"); return; }
     setActivities(prev => {
         const newIds = new Set(toPublish.map(m => m.id));
         const kept = prev.filter(p => !newIds.has(p.id));
@@ -335,7 +330,7 @@ const App = () => {
     setPendingImports(prev => prev.filter(i => i.id !== id));
   };
 
-  // Logic: Database Management
+  // Logic: DB Management
   const handleDeleteActivity = (id) => {
       if(window.confirm('確定要刪除這筆紀錄嗎？')) {
           setActivities(prev => prev.filter(a => a.id !== id));
@@ -354,9 +349,7 @@ const App = () => {
 
   const saveEditActivity = (id) => {
       setActivities(prev => prev.map(a => {
-          if (a.id === id) {
-              return { ...a, ...editFormData };
-          }
+          if (a.id === id) return { ...a, ...editFormData };
           return a;
       }));
       setEditingId(null);
@@ -367,9 +360,26 @@ const App = () => {
       setEditFormData({});
   };
 
-  // Logic: Search
+  // Logic: Student Search (V2.6 Updated to Log Query)
   const handleStudentSearch = () => {
     const formattedClassNo = selectedClassNo.padStart(2, '0');
+    
+    // Find Student Name from Master List
+    const student = masterList.find(s => s.classCode === selectedClass && s.classNo === formattedClassNo);
+    const studentName = student ? student.chiName : '未知學生';
+
+    // 1. Log the query
+    const newLog = {
+        id: Date.now(),
+        timestamp: new Date().toLocaleString('zh-HK'),
+        class: selectedClass,
+        classNo: formattedClassNo,
+        name: studentName,
+        success: !!student
+    };
+    setQueryLogs(prev => [newLog, ...prev]);
+
+    // 2. Perform Search
     const results = activities.filter(item => 
       item.verifiedClass === selectedClass && item.verifiedClassNo === formattedClassNo
     );
@@ -518,7 +528,143 @@ const App = () => {
       </div>
   );
 
-  // Database Management Sub-View
+  // V2.6: Stats View
+  const renderStatsView = () => {
+      // 1. Calculate Activity Counts per Student
+      const studentStats = masterList.map(student => {
+          const studentActs = activities.filter(a => 
+              a.verifiedClass === student.classCode && 
+              a.verifiedClassNo === student.classNo
+          );
+          
+          // Filter by activity name if needed
+          const filteredActs = statsActivityFilter 
+              ? studentActs.filter(a => a.activity.includes(statsActivityFilter))
+              : studentActs;
+
+          return {
+              ...student,
+              count: filteredActs.length,
+              actList: filteredActs.map(a => a.activity)
+          };
+      });
+
+      // 2. Sort Logic
+      const sortedStats = [...studentStats].sort((a, b) => {
+          if (statsSort === 'most') return b.count - a.count;
+          if (statsSort === 'least') return a.count - b.count;
+          return 0;
+      });
+
+      // Filter out students with 0 activities if searching by activity
+      const displayStats = statsActivityFilter 
+          ? sortedStats.filter(s => s.count > 0)
+          : sortedStats;
+
+      return (
+          <div className="bg-white p-6 rounded-xl shadow-md min-h-[600px] flex flex-col">
+              <div className="flex justify-between items-center mb-6 border-b pb-4">
+                  <button onClick={() => setAdminTab('import')} className="flex items-center text-slate-500 hover:text-blue-600">
+                      <ArrowLeft className="mr-2" size={20} /> 返回
+                  </button>
+                  <h2 className="text-2xl font-bold text-slate-800 flex items-center">
+                      <BarChart className="mr-2 text-blue-600" /> 數據統計中心
+                  </h2>
+                  <div className="w-24"></div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-full">
+                  {/* Left: Query Logs */}
+                  <div className="flex flex-col h-full">
+                      <h3 className="font-bold text-lg text-slate-700 mb-4 flex items-center">
+                          <History className="mr-2" size={20} /> 最近查詢紀錄
+                      </h3>
+                      <div className="bg-slate-50 border rounded-xl flex-1 overflow-y-auto max-h-[500px]">
+                          <table className="w-full text-sm text-left">
+                              <thead className="bg-slate-100 text-slate-500 sticky top-0">
+                                  <tr>
+                                      <th className="p-3">時間</th>
+                                      <th className="p-3">查詢對象</th>
+                                      <th className="p-3">狀態</th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  {queryLogs.length > 0 ? queryLogs.map((log, i) => (
+                                      <tr key={i} className="border-b last:border-0 hover:bg-white">
+                                          <td className="p-3 text-slate-500 text-xs">{log.timestamp}</td>
+                                          <td className="p-3 font-bold text-slate-700">{log.class} ({log.classNo}) {log.name}</td>
+                                          <td className="p-3">
+                                              {log.success ? <span className="text-green-600 text-xs bg-green-100 px-2 py-1 rounded">成功</span> : <span className="text-red-500 text-xs">失敗</span>}
+                                          </td>
+                                      </tr>
+                                  )) : (
+                                      <tr><td colSpan="3" className="p-8 text-center text-slate-400">暫無查詢紀錄</td></tr>
+                                  )}
+                              </tbody>
+                          </table>
+                      </div>
+                  </div>
+
+                  {/* Right: Activity Stats */}
+                  <div className="flex flex-col h-full">
+                      <h3 className="font-bold text-lg text-slate-700 mb-4 flex items-center">
+                          <TrendingUp className="mr-2" size={20} /> 全校活動統計
+                      </h3>
+                      
+                      <div className="bg-blue-50 p-4 rounded-xl mb-4 space-y-3">
+                          <div className="flex gap-2">
+                              <button onClick={() => setStatsSort('most')} className={`flex-1 py-1 text-xs rounded font-bold ${statsSort === 'most' ? 'bg-blue-600 text-white' : 'bg-white text-blue-600 border border-blue-200'}`}>最多活動</button>
+                              <button onClick={() => setStatsSort('least')} className={`flex-1 py-1 text-xs rounded font-bold ${statsSort === 'least' ? 'bg-blue-600 text-white' : 'bg-white text-blue-600 border border-blue-200'}`}>最少活動</button>
+                          </div>
+                          <div className="flex items-center bg-white border border-blue-200 rounded px-2">
+                              <Filter size={14} className="text-blue-400 mr-2" />
+                              <input 
+                                  type="text" 
+                                  placeholder="以活動名稱搜尋 (如: 無人機)" 
+                                  className="w-full py-2 text-sm outline-none"
+                                  value={statsActivityFilter}
+                                  onChange={(e) => setStatsActivityFilter(e.target.value)}
+                              />
+                          </div>
+                      </div>
+
+                      <div className="bg-white border rounded-xl flex-1 overflow-y-auto max-h-[400px]">
+                          <table className="w-full text-sm text-left">
+                              <thead className="bg-slate-100 text-slate-500 sticky top-0">
+                                  <tr>
+                                      <th className="p-3">排名</th>
+                                      <th className="p-3">學生</th>
+                                      <th className="p-3 text-center">數量</th>
+                                      <th className="p-3">參與活動</th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  {displayStats.map((s, i) => (
+                                      <tr key={s.key} className="border-b hover:bg-slate-50">
+                                          <td className="p-3 text-slate-400 font-mono">{i + 1}</td>
+                                          <td className="p-3">
+                                              <div className="font-bold text-slate-700">{s.classCode} ({s.classNo})</div>
+                                              <div className="text-xs text-slate-500">{s.chiName}</div>
+                                          </td>
+                                          <td className="p-3 text-center">
+                                              <span className={`inline-block w-8 h-8 leading-8 rounded-full font-bold ${s.count > 0 ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'}`}>
+                                                  {s.count}
+                                              </span>
+                                          </td>
+                                          <td className="p-3 text-xs text-slate-500">
+                                              {s.actList.join(', ')}
+                                          </td>
+                                      </tr>
+                                  ))}
+                              </tbody>
+                          </table>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      );
+  };
+
   const renderDatabaseManager = () => (
       <div className="bg-white p-6 rounded-xl shadow-md min-h-[500px]">
           <div className="flex justify-between items-center mb-6">
@@ -610,7 +756,8 @@ const App = () => {
             />
 
             {/* Toggle Views */}
-            {adminTab === 'manage_db' ? renderDatabaseManager() : (
+            {adminTab === 'manage_db' ? renderDatabaseManager() : 
+             adminTab === 'stats' ? renderStatsView() : (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Left: Reconcile Action Area */}
                 <div className="lg:col-span-2 space-y-6">
@@ -708,20 +855,23 @@ const App = () => {
 
                 {/* Right Side: Import Panel */}
                 <div className="space-y-6">
-                    <div className="bg-slate-800 text-slate-300 p-6 rounded-xl shadow-md cursor-pointer hover:bg-slate-750 transition border border-slate-700 group" onClick={() => setAdminTab('manage_db')}>
+                    <div className="bg-slate-800 text-slate-300 p-6 rounded-xl shadow-md border border-slate-700">
                         <div className="flex justify-between items-center mb-4">
-                            <h3 className="font-bold text-white flex items-center group-hover:text-blue-300 transition"><Database className="mr-2" size={16}/> 數據庫狀態</h3>
-                            <span className="text-xs bg-blue-600 text-white px-2 py-1 rounded">點擊管理</span>
+                            <h3 className="font-bold text-white flex items-center"><Database className="mr-2" size={16}/> 數據庫狀態</h3>
                         </div>
-                        <div className="space-y-4">
-                            <div className="bg-slate-700 p-3 rounded-lg flex justify-between items-center">
-                                <div className="text-xs text-slate-400 uppercase">已發布活動</div>
-                                <div className="text-2xl font-bold text-white">{activities.length}</div>
-                            </div>
-                            <div className="bg-slate-700 p-3 rounded-lg flex justify-between items-center">
-                                <div className="text-xs text-slate-400 uppercase">學生總數</div>
-                                <div className="text-2xl font-bold text-white">{masterList.length}</div>
-                            </div>
+                        <div className="space-y-3">
+                            {/* DB Management Button */}
+                            <button onClick={() => setAdminTab('manage_db')} className="w-full bg-slate-700 hover:bg-slate-600 text-white p-3 rounded-lg text-sm font-bold flex items-center justify-between transition">
+                                <span>管理活動資料庫</span>
+                                <span className="bg-blue-600 text-xs px-2 py-1 rounded">{activities.length}</span>
+                            </button>
+                            {/* Statistics Button (V2.6) */}
+                            <button onClick={() => setAdminTab('stats')} className="w-full bg-purple-700 hover:bg-purple-600 text-white p-3 rounded-lg text-sm font-bold flex items-center justify-center transition shadow-lg">
+                                <BarChart className="mr-2" size={16} /> 查看統計報表
+                            </button>
+                        </div>
+                        <div className="mt-4 pt-4 border-t border-slate-700 text-xs text-slate-500 text-center">
+                            學生總數: {masterList.length}
                         </div>
                     </div>
 
