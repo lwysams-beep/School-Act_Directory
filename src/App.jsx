@@ -4,16 +4,21 @@ import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, Arrow
 // =============================================================================
 //  CONFIGURATION: FIREBASE SETUP
 // =============================================================================
-const USE_FIREBASE = false; 
+const USE_FIREBASE = true; 
 
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "your-project.firebaseapp.com",
-  projectId: "your-project",
-  storageBucket: "your-project.appspot.com",
-  messagingSenderId: "123",
-  appId: "1:123:web:123"
+    apiKey: "AIzaSyDXZClMosztnJBd0CK6cpS6PPtJTTpgDkQ",
+    authDomain: "school-act-directory.firebaseapp.com",
+    projectId: "school-act-directory",
+    storageBucket: "school-act-directory.firebasestorage.app",
+    messagingSenderId: "351532359820",
+    appId: "1:351532359820:web:29a353f54826ac80a41ba9",
+    measurementId: "G-K5G20KH0RH"
 };
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
 
 // Mock Auth SDK
 const mockAuth = {
