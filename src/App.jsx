@@ -6,6 +6,10 @@ import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, Arrow
 // =============================================================================
 const USE_FIREBASE = true; 
 
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+
 const firebaseConfig = {
     apiKey: "AIzaSyDXZClMosztnJBd0CK6cpS6PPtJTTpgDkQ",
     authDomain: "school-act-directory.firebaseapp.com",
