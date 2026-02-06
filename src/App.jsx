@@ -33,7 +33,6 @@ const mockAuth = {
 // -----------------------------------------------------------------------------
 // 1. MASTER DATA (Default fallback)
 // -----------------------------------------------------------------------------
-// Mock CSV content reflecting the structure: Class, ClassNo, EngName, ChiName, Sex
 const RAW_CSV_CONTENT = `
 1A,1,CHAN CHIT HIM JAYDON,陳哲謙,M
 1A,2,CHAN HAU MAN,陳孝敏,F
@@ -57,19 +56,18 @@ const RAW_CSV_CONTENT = `
 6D,13,LIN HEI CHIT,連希哲,M
 `;
 
-// V2.1 Fix: Updated Column Mapping
 // A=Class(0), B=No(1), C=EngName(2), D=ChiName(3), E=Sex(4)
 const parseMasterCSV = (csvText) => {
   const lines = csvText.trim().split('\n');
   return lines.map(line => {
     const cols = line.split(',');
-    if (cols.length < 4) return null; // At least up to Chinese Name
+    if (cols.length < 4) return null; 
     return {
-      classCode: cols[0].trim(), // Col A
-      classNo: cols[1].trim().padStart(2, '0'), // Col B
-      engName: cols[2].trim(), // Col C
-      chiName: cols[3].trim(), // Col D
-      sex: cols[4] ? cols[4].trim() : '', // Col E
+      classCode: cols[0].trim(), 
+      classNo: cols[1].trim().padStart(2, '0'), 
+      engName: cols[2].trim(), 
+      chiName: cols[3].trim(), 
+      sex: cols[4] ? cols[4].trim() : '', 
       key: `${cols[0].trim()}-${cols[3].trim()}` 
     };
   }).filter(item => item !== null);
@@ -106,6 +104,9 @@ const App = () => {
   // Admin UI State
   const [adminTab, setAdminTab] = useState('import'); 
   const [selectedMatchIds, setSelectedMatchIds] = useState(new Set());
+  
+  // V2.2: CSV Encoding State
+  const [csvEncoding, setCsvEncoding] = useState('Big5'); 
   const fileInputRef = useRef(null); 
 
   // DB Editing State
@@ -139,7 +140,7 @@ const App = () => {
       setCurrentView('student'); 
   };
 
-  // Logic: Master CSV Upload
+  // Logic: Master CSV Upload (V2.2 Updated with Encoding)
   const handleMasterUploadTrigger = () => {
       fileInputRef.current.click();
   };
@@ -149,21 +150,24 @@ const App = () => {
       if (!file) return;
 
       const reader = new FileReader();
+      
+      // V2.2: 使用選定的編碼讀取
+      reader.readAsText(file, csvEncoding);
+
       reader.onload = (event) => {
           const text = event.target.result;
           try {
               const newMaster = parseMasterCSV(text);
               if (newMaster.length > 0) {
                   setMasterList(newMaster);
-                  alert(`成功更新真理數據庫！共載入 ${newMaster.length} 筆學生資料。\n(請確認 CSV 欄位順序: 班別,學號,英文名,中文名,性別)`);
+                  alert(`成功更新真理數據庫！\n共載入 ${newMaster.length} 筆學生資料。\n(使用編碼: ${csvEncoding})`);
               } else {
-                  alert("CSV 格式無法識別或無資料。");
+                  alert(`無法識別資料。可能是編碼問題 (${csvEncoding}) 或 CSV 格式不符。\n請嘗試切換編碼後重新上載。`);
               }
           } catch (err) {
               alert("解析 CSV 失敗: " + err.message);
           }
       };
-      reader.readAsText(file);
   };
 
   // Logic: Multi-Date Management
@@ -719,6 +723,18 @@ const App = () => {
                                 <div className="text-2xl font-bold text-white">{masterList.length}</div>
                             </div>
                         </div>
+                    </div>
+
+                    {/* V2.2: Encoding Selector */}
+                    <div className="flex justify-end mb-1">
+                        <select 
+                            className="text-xs p-1 border border-slate-300 rounded bg-white text-slate-600 outline-none focus:ring-1 focus:ring-emerald-500"
+                            value={csvEncoding}
+                            onChange={(e) => setCsvEncoding(e.target.value)}
+                        >
+                            <option value="Big5">CSV 編碼: Big5 (解決 Excel 亂碼)</option>
+                            <option value="UTF-8">CSV 編碼: UTF-8 (通用格式)</option>
+                        </select>
                     </div>
 
                     {/* V2.0: Master CSV Upload Button */}
