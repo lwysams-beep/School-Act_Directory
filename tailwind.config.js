@@ -11,7 +11,7 @@ export default {
       },
       keyframes: {
         'pulse-border': {
-          '0%, 100%': { borderColor: 'rgba(239, 68, 68, 1)' },
+          '0%, 100%': { borderColor: 'rgba(239, 68, 68, 1)' }, // red-500
           '50%': { borderColor: 'rgba(239, 68, 68, 0.2)' },
         }
       }
