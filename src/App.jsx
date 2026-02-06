@@ -95,19 +95,26 @@ const PDF_IMPORT_MOCK = [
 
 const App = () => {
   const [currentView, setCurrentView] = useState('student'); 
+  
+  // Auth
   const [user, setUser] = useState(null); 
   const [authLoading, setAuthLoading] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPwd, setLoginPwd] = useState('');
+  
+  // Data
   const [masterList, setMasterList] = useState(MASTER_DB);
   const [activities, setActivities] = useState([]); 
   const [pendingImports, setPendingImports] = useState(PDF_IMPORT_MOCK);
+  
+  // UI
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedClass, setSelectedClass] = useState('1A');
   const [selectedClassNo, setSelectedClassNo] = useState('');
   const [studentResult, setStudentResult] = useState(null);
   const [todayDay, setTodayDay] = useState(new Date().getDay());
 
+  // Logic: Auth
   const handleLogin = async (e) => {
       e.preventDefault();
       setAuthLoading(true);
@@ -128,6 +135,7 @@ const App = () => {
       setCurrentView('student'); 
   };
 
+  // Logic: Reconciliation
   const { matched, conflicts } = useMemo(() => {
     const matched = [];
     const conflicts = [];
@@ -196,7 +204,11 @@ const App = () => {
     item.activity?.includes(searchTerm)
   );
 
-  const TopNavBar = () => (
+  // -------------------------------------------------------------------------
+  // Render Functions (Fix: Changed from Components to Render Functions to avoid re-mount)
+  // -------------------------------------------------------------------------
+
+  const renderTopNavBar = () => (
     <div className="bg-slate-900 text-white p-3 flex justify-between items-center shadow-md sticky top-0 z-50">
         <div className="flex items-center space-x-2 cursor-pointer" onClick={() => setCurrentView('student')}>
             <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center font-bold text-sm">佛</div>
@@ -216,7 +228,7 @@ const App = () => {
     </div>
   );
 
-  const StudentView = () => (
+  const renderStudentView = () => (
     <div className="flex-1 flex flex-col bg-gradient-to-b from-orange-50 to-white">
         <div className="flex-1 flex flex-col items-center justify-center p-4">
           <div className="w-full max-w-lg bg-white p-8 rounded-3xl shadow-xl border border-orange-100">
@@ -256,7 +268,7 @@ const App = () => {
     </div>
   );
 
-  const StaffView = () => (
+  const renderStaffView = () => (
       <div className="min-h-screen bg-slate-50 p-6 flex-1">
         <div className="max-w-5xl mx-auto">
             <div className="mb-6">
@@ -299,7 +311,7 @@ const App = () => {
       </div>
   );
 
-  const LoginView = () => (
+  const renderLoginView = () => (
       <div className="flex-1 flex flex-col items-center justify-center bg-slate-100 p-6">
           <div className="bg-white p-8 rounded-2xl shadow-lg w-full max-w-md border border-slate-200">
               <div className="text-center mb-8">
@@ -325,7 +337,7 @@ const App = () => {
       </div>
   );
 
-  const AdminView = () => (
+  const renderAdminView = () => (
       <div className="min-h-screen bg-slate-100 p-6 flex-1">
         <div className="max-w-7xl mx-auto">
             <div className="flex justify-between items-center mb-6">
@@ -341,6 +353,7 @@ const App = () => {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                <div className="lg:col-span-2 space-y-6">
+                  {/* Verified Block */}
                   <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                      <div className="flex justify-between items-center mb-4">
                         <h3 className="font-bold text-lg text-green-700 flex items-center"><CheckCircle className="mr-2" size={20} /> 等待發布 ({matched.length})</h3>
@@ -386,6 +399,7 @@ const App = () => {
                      </div>
                   </div>
 
+                  {/* Conflict Block */}
                   {conflicts.length > 0 && (
                       <div className="bg-white p-6 rounded-xl shadow-md border-l-4 border-red-500 animate-pulse-border">
                          <h3 className="font-bold text-lg text-red-700 flex items-center mb-4"><AlertTriangle className="mr-2" /> 異常資料需修正 ({conflicts.length})</h3>
@@ -434,7 +448,7 @@ const App = () => {
       </div>
   );
 
-  const KioskResultView = () => {
+  const renderKioskResultView = () => {
      const days = [ { id: 1, label: '一' }, { id: 2, label: '二' }, { id: 3, label: '三' }, { id: 4, label: '四' }, { id: 5, label: '五' } ];
      return (
         <div className="flex-1 bg-slate-800 flex flex-col font-sans text-white">
@@ -504,11 +518,11 @@ const App = () => {
 
   return (
     <div className="min-h-screen flex flex-col font-sans">
-      <TopNavBar />
-      {currentView === 'student' && <StudentView />}
-      {currentView === 'staff' && <StaffView />}
-      {currentView === 'admin' && (user ? <AdminView /> : <LoginView />)}
-      {currentView === 'kiosk_result' && <KioskResultView />}
+      {renderTopNavBar()}
+      {currentView === 'student' && renderStudentView()}
+      {currentView === 'staff' && renderStaffView()}
+      {currentView === 'admin' && (user ? renderAdminView() : renderLoginView())}
+      {currentView === 'kiosk_result' && renderKioskResultView()}
     </div>
   );
 };
