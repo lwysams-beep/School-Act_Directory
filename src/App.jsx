@@ -839,66 +839,117 @@ const App = () => {
   );
 
   const renderKioskResultView = () => {
-     const days = [ { id: 1, label: '一' }, { id: 2, label: '二' }, { id: 3, label: '三' }, { id: 4, label: '四' }, { id: 5, label: '五' } ];
+     // V2.4: Generate next 8 days starting from today
+     const upcomingDays = [];
+     const today = new Date();
+     const weekDayNames = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+     // V2.5: Add English names
+     const weekDayEnNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+     for (let i = 0; i < 8; i++) { 
+         const d = new Date(today);
+         d.setDate(today.getDate() + i);
+         // Format date carefully to avoid timezone issues
+         const year = d.getFullYear();
+         const month = String(d.getMonth() + 1).padStart(2, '0');
+         const day = String(d.getDate()).padStart(2, '0');
+         const localDateString = `${year}-${month}-${day}`;
+         // V2.5: Display format DD/MM/YYYY
+         const displayDate = `(${day}/${month}/${year})`;
+         
+         upcomingDays.push({
+             dayId: d.getDay(),
+             dateString: localDateString,
+             // V2.5: Updated label format: 星期X Sat (DD/MM/YYYY)
+             label: i === 0 ? '今天' : weekDayNames[d.getDay()],
+             fullLabel: `${weekDayNames[d.getDay()]} ${weekDayEnNames[d.getDay()]} ${displayDate}`
+         });
+     }
+
+     // V2.5: Find student name from Master List
+     const currentStudent = masterList.find(s => s.classCode === selectedClass && s.classNo === selectedClassNo.padStart(2, '0'));
+
      return (
-        <div className="flex-1 bg-slate-800 flex flex-col font-sans text-white">
-            <div className="p-4 flex items-center justify-between bg-slate-900 shadow-md">
+        <div className="flex-1 bg-slate-800 flex flex-col font-sans text-white h-screen overflow-hidden">
+            {/* Header */}
+            <div className="p-4 flex items-center justify-between bg-slate-900 shadow-md shrink-0">
                 <h2 className="text-xl font-bold text-slate-300">活動日程表</h2>
-                <button onClick={() => { setCurrentView('student'); setStudentResult(null); setSelectedClassNo(''); }} className="bg-white/10 px-4 py-2 rounded-full flex items-center text-sm backdrop-blur-md hover:bg-white/20 transition"><ArrowLeft size={20} className="mr-1" /> 返回</button>
+                <button onClick={() => { setCurrentView('student'); setStudentResult(null); setSelectedClassNo(''); }} className="bg-white/10 px-4 py-2 rounded-full flex items-center text-sm backdrop-blur-md hover:bg-white/20 transition">
+                    <ArrowLeft size={20} className="mr-1" /> 返回
+                </button>
             </div>
-            <div className="px-8 pt-6 pb-2">
-                <h1 className="text-4xl font-bold">{selectedClass}班 ({selectedClassNo})號</h1>
-                <p className="text-slate-400 mt-1">本週活動概覽</p>
+
+            {/* Student Info - V2.5 Updated with Name */}
+            <div className="px-8 pt-6 pb-2 shrink-0">
+                <h1 className="text-4xl font-bold">
+                    {selectedClass}班 ({selectedClassNo})號 <span className="text-orange-400">{currentStudent ? currentStudent.chiName : ''}</span>
+                </h1>
+                <p className="text-slate-400 mt-1">未來一週活動概覽</p>
             </div>
-            <div className="px-6 py-4">
-                <div className="grid grid-cols-5 gap-2">
-                    {days.map((day) => {
-                    const isToday = todayDay === day.id;
-                    const hasAct = studentResult && studentResult.some(act => act.dayIds && act.dayIds.includes(day.id));
-                    return (
-                        <div key={day.id} className={`flex flex-col items-center p-3 rounded-xl border-2 transition-all ${isToday ? 'bg-green-900/40 border-green-500 shadow-[0_0_15px_rgba(34,197,94,0.5)]' : 'bg-slate-700/50 border-slate-600'}`}>
-                            <span className={`text-sm mb-1 ${isToday ? 'text-green-300' : 'text-slate-400'}`}>星期</span>
-                            <span className={`text-2xl font-bold ${isToday ? 'text-white' : 'text-slate-300'}`}>{day.label}</span>
-                            <div className={`mt-2 w-3 h-3 rounded-full ${isToday ? 'bg-green-500 animate-pulse' : 'bg-slate-600'}`} />
-                            {hasAct && <div className="mt-2 px-2 py-0.5 bg-orange-500 text-[10px] rounded-full text-white">有活動</div>}
-                        </div>
-                    );
-                    })}
-                </div>
-            </div>
+
+            {/* Scrollable Content Area */}
             <div className="flex-1 px-8 pb-8 overflow-y-auto">
-                {studentResult && studentResult.length > 0 ? (
-                    <div className="space-y-4 mt-2">
-                    <h3 className="text-slate-400 text-sm uppercase tracking-widest mb-4 border-b border-slate-700 pb-2">詳細列表</h3>
-                    {studentResult.map((item, idx) => {
-                        const isTodayActivity = item.dayIds && item.dayIds.includes(todayDay);
+                <div className="space-y-6 mt-4">
+                    {upcomingDays.map((dayItem) => {
+                        const dayActivities = studentResult ? studentResult.filter(act => {
+                            // Check if activity has specific dates
+                            if (act.specificDates && act.specificDates.length > 0) {
+                                return act.specificDates.includes(dayItem.dateString);
+                            }
+                            // Otherwise check recurring day
+                            return act.dayIds && act.dayIds.includes(dayItem.dayId);
+                        }) : [];
+
+                        const isToday = dayItem.label === '今天';
+
                         return (
-                        <div key={idx} className={`bg-white text-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden ${isTodayActivity ? 'border-4 border-green-500 ring-4 ring-green-500/20' : ''}`}>
-                            {isTodayActivity && <div className="absolute top-0 right-0 bg-green-500 text-white px-3 py-1 rounded-bl-xl text-xs font-bold flex items-center"><CheckCircle size={12} className="mr-1" /> 今天</div>}
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <div className="text-orange-600 font-bold text-sm mb-1">{item.dateText}</div>
-                                    <h3 className="text-2xl font-bold mb-2 text-slate-900">{item.activity}</h3>
+                            <div key={dayItem.dateString} className={`rounded-3xl p-6 transition-all ${isToday ? 'bg-slate-700/80 ring-2 ring-green-500 shadow-[0_0_20px_rgba(34,197,94,0.3)]' : 'bg-slate-700/30'}`}>
+                                {/* Day Header */}
+                                <div className="flex items-center mb-4 border-b border-slate-600 pb-2">
+                                    <div className={`text-2xl font-bold ${isToday ? 'text-green-400' : 'text-slate-200'}`}>
+                                        {dayItem.fullLabel}
+                                    </div>
+                                    {isToday && <span className="ml-3 bg-green-600 text-white text-xs px-2 py-1 rounded-full animate-pulse">Today</span>}
+                                </div>
+
+                                {/* Activities List for this Day */}
+                                <div className="space-y-4">
+                                    {dayActivities.length > 0 ? (
+                                        dayActivities.map((item, idx) => (
+                                            <div key={`${item.id}-${idx}`} className="bg-white text-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden">
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <h3 className="text-2xl font-bold text-slate-900">{item.activity}</h3>
+                                                    {/* V2.5: Removed date string from right side since it's in header now */}
+                                                </div>
+                                                
+                                                <div className="grid grid-cols-2 gap-4 mt-3">
+                                                    <div className="flex items-center text-slate-600 bg-slate-100 p-2 rounded-lg">
+                                                        <Clock size={20} className="mr-2 text-orange-500" />
+                                                        <span className="font-bold">{item.time}</span>
+                                                    </div>
+                                                    <div className="flex items-center text-blue-800 bg-blue-50 p-2 rounded-lg">
+                                                        <MapPin size={20} className="mr-2 text-blue-500" />
+                                                        <span className="font-bold">{item.location}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="text-slate-500 text-sm italic py-4 text-center border border-dashed border-slate-600 rounded-xl">
+                                            沒有安排活動
+                                        </div>
+                                    )}
                                 </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-4 mt-2">
-                                <div className="flex items-center text-slate-600 bg-slate-100 p-2 rounded-lg">
-                                    <Clock size={20} className="mr-2 text-orange-500" />
-                                    <span className="font-bold">{item.time}</span>
-                                </div>
-                                <div className="flex items-center text-blue-800 bg-blue-50 p-2 rounded-lg">
-                                    <MapPin size={20} className="mr-2 text-blue-500" />
-                                    <span className="font-bold">{item.location}</span>
-                                </div>
-                            </div>
-                        </div>
                         );
                     })}
-                    </div>
-                ) : (
-                    <div className="flex flex-col items-center justify-center h-40 mt-8 text-slate-400 bg-slate-700/30 rounded-2xl border border-dashed border-slate-600">
-                    <Calendar size={48} className="mb-2 opacity-50" />
-                    <p className="text-lg">找不到相關活動</p>
+                </div>
+                
+                {/* Fallback if user not found in master list either */}
+                {(!studentResult) && (
+                     <div className="flex flex-col items-center justify-center h-40 mt-8 text-slate-400 bg-slate-700/30 rounded-2xl border border-dashed border-slate-600">
+                        <Calendar size={48} className="mb-2 opacity-50" />
+                        <p className="text-lg">請輸入班別及學號查詢</p>
                     </div>
                 )}
             </div>
