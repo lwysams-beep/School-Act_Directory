@@ -1,11 +1,10 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, Phone, CheckSquare, Square, RefreshCcw, X, Plus, Edit2, FileSpreadsheet, BarChart, History, TrendingUp, Filter, Cloud } from 'lucide-react';
+import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, Phone, CheckSquare, Square, RefreshCcw, X, Plus, Edit2, FileSpreadsheet, BarChart, History, TrendingUp, Filter, Cloud, UserX } from 'lucide-react';
 
 // =============================================================================
 //  FIREBASE IMPORTS & CONFIGURATION
 // =============================================================================
 import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
 import { 
   getAuth, 
   signInWithEmailAndPassword, 
@@ -28,19 +27,16 @@ import {
 
 // *** 請在此填入你的真實 Firebase Config ***
 const firebaseConfig = {
-    apiKey: "AIzaSyDXZClMosztnJBd0CK6cpS6PPtJTTpgDkQ",
-    authDomain: "school-act-directory.firebaseapp.com",
-    projectId: "school-act-directory",
-    storageBucket: "school-act-directory.firebasestorage.app",
-    messagingSenderId: "351532359820",
-    appId: "1:351532359820:web:29a353f54826ac80a41ba9",
-    measurementId: "G-K5G20KH0RH"
-  };
-  
+  apiKey: "YOUR_API_KEY_HERE",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
@@ -59,7 +55,7 @@ const parseMasterCSV = (csvText) => {
       engName: cols[2].trim(), 
       chiName: cols[3].trim(), 
       sex: cols[4] ? cols[4].trim() : '', 
-      key: `${cols[0].trim()}-${cols[3].trim()}` 
+      key: `${cols[0].trim()}-${cols[3].trim()}` // Unique Key for internal use
     };
   }).filter(item => item !== null);
 };
@@ -69,12 +65,12 @@ const App = () => {
   
   // Auth State
   const [user, setUser] = useState(null); 
-  const [authLoading, setAuthLoading] = useState(true); // Initial loading
+  const [authLoading, setAuthLoading] = useState(true); 
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPwd, setLoginPwd] = useState('');
   
   // Data State
-  const [masterList, setMasterList] = useState([]); // Empty initially, fetched from DB
+  const [masterList, setMasterList] = useState([]); 
   const [activities, setActivities] = useState([]); 
   const [pendingImports, setPendingImports] = useState([]);
   const [queryLogs, setQueryLogs] = useState([]);
@@ -113,10 +109,8 @@ const App = () => {
   const [todayDay, setTodayDay] = useState(new Date().getDay());
 
   // ---------------------------------------------------------------------------
-  // FIREBASE LISTENERS (Real-time Sync)
+  // FIREBASE LISTENERS
   // ---------------------------------------------------------------------------
-  
-  // 1. Auth Listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
@@ -125,9 +119,8 @@ const App = () => {
     return () => unsubscribe();
   }, []);
 
-  // 2. Activities Listener (Sync 'activities' collection)
   useEffect(() => {
-    const q = query(collection(db, "activities"), orderBy("time")); // Optional sort
+    const q = query(collection(db, "activities"), orderBy("time")); 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const acts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setActivities(acts);
@@ -135,7 +128,6 @@ const App = () => {
     return () => unsubscribe();
   }, []);
 
-  // 3. Master Data Fetcher (Single Doc Approach)
   useEffect(() => {
     const fetchMaster = async () => {
         setIsMasterLoading(true);
@@ -144,11 +136,7 @@ const App = () => {
             const docSnap = await getDoc(docRef);
             if (docSnap.exists()) {
                 const data = docSnap.data();
-                // We store the list as a JSON string to avoid array limits if huge, 
-                // or just a huge array field. Let's assume array field 'students'
-                if (data.students) {
-                    setMasterList(data.students);
-                }
+                if (data.students) setMasterList(data.students);
             }
         } catch (error) {
             console.error("Error fetching master list:", error);
@@ -179,29 +167,23 @@ const App = () => {
   };
 
   // ---------------------------------------------------------------------------
-  // MASTER DATA UPLOAD (Cloud Sync)
+  // MASTER DATA ACTIONS (Upload & Delete)
   // ---------------------------------------------------------------------------
-  const handleMasterUploadTrigger = () => {
-      fileInputRef.current.click();
-  };
+  const handleMasterUploadTrigger = () => fileInputRef.current.click();
 
   const handleMasterFileChange = (e) => {
       const file = e.target.files[0];
       if (!file) return;
-
       const reader = new FileReader();
-      reader.readAsText(file, csvEncoding); // Use selected encoding
-
+      reader.readAsText(file, csvEncoding);
       reader.onload = async (event) => {
           const text = event.target.result;
           try {
               const newMaster = parseMasterCSV(text);
               if (newMaster.length > 0) {
-                  // --- FIREBASE SAVE LOGIC ---
                   if (window.confirm(`解析成功！共 ${newMaster.length} 筆資料。\n確定要上傳至雲端資料庫嗎？(這將覆蓋舊有名單)`)) {
                       setIsMasterLoading(true);
                       try {
-                          // Save as a single document to ensure consistency and speed
                           await setDoc(doc(db, "settings", "master_list"), {
                               students: newMaster,
                               updatedAt: new Date().toISOString(),
@@ -224,11 +206,34 @@ const App = () => {
       };
   };
 
+  // V2.8: Delete Student from Master List
+  const handleDeleteStudent = async (studentToDelete) => {
+      if (!window.confirm(`確定要將學生移除嗎？\n\n${studentToDelete.classCode} (${studentToDelete.classNo}) ${studentToDelete.chiName}\n\n注意：這將會從「真理數據庫」中永久刪除此學生。`)) return;
+
+      setIsMasterLoading(true);
+      try {
+          const newMasterList = masterList.filter(s => s.key !== studentToDelete.key);
+          
+          // Sync to Firebase
+          await setDoc(doc(db, "settings", "master_list"), {
+              students: newMasterList,
+              updatedAt: new Date().toISOString(),
+              updatedBy: user.email
+          });
+          
+          setMasterList(newMasterList);
+          // Optional: alert("已移除學生");
+      } catch (error) {
+          alert("刪除失敗: " + error.message);
+      } finally {
+          setIsMasterLoading(false);
+      }
+  };
+
   // ---------------------------------------------------------------------------
   // DATA LOGIC (Import / Reconcile)
   // ---------------------------------------------------------------------------
   
-  // ... (Date Logic same as V2.5) ...
   const handleAddDate = () => {
       if (tempDateInput && !importDates.includes(tempDateInput)) {
           const newDates = [...importDates, tempDateInput].sort();
@@ -240,10 +245,18 @@ const App = () => {
       }
       setTempDateInput(''); 
   };
+
+  // V2.8: Handle Enter key on Date Input
+  const handleDateInputKeyDown = (e) => {
+      if (e.key === 'Enter') {
+          e.preventDefault();
+          handleAddDate();
+      }
+  };
+
   const handleRemoveDate = (d) => setImportDates(prev => prev.filter(x => x !== d));
   const handleClearDates = () => setImportDates([]);
 
-  // ... (Bulk Import Parsing Logic same as V2.5) ...
   const handleBulkImport = () => {
       const lines = bulkInput.trim().split('\n');
       const newItems = [];
@@ -263,7 +276,7 @@ const App = () => {
 
           if (classMatch && nameMatch) {
               newItems.push({
-                  id: Date.now() + Math.random(), // Temporary ID for pending
+                  id: Date.now() + Math.random(),
                   rawName: nameMatch[0],
                   rawClass: classMatch[1],
                   rawClassNo: classMatch[2] ? classMatch[2].padStart(2, '0') : '00', 
@@ -288,7 +301,6 @@ const App = () => {
       }
   };
 
-  // ... (Reconciliation Logic same as V2.5) ...
   const { matched, conflicts } = useMemo(() => {
     const matched = [];
     const conflicts = [];
@@ -316,28 +328,17 @@ const App = () => {
   };
   const toggleSelectAll = () => setSelectedMatchIds(selectedMatchIds.size === matched.length ? new Set() : new Set(matched.map(m => m.id)));
 
-  // --- FIREBASE PUBLISH LOGIC ---
   const handlePublish = async () => {
     const toPublish = matched.filter(m => selectedMatchIds.has(m.id));
     if (toPublish.length === 0) return alert("請選擇資料");
-
     try {
-        // Write to Firestore 'activities' collection
         const batchPromises = toPublish.map(item => {
-            // Remove temporary ID and UI flags before saving
             const { id, status, forceConflict, ...dataToSave } = item;
-            return addDoc(collection(db, "activities"), {
-                ...dataToSave,
-                createdAt: new Date().toISOString()
-            });
+            return addDoc(collection(db, "activities"), { ...dataToSave, createdAt: new Date().toISOString() });
         });
-
         await Promise.all(batchPromises);
-
-        // Clear from pending
         const publishedIds = new Set(toPublish.map(m => m.id));
         setPendingImports(prev => prev.filter(p => !publishedIds.has(p.id)));
-        
         alert(`成功發布 ${toPublish.length} 筆資料到雲端！`);
     } catch (error) {
         alert("發布失敗: " + error.message);
@@ -345,24 +346,15 @@ const App = () => {
   };
 
   const handleManualConflict = (id) => setPendingImports(prev => prev.map(i => i.id === id ? { ...i, forceConflict: true } : i));
+  
   const handleResolveConflict = (item, correctStudent) => {
-    const fixedItem = { ...item, verifiedName: correctStudent.chiName, verifiedClass: correctStudent.classCode, verifiedClassNo: correctStudent.classNo, status: 'verified', forceConflict: false };
-    // Move to matched by updating state (conceptually, it re-runs through memo)
-    // Actually we just update the pending item to match
-    // Simplified: Just add to pendingImports with corrected data? No, tricky.
-    // Easier: Add directly to activities (publish) OR update pending item data to match logic.
-    // Let's force publish the resolved one directly to DB for simplicity in this flow?
-    // Or better: update the raw data in pending to match the selected student so it auto-matches.
     setPendingImports(prev => prev.map(i => i.id === item.id ? { ...i, rawClass: correctStudent.classCode, rawName: correctStudent.chiName, rawClassNo: correctStudent.classNo, forceConflict: false } : i));
   };
   const handleDeleteImport = (id) => setPendingImports(prev => prev.filter(i => i.id !== id));
 
-  // --- FIREBASE DB MANAGEMENT ---
   const handleDeleteActivity = async (id) => {
       if(window.confirm('確定要刪除這筆紀錄嗎？')) {
-          try {
-              await deleteDoc(doc(db, "activities", id));
-          } catch(e) { alert("刪除失敗:" + e.message) }
+          try { await deleteDoc(doc(db, "activities", id)); } catch(e) { alert("刪除失敗:" + e.message) }
       }
   };
 
@@ -379,12 +371,11 @@ const App = () => {
   };
   const cancelEdit = () => { setEditingId(null); setEditFormData({}); };
 
-  // Logic: Search & Log
   const handleStudentSearch = () => {
     const formattedClassNo = selectedClassNo.padStart(2, '0');
     const student = masterList.find(s => s.classCode === selectedClass && s.classNo === formattedClassNo);
     
-    // Log query (Local only for now, could be Firestore 'logs' collection)
+    // Log query (Local)
     const newLog = { id: Date.now(), timestamp: new Date().toLocaleString('zh-HK'), class: selectedClass, classNo: formattedClassNo, name: student ? student.chiName : '未知', success: !!student };
     setQueryLogs(prev => [newLog, ...prev]);
 
@@ -393,13 +384,12 @@ const App = () => {
     setCurrentView('kiosk_result');
   };
 
-  // Helper for Staff View
   const filteredActivities = activities.filter(item => 
     item.verifiedName?.includes(searchTerm) || item.verifiedClass?.includes(searchTerm) || item.activity?.includes(searchTerm)
   );
 
   // -------------------------------------------------------------------------
-  // VIEWS (Simplified for brevity, same logic as V2.6)
+  // VIEWS
   // -------------------------------------------------------------------------
   const renderTopNavBar = () => (
     <div className="bg-slate-900 text-white p-3 flex justify-between items-center shadow-md sticky top-0 z-50">
@@ -417,9 +407,6 @@ const App = () => {
     </div>
   );
 
-  // ... (renderStudentView, renderStaffView, renderKioskResultView are same as before, using new data sources) ...
-  // Re-pasting the exact render functions to ensure consistency
-  
   const renderStudentView = () => (
     <div className="flex-1 flex flex-col bg-gradient-to-b from-orange-50 to-white">
         <div className="flex-1 flex flex-col items-center justify-center p-4">
@@ -463,34 +450,8 @@ const App = () => {
       </div>
   );
 
-  const renderKioskResultView = () => {
-     const upcomingDays = [];
-     const today = new Date();
-     const weekDayNames = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
-     const weekDayEnNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-     for (let i = 0; i < 8; i++) { 
-         const d = new Date(today); d.setDate(today.getDate() + i);
-         const year = d.getFullYear(); const month = String(d.getMonth() + 1).padStart(2, '0'); const day = String(d.getDate()).padStart(2, '0');
-         const localDateString = `${year}-${month}-${day}`; const displayDate = `(${day}/${month}/${year})`;
-         upcomingDays.push({ dayId: d.getDay(), dateString: localDateString, label: i === 0 ? '今天' : weekDayNames[d.getDay()], fullLabel: `${weekDayNames[d.getDay()]} ${weekDayEnNames[d.getDay()]} ${displayDate}` });
-     }
-     const currentStudent = masterList.find(s => s.classCode === selectedClass && s.classNo === selectedClassNo.padStart(2, '0'));
-
-     return (
-        <div className="flex-1 bg-slate-800 flex flex-col font-sans text-white h-screen overflow-hidden">
-            <div className="p-4 flex items-center justify-between bg-slate-900 shadow-md shrink-0"><h2 className="text-xl font-bold text-slate-300">活動日程表</h2><button onClick={() => { setCurrentView('student'); setStudentResult(null); setSelectedClassNo(''); }} className="bg-white/10 px-4 py-2 rounded-full flex items-center text-sm backdrop-blur-md hover:bg-white/20 transition"><ArrowLeft size={20} className="mr-1" /> 返回</button></div>
-            <div className="px-8 pt-6 pb-2 shrink-0"><h1 className="text-4xl font-bold">{selectedClass}班 ({selectedClassNo})號 <span className="text-orange-400">{currentStudent ? currentStudent.chiName : ''}</span></h1><p className="text-slate-400 mt-1">未來一週活動概覽</p></div>
-            <div className="flex-1 px-8 pb-8 overflow-y-auto"><div className="space-y-6 mt-4">{upcomingDays.map((dayItem) => {
-                const dayActivities = studentResult ? studentResult.filter(act => { if (act.specificDates && act.specificDates.length > 0) { return act.specificDates.includes(dayItem.dateString); } return act.dayIds && act.dayIds.includes(dayItem.dayId); }) : [];
-                const isToday = dayItem.label === '今天';
-                return (<div key={dayItem.dateString} className={`rounded-3xl p-6 transition-all ${isToday ? 'bg-slate-700/80 ring-2 ring-green-500 shadow-[0_0_20px_rgba(34,197,94,0.3)]' : 'bg-slate-700/30'}`}><div className="flex items-center mb-4 border-b border-slate-600 pb-2"><div className={`text-2xl font-bold ${isToday ? 'text-green-400' : 'text-slate-200'}`}>{dayItem.fullLabel}</div>{isToday && <span className="ml-3 bg-green-600 text-white text-xs px-2 py-1 rounded-full animate-pulse">Today</span>}</div><div className="space-y-4">{dayActivities.length > 0 ? (dayActivities.map((item, idx) => (<div key={`${item.id}-${idx}`} className="bg-white text-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden"><div className="flex justify-between items-start mb-2"><h3 className="text-2xl font-bold text-slate-900">{item.activity}</h3></div><div className="grid grid-cols-2 gap-4 mt-3"><div className="flex items-center text-slate-600 bg-slate-100 p-2 rounded-lg"><Clock size={20} className="mr-2 text-orange-500" /><span className="font-bold">{item.time}</span></div><div className="flex items-center text-blue-800 bg-blue-50 p-2 rounded-lg"><MapPin size={20} className="mr-2 text-blue-500" /><span className="font-bold">{item.location}</span></div></div></div>))) : (<div className="text-slate-500 text-sm italic py-4 text-center border border-dashed border-slate-600 rounded-xl">沒有安排活動</div>)}</div></div>);
-            })}</div>{(!studentResult) && (<div className="flex flex-col items-center justify-center h-40 mt-8 text-slate-400 bg-slate-700/30 rounded-2xl border border-dashed border-slate-600"><Calendar size={48} className="mb-2 opacity-50" /><p className="text-lg">請輸入班別及學號查詢</p></div>)}</div></div>
-     );
-  }
-
-  // ... (Stats and DB Manager Views reused from V2.6) ...
+  // Stats View with Delete Function
   const renderStatsView = () => {
-      // Reusing logic from v2.6, ensuring it uses masterList
       const studentStats = masterList.map(student => {
           const studentActs = activities.filter(a => a.verifiedClass === student.classCode && a.verifiedClassNo === student.classNo);
           const filteredActs = statsActivityFilter ? studentActs.filter(a => a.activity.includes(statsActivityFilter)) : studentActs;
@@ -504,7 +465,9 @@ const App = () => {
               <div className="flex justify-between items-center mb-6 border-b pb-4"><button onClick={() => setAdminTab('import')} className="flex items-center text-slate-500 hover:text-blue-600"><ArrowLeft className="mr-2" size={20} /> 返回</button><h2 className="text-2xl font-bold text-slate-800 flex items-center"><BarChart className="mr-2 text-blue-600" /> 數據統計中心</h2><div className="w-24"></div></div>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-full">
                   <div className="flex flex-col h-full"><h3 className="font-bold text-lg text-slate-700 mb-4 flex items-center"><History className="mr-2" size={20} /> 最近查詢紀錄 (暫存)</h3><div className="bg-slate-50 border rounded-xl flex-1 overflow-y-auto max-h-[500px]"><table className="w-full text-sm text-left"><thead className="bg-slate-100 text-slate-500 sticky top-0"><tr><th className="p-3">時間</th><th className="p-3">查詢對象</th><th className="p-3">狀態</th></tr></thead><tbody>{queryLogs.length > 0 ? queryLogs.map((log, i) => (<tr key={i} className="border-b last:border-0 hover:bg-white"><td className="p-3 text-slate-500 text-xs">{log.timestamp}</td><td className="p-3 font-bold text-slate-700">{log.class} ({log.classNo}) {log.name}</td><td className="p-3">{log.success ? <span className="text-green-600 text-xs bg-green-100 px-2 py-1 rounded">成功</span> : <span className="text-red-500 text-xs">失敗</span>}</td></tr>)) : (<tr><td colSpan="3" className="p-8 text-center text-slate-400">暫無查詢紀錄</td></tr>)}</tbody></table></div></div>
-                  <div className="flex flex-col h-full"><h3 className="font-bold text-lg text-slate-700 mb-4 flex items-center"><TrendingUp className="mr-2" size={20} /> 全校活動統計</h3><div className="bg-blue-50 p-4 rounded-xl mb-4 space-y-3"><div className="flex gap-2"><button onClick={() => setStatsSort('most')} className={`flex-1 py-1 text-xs rounded font-bold ${statsSort === 'most' ? 'bg-blue-600 text-white' : 'bg-white text-blue-600 border border-blue-200'}`}>最多活動</button><button onClick={() => setStatsSort('least')} className={`flex-1 py-1 text-xs rounded font-bold ${statsSort === 'least' ? 'bg-blue-600 text-white' : 'bg-white text-blue-600 border border-blue-200'}`}>最少活動</button></div><div className="flex items-center bg-white border border-blue-200 rounded px-2"><Filter size={14} className="text-blue-400 mr-2" /><input type="text" placeholder="以活動名稱搜尋 (如: 無人機)" className="w-full py-2 text-sm outline-none" value={statsActivityFilter} onChange={(e) => setStatsActivityFilter(e.target.value)} /></div></div><div className="bg-white border rounded-xl flex-1 overflow-y-auto max-h-[400px]"><table className="w-full text-sm text-left"><thead className="bg-slate-100 text-slate-500 sticky top-0"><tr><th className="p-3">排名</th><th className="p-3">學生</th><th className="p-3 text-center">數量</th><th className="p-3">參與活動</th></tr></thead><tbody>{displayStats.map((s, i) => (<tr key={s.key} className="border-b hover:bg-slate-50"><td className="p-3 text-slate-400 font-mono">{i + 1}</td><td className="p-3"><div className="font-bold text-slate-700">{s.classCode} ({s.classNo})</div><div className="text-xs text-slate-500">{s.chiName}</div></td><td className="p-3 text-center"><span className={`inline-block w-8 h-8 leading-8 rounded-full font-bold ${s.count > 0 ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'}`}>{s.count}</span></td><td className="p-3 text-xs text-slate-500">{s.actList.join(', ')}</td></tr>))}</tbody></table></div></div>
+                  <div className="flex flex-col h-full"><h3 className="font-bold text-lg text-slate-700 mb-4 flex items-center"><TrendingUp className="mr-2" size={20} /> 全校活動統計</h3>
+                  <div className="bg-blue-50 p-4 rounded-xl mb-4 space-y-3"><div className="flex gap-2"><button onClick={() => setStatsSort('most')} className={`flex-1 py-1 text-xs rounded font-bold ${statsSort === 'most' ? 'bg-blue-600 text-white' : 'bg-white text-blue-600 border border-blue-200'}`}>最多活動</button><button onClick={() => setStatsSort('least')} className={`flex-1 py-1 text-xs rounded font-bold ${statsSort === 'least' ? 'bg-blue-600 text-white' : 'bg-white text-blue-600 border border-blue-200'}`}>最少活動</button></div><div className="flex items-center bg-white border border-blue-200 rounded px-2"><Filter size={14} className="text-blue-400 mr-2" /><input type="text" placeholder="以活動名稱搜尋 (如: 無人機)" className="w-full py-2 text-sm outline-none" value={statsActivityFilter} onChange={(e) => setStatsActivityFilter(e.target.value)} /></div></div>
+                  <div className="bg-white border rounded-xl flex-1 overflow-y-auto max-h-[400px]"><table className="w-full text-sm text-left"><thead className="bg-slate-100 text-slate-500 sticky top-0"><tr><th className="p-3">排名</th><th className="p-3">學生</th><th className="p-3 text-center">數量</th><th className="p-3">參與活動</th><th className="p-3 text-right">管理</th></tr></thead><tbody>{displayStats.map((s, i) => (<tr key={s.key} className="border-b hover:bg-slate-50"><td className="p-3 text-slate-400 font-mono">{i + 1}</td><td className="p-3"><div className="font-bold text-slate-700">{s.classCode} ({s.classNo})</div><div className="text-xs text-slate-500">{s.chiName}</div></td><td className="p-3 text-center"><span className={`inline-block w-8 h-8 leading-8 rounded-full font-bold ${s.count > 0 ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'}`}>{s.count}</span></td><td className="p-3 text-xs text-slate-500">{s.actList.join(', ')}</td><td className="p-3 text-right"><button onClick={() => handleDeleteStudent(s)} className="text-red-300 hover:text-red-600 hover:bg-red-50 p-1 rounded transition" title="刪除學生 (離校)"><UserX size={16} /></button></td></tr>))}</tbody></table></div></div>
               </div>
           </div>
       );
@@ -512,7 +475,7 @@ const App = () => {
 
   const renderDatabaseManager = () => (
       <div className="bg-white p-6 rounded-xl shadow-md min-h-[500px]">
-          <div className="flex justify-between items-center mb-6"><button onClick={() => setAdminTab('import')} className="flex items-center text-slate-500 hover:text-blue-600"><ArrowLeft className="mr-2" size={20} /> 返回</button><h2 className="text-2xl font-bold text-slate-800 flex items-center"><Database className="mr-2 text-blue-600" /> 數據庫管理</h2><div className="w-24"></div></div>
+          <div className="flex justify-between items-center mb-6"><button onClick={() => setAdminTab('import')} className="flex items-center text-slate-500 hover:text-blue-600"><ArrowLeft className="mr-2" size={20} /> 返回導入介面</button><h2 className="text-2xl font-bold text-slate-800 flex items-center"><Database className="mr-2 text-blue-600" /> 數據庫管理</h2><div className="w-24"></div></div>
           <div className="overflow-x-auto"><table className="w-full text-left text-sm border-collapse"><thead className="bg-slate-100 text-slate-600 uppercase"><tr><th className="p-3">學生</th><th className="p-3">活動名稱</th><th className="p-3">時間</th><th className="p-3">地點</th><th className="p-3">日期/備註</th><th className="p-3 text-right">操作</th></tr></thead><tbody>
               {activities.map(act => (<tr key={act.id} className="border-b hover:bg-slate-50">
                   <td className="p-3"><div className="font-bold text-slate-800">{act.verifiedClass} ({act.verifiedClassNo})</div><div className="text-slate-500">{act.verifiedName}</div></td>
@@ -557,7 +520,7 @@ const App = () => {
                         <div className="space-y-3 mb-4">
                             <div><label className="text-xs text-slate-500 font-bold uppercase">活動名稱</label><input type="text" className="w-full p-2 border rounded" value={importActivity} onChange={e => setImportActivity(e.target.value)} /></div>
                             <div className="grid grid-cols-2 gap-2"><div><label className="text-xs text-slate-500 font-bold uppercase">時間</label><input type="text" className="w-full p-2 border rounded" value={importTime} onChange={e => setImportTime(e.target.value)} /></div><div><label className="text-xs text-slate-500 font-bold uppercase">地點</label><input type="text" className="w-full p-2 border rounded" value={importLocation} onChange={e => setImportLocation(e.target.value)} /></div></div>
-                            <div className="border border-slate-200 rounded p-3 bg-slate-50"><label className="text-xs text-slate-500 font-bold uppercase mb-2 block">選擇日期 (多選)</label><div className="flex gap-2 mb-2"><input type="date" className="flex-1 p-2 border rounded text-sm" value={tempDateInput} onChange={(e) => setTempDateInput(e.target.value)} /><button onClick={handleAddDate} className="bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 flex items-center"><Plus size={16} /></button></div><div className="flex flex-wrap gap-2 mb-2">{importDates.map(date => (<span key={date} className="bg-white border border-blue-200 text-blue-800 text-xs px-2 py-1 rounded-full flex items-center shadow-sm">{date}<button onClick={() => handleRemoveDate(date)} className="ml-1 text-blue-400 hover:text-red-500"><X size={12} /></button></span>))}</div><div className="flex justify-between items-center text-xs"><span className="font-bold text-slate-600">已選: {importDates.length} 天 (共{importDates.length}堂)</span>{importDates.length > 0 && <button onClick={handleClearDates} className="text-red-400 hover:underline">清空</button>}</div></div>
+                            <div className="border border-slate-200 rounded p-3 bg-slate-50"><label className="text-xs text-slate-500 font-bold uppercase mb-2 block">選擇日期 (多選)</label><div className="flex gap-2 mb-2"><input type="date" className="flex-1 p-2 border rounded text-sm" value={tempDateInput} onChange={(e) => setTempDateInput(e.target.value)} onKeyDown={handleDateInputKeyDown} /><button onClick={handleAddDate} className="bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 flex items-center"><Plus size={16} /></button></div><div className="flex flex-wrap gap-2 mb-2">{importDates.map(date => (<span key={date} className="bg-white border border-blue-200 text-blue-800 text-xs px-2 py-1 rounded-full flex items-center shadow-sm">{date}<button onClick={() => handleRemoveDate(date)} className="ml-1 text-blue-400 hover:text-red-500"><X size={12} /></button></span>))}</div><div className="flex justify-between items-center text-xs"><span className="font-bold text-slate-600">已選: {importDates.length} 天 (共{importDates.length}堂)</span>{importDates.length > 0 && <button onClick={handleClearDates} className="text-red-400 hover:underline">清空</button>}</div></div>
                             <div><label className="text-xs text-slate-500 font-bold uppercase">星期 (自動/預設)</label><select className="w-full p-2 border rounded" value={importDayId} onChange={e => setImportDayId(e.target.value)}><option value="1">逢星期一</option><option value="2">逢星期二</option><option value="3">逢星期三</option><option value="4">逢星期四</option><option value="5">逢星期五</option><option value="6">逢星期六</option><option value="0">逢星期日</option></select></div>
                         </div>
                         <div className="mb-4"><label className="text-xs text-slate-500 font-bold uppercase flex justify-between"><span>貼上名單 (PDF Copy/Paste)</span><span className="text-blue-500 cursor-pointer flex items-center" title="格式: 4A 蔡舒朗 (可含電話)"><FileText size={12} className="mr-1"/> 說明</span></label><textarea className="w-full h-32 p-2 border rounded bg-slate-50 text-sm font-mono" placeholder={`4A 蔡舒朗 91234567\n2A1 陳嘉瑩`} value={bulkInput} onChange={e => setBulkInput(e.target.value)}></textarea></div>
@@ -569,6 +532,31 @@ const App = () => {
         </div>
       </div>
   );
+
+  const renderKioskResultView = () => {
+     const upcomingDays = [];
+     const today = new Date();
+     const weekDayNames = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+     const weekDayEnNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+     for (let i = 0; i < 8; i++) { 
+         const d = new Date(today); d.setDate(today.getDate() + i);
+         const year = d.getFullYear(); const month = String(d.getMonth() + 1).padStart(2, '0'); const day = String(d.getDate()).padStart(2, '0');
+         const localDateString = `${year}-${month}-${day}`; const displayDate = `(${day}/${month}/${year})`;
+         upcomingDays.push({ dayId: d.getDay(), dateString: localDateString, label: i === 0 ? '今天' : weekDayNames[d.getDay()], fullLabel: `${weekDayNames[d.getDay()]} ${weekDayEnNames[d.getDay()]} ${displayDate}` });
+     }
+     const currentStudent = masterList.find(s => s.classCode === selectedClass && s.classNo === selectedClassNo.padStart(2, '0'));
+
+     return (
+        <div className="flex-1 bg-slate-800 flex flex-col font-sans text-white h-screen overflow-hidden">
+            <div className="p-4 flex items-center justify-between bg-slate-900 shadow-md shrink-0"><h2 className="text-xl font-bold text-slate-300">活動日程表</h2><button onClick={() => { setCurrentView('student'); setStudentResult(null); setSelectedClassNo(''); }} className="bg-white/10 px-4 py-2 rounded-full flex items-center text-sm backdrop-blur-md hover:bg-white/20 transition"><ArrowLeft size={20} className="mr-1" /> 返回</button></div>
+            <div className="px-8 pt-6 pb-2 shrink-0"><h1 className="text-4xl font-bold">{selectedClass}班 ({selectedClassNo})號 <span className="text-orange-400">{currentStudent ? currentStudent.chiName : ''}</span></h1><p className="text-slate-400 mt-1">未來一週活動概覽</p></div>
+            <div className="flex-1 px-8 pb-8 overflow-y-auto"><div className="space-y-6 mt-4">{upcomingDays.map((dayItem) => {
+                const dayActivities = studentResult ? studentResult.filter(act => { if (act.specificDates && act.specificDates.length > 0) { return act.specificDates.includes(dayItem.dateString); } return act.dayIds && act.dayIds.includes(dayItem.dayId); }) : [];
+                const isToday = dayItem.label === '今天';
+                return (<div key={dayItem.dateString} className={`rounded-3xl p-6 transition-all ${isToday ? 'bg-slate-700/80 ring-2 ring-green-500 shadow-[0_0_20px_rgba(34,197,94,0.3)]' : 'bg-slate-700/30'}`}><div className="flex items-center mb-4 border-b border-slate-600 pb-2"><div className={`text-2xl font-bold ${isToday ? 'text-green-400' : 'text-slate-200'}`}>{dayItem.fullLabel}</div>{isToday && <span className="ml-3 bg-green-600 text-white text-xs px-2 py-1 rounded-full animate-pulse">Today</span>}</div><div className="space-y-4">{dayActivities.length > 0 ? (dayActivities.map((item, idx) => (<div key={`${item.id}-${idx}`} className="bg-white text-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden"><div className="flex justify-between items-start mb-2"><h3 className="text-2xl font-bold text-slate-900">{item.activity}</h3></div><div className="grid grid-cols-2 gap-4 mt-3"><div className="flex items-center text-slate-600 bg-slate-100 p-2 rounded-lg"><Clock size={20} className="mr-2 text-orange-500" /><span className="font-bold">{item.time}</span></div><div className="flex items-center text-blue-800 bg-blue-50 p-2 rounded-lg"><MapPin size={20} className="mr-2 text-blue-500" /><span className="font-bold">{item.location}</span></div></div></div>))) : (<div className="text-slate-500 text-sm italic py-4 text-center border border-dashed border-slate-600 rounded-xl">沒有安排活動</div>)}</div></div>);
+            })}</div>{(!studentResult) && (<div className="flex flex-col items-center justify-center h-40 mt-8 text-slate-400 bg-slate-700/30 rounded-2xl border border-dashed border-slate-600"><Calendar size={48} className="mb-2 opacity-50" /><p className="text-lg">請輸入班別及學號查詢</p></div>)}</div></div>
+     );
+  }
 
   return (
     <div className="min-h-screen flex flex-col font-sans">
