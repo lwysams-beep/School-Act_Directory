@@ -82,7 +82,7 @@ const App = () => {
   const [isMasterLoading, setIsMasterLoading] = useState(false);
 
   // V2.9: School Year State
-  const [schoolYearStart, setSchoolYearStart] = useState(2025); // Default start year (e.g., 2025 for 25-26)
+  const [schoolYearStart, setSchoolYearStart] = useState(2025); // Default start year
 
   // Import Form State
   const [bulkInput, setBulkInput] = useState('');
@@ -92,7 +92,7 @@ const App = () => {
   const [importDayId, setImportDayId] = useState(1);
   const [importDates, setImportDates] = useState([]); 
   const [tempDateInput, setTempDateInput] = useState('');
-  const dateInputRef = useRef(null); // Ref for auto-focus
+  const dateInputRef = useRef(null); 
 
   // Admin UI State
   const [adminTab, setAdminTab] = useState('import'); 
@@ -103,11 +103,10 @@ const App = () => {
   // Stats UI State
   const [statsSort, setStatsSort] = useState('most');
   const [statsActivityFilter, setStatsActivityFilter] = useState('');
-  // V2.9: Stats Editing State
-  const [statsEditingKey, setStatsEditingKey] = useState(null); // Key of the student being edited
+  const [statsEditingKey, setStatsEditingKey] = useState(null); 
   const [statsEditForm, setStatsEditForm] = useState({});
 
-  // DB Editing State (Activities)
+  // DB Editing State
   const [editingId, setEditingId] = useState(null);
   const [editFormData, setEditFormData] = useState({});
 
@@ -147,7 +146,6 @@ const App = () => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 if (data.students) setMasterList(data.students);
-                // V2.9: Load School Year if saved, otherwise default
                 if (data.schoolYearStart) setSchoolYearStart(data.schoolYearStart);
             }
         } catch (error) {
@@ -179,7 +177,7 @@ const App = () => {
   };
 
   // ---------------------------------------------------------------------------
-  // MASTER DATA ACTIONS (Upload & Edit & Delete)
+  // MASTER DATA ACTIONS
   // ---------------------------------------------------------------------------
   const handleMasterUploadTrigger = () => fileInputRef.current.click();
 
@@ -198,7 +196,7 @@ const App = () => {
                       try {
                           await setDoc(doc(db, "settings", "master_list"), {
                               students: newMaster,
-                              schoolYearStart: schoolYearStart, // Save year too
+                              schoolYearStart: schoolYearStart, 
                               updatedAt: new Date().toISOString(),
                               updatedBy: user.email
                           });
@@ -219,11 +217,9 @@ const App = () => {
       };
   };
 
-  // Update School Year
   const handleSchoolYearChange = async (e) => {
       const newYear = parseInt(e.target.value);
       setSchoolYearStart(newYear);
-      // Sync to cloud silently
       if (user) {
           try {
               await setDoc(doc(db, "settings", "master_list"), {
@@ -236,7 +232,6 @@ const App = () => {
       }
   };
 
-  // V2.9: Edit Student in Master List
   const startEditStudent = (student) => {
       setStatsEditingKey(student.key);
       setStatsEditForm({ ...student });
@@ -251,7 +246,7 @@ const App = () => {
       setIsMasterLoading(true);
       try {
           const newMasterList = masterList.map(s => 
-              s.key === statsEditingKey ? { ...statsEditForm, key: `${statsEditForm.classCode}-${statsEditForm.chiName}` } : s // Update key if changed, though risky if duplicates
+              s.key === statsEditingKey ? { ...statsEditForm, key: `${statsEditForm.classCode}-${statsEditForm.chiName}` } : s 
           );
           
           await setDoc(doc(db, "settings", "master_list"), {
@@ -270,7 +265,6 @@ const App = () => {
       }
   };
 
-  // V2.8: Delete Student
   const handleDeleteStudent = async (studentToDelete) => {
       if (!window.confirm(`確定要將學生移除嗎？\n\n${studentToDelete.classCode} (${studentToDelete.classNo}) ${studentToDelete.chiName}\n\n注意：這將會從「真理數據庫」中永久刪除此學生。`)) return;
 
@@ -295,20 +289,24 @@ const App = () => {
   // DATA LOGIC (Date & Import)
   // ---------------------------------------------------------------------------
   
-  // V2.9: Smart Date Logic
+  // V3.0: Updated Date Logic (DDMM format)
   const handleAddDate = () => {
       if (!tempDateInput) return;
 
       let dateString = tempDateInput;
-      // 1. Try to parse MM/DD or M/D
-      // Regex for M/D or MM/DD
-      const shortDateRegex = /^(\d{1,2})[\/\-\.](\d{1,2})$/;
-      const match = tempDateInput.match(shortDateRegex);
+      // Regex for DDMM (e.g., 0209 for 2nd Sep) or DMM (e.g. 209, flexible but assume 4 digits preferred)
+      // Capture 1: Day, Capture 2: Month
+      const ddmmRegex = /^(\d{1,2})(\d{2})$/;
+      const match = tempDateInput.match(ddmmRegex);
 
       if (match) {
-          const month = parseInt(match[1]);
-          const day = parseInt(match[2]);
+          const day = parseInt(match[1]);
+          const month = parseInt(match[2]);
           
+          // Validation
+          if (month < 1 || month > 12) { alert("無效的月份"); return; }
+          if (day < 1 || day > 31) { alert("無效的日期"); return; }
+
           // Logic: Sep (9) to Dec (12) -> Start Year
           // Logic: Jan (1) to Aug (8) -> Start Year + 1
           let year = schoolYearStart;
@@ -316,40 +314,36 @@ const App = () => {
               year = schoolYearStart + 1;
           } else if (month >= 9 && month <= 12) {
               year = schoolYearStart;
-          } else {
-              alert("無效的月份");
-              return;
           }
 
-          // Format to YYYY-MM-DD
+          // Format to YYYY-MM-DD for storage/sorting
           const fMonth = String(month).padStart(2, '0');
           const fDay = String(day).padStart(2, '0');
           dateString = `${year}-${fMonth}-${fDay}`;
       } else {
-          // If it's already YYYY-MM-DD (from strict date picker fallback), keep it
-          // Or validate
-      }
-
-      // Check if valid date
-      const d = new Date(dateString);
-      if (isNaN(d.getTime())) {
-          alert("日期格式錯誤，請輸入如 09/02 或 9/2");
-          return;
+          // Fallback if user types with slashes or other formats not matching DDMM
+          const d = new Date(tempDateInput);
+          if (isNaN(d.getTime())) {
+              alert("日期格式錯誤，請輸入 DDMM (如 0209 代表 9月2日)");
+              return;
+          }
+          // If valid standard date string, use it
+          // But highly recommend sticking to DDMM logic to avoid US/UK date confusion
       }
 
       if (!importDates.includes(dateString)) {
           const newDates = [...importDates, dateString].sort();
           setImportDates(newDates);
           if (newDates.length === 1) {
+              const d = new Date(dateString);
               setImportDayId(d.getDay());
           }
       }
       setTempDateInput(''); 
-      // V2.9: Auto-focus back
+      // Auto-focus back
       if(dateInputRef.current) dateInputRef.current.focus();
   };
 
-  // V2.8: Handle Enter key
   const handleDateInputKeyDown = (e) => {
       if (e.key === 'Enter') {
           e.preventDefault();
@@ -359,6 +353,15 @@ const App = () => {
 
   const handleRemoveDate = (d) => setImportDates(prev => prev.filter(x => x !== d));
   const handleClearDates = () => setImportDates([]);
+
+  // Helper to display DDMM from YYYY-MM-DD
+  const formatDisplayDate = (isoDate) => {
+      const parts = isoDate.split('-');
+      if (parts.length === 3) {
+          return `${parts[2]}${parts[1]}`; // DDMM
+      }
+      return isoDate;
+  };
 
   const handleBulkImport = () => {
       const lines = bulkInput.trim().split('\n');
@@ -404,7 +407,7 @@ const App = () => {
       }
   };
 
-  // ... (Reconciliation Logic same as V2.5) ...
+  // ... (Reconciliation Logic) ...
   const { matched, conflicts } = useMemo(() => {
     const matched = [];
     const conflicts = [];
@@ -509,7 +512,6 @@ const App = () => {
     </div>
   );
 
-  // ... (Student, Staff, Login, DB Manager Views same as previous) ...
   const renderStudentView = () => (
     <div className="flex-1 flex flex-col bg-gradient-to-b from-orange-50 to-white">
         <div className="flex-1 flex flex-col items-center justify-center p-4">
@@ -566,7 +568,6 @@ const App = () => {
       </div>
   );
 
-  // Stats View with Delete & V2.9 Edit Function
   const renderStatsView = () => {
       const studentStats = masterList.map(student => {
           const studentActs = activities.filter(a => a.verifiedClass === student.classCode && a.verifiedClassNo === student.classNo);
@@ -664,7 +665,7 @@ const App = () => {
                         <div className="space-y-3 mb-4">
                             <div><label className="text-xs text-slate-500 font-bold uppercase">活動名稱</label><input type="text" className="w-full p-2 border rounded" value={importActivity} onChange={e => setImportActivity(e.target.value)} /></div>
                             <div className="grid grid-cols-2 gap-2"><div><label className="text-xs text-slate-500 font-bold uppercase">時間</label><input type="text" className="w-full p-2 border rounded" value={importTime} onChange={e => setImportTime(e.target.value)} /></div><div><label className="text-xs text-slate-500 font-bold uppercase">地點</label><input type="text" className="w-full p-2 border rounded" value={importLocation} onChange={e => setImportLocation(e.target.value)} /></div></div>
-                            <div className="border border-slate-200 rounded p-3 bg-slate-50"><label className="text-xs text-slate-500 font-bold uppercase mb-2 block">選擇日期 (輸入 02/09 即 2月9日)</label><div className="flex gap-2 mb-2"><input type="text" ref={dateInputRef} placeholder="MM/DD" className="flex-1 p-2 border rounded text-sm" value={tempDateInput} onChange={(e) => setTempDateInput(e.target.value)} onKeyDown={handleDateInputKeyDown} /><button onClick={handleAddDate} className="bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 flex items-center"><Plus size={16} /></button></div><div className="flex flex-wrap gap-2 mb-2">{importDates.map(date => (<span key={date} className="bg-white border border-blue-200 text-blue-800 text-xs px-2 py-1 rounded-full flex items-center shadow-sm">{date}<button onClick={() => handleRemoveDate(date)} className="ml-1 text-blue-400 hover:text-red-500"><X size={12} /></button></span>))}</div><div className="flex justify-between items-center text-xs"><span className="font-bold text-slate-600">已選: {importDates.length} 天 (共{importDates.length}堂)</span>{importDates.length > 0 && <button onClick={handleClearDates} className="text-red-400 hover:underline">清空</button>}</div></div>
+                            <div className="border border-slate-200 rounded p-3 bg-slate-50"><label className="text-xs text-slate-500 font-bold uppercase mb-2 block">選擇日期 (輸入 0209 代表 9月2日)</label><div className="flex gap-2 mb-2"><input type="text" ref={dateInputRef} placeholder="DDMM (如 0209)" className="flex-1 p-2 border rounded text-sm" value={tempDateInput} onChange={(e) => setTempDateInput(e.target.value)} onKeyDown={handleDateInputKeyDown} /><button onClick={handleAddDate} className="bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 flex items-center"><Plus size={16} /></button></div><div className="flex flex-wrap gap-2 mb-2">{importDates.map(date => (<span key={date} className="bg-white border border-blue-200 text-blue-800 text-xs px-2 py-1 rounded-full flex items-center shadow-sm">{formatDisplayDate(date)}<button onClick={() => handleRemoveDate(date)} className="ml-1 text-blue-400 hover:text-red-500"><X size={12} /></button></span>))}</div><div className="flex justify-between items-center text-xs"><span className="font-bold text-slate-600">已選: {importDates.length} 天 (共{importDates.length}堂)</span>{importDates.length > 0 && <button onClick={handleClearDates} className="text-red-400 hover:underline">清空</button>}</div></div>
                             <div><label className="text-xs text-slate-500 font-bold uppercase">星期 (自動/預設)</label><select className="w-full p-2 border rounded" value={importDayId} onChange={e => setImportDayId(e.target.value)}><option value="1">逢星期一</option><option value="2">逢星期二</option><option value="3">逢星期三</option><option value="4">逢星期四</option><option value="5">逢星期五</option><option value="6">逢星期六</option><option value="0">逢星期日</option></select></div>
                         </div>
                         <div className="mb-4"><label className="text-xs text-slate-500 font-bold uppercase flex justify-between"><span>貼上名單 (PDF Copy/Paste)</span><span className="text-blue-500 cursor-pointer flex items-center" title="格式: 4A 蔡舒朗 (可含電話)"><FileText size={12} className="mr-1"/> 說明</span></label><textarea className="w-full h-32 p-2 border rounded bg-slate-50 text-sm font-mono" placeholder={`4A 蔡舒朗 91234567\n2A1 陳嘉瑩`} value={bulkInput} onChange={e => setBulkInput(e.target.value)}></textarea></div>
