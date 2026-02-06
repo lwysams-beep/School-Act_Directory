@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText } from 'lucide-react';
+import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, Phone, CheckSquare, Square, RefreshCcw, X, Plus } from 'lucide-react';
 
 // =============================================================================
 //  CONFIGURATION: FIREBASE SETUP
@@ -81,16 +81,9 @@ const parseMasterCSV = (csvText) => {
 const MASTER_DB = parseMasterCSV(RAW_CSV_CONTENT);
 
 // -----------------------------------------------------------------------------
-// 2. MOCK IMPORT DATA
+// 2. IMPORT DATA (Cleaned for V1.8)
 // -----------------------------------------------------------------------------
-const PDF_IMPORT_MOCK = [
-  { id: 101, rawName: '蔡舒朗', rawClass: '4A', rawClassNo: '00', activity: '無人機培訓班', time: '15:45-16:45', location: '特別室', dateText: '逢星期一', dayIds: [1] },
-  { id: 301, rawName: '陳嘉瑩', rawClass: '2A', rawClassNo: '01', activity: '初級壁球訓練班', time: '16:00-17:30', location: '和興體育館', dateText: '逢星期四', dayIds: [4] },
-  { id: 303, rawName: '胡曼琳', rawClass: '3C', rawClassNo: '20', activity: '初級壁球訓練班', time: '16:00-17:30', location: '和興體育館', dateText: '逢星期四', dayIds: [4] },
-  { id: 304, rawName: '許心雅', rawClass: '4A', rawClassNo: '28', activity: '初級壁球訓練班', time: '16:00-17:30', location: '和興體育館', dateText: '逢星期四', dayIds: [4] },
-  { id: 305, rawName: '麥家臻', rawClass: '6B', rawClassNo: '13', activity: '初級壁球訓練班', time: '16:00-17:30', location: '和興體育館', dateText: '逢星期四', dayIds: [4] },
-  { id: 401, rawName: '何沛津', rawClass: '4A', rawClassNo: '00', activity: 'e-樂團', time: '15:30-16:30', location: '學校音樂室', dateText: '逢星期一', dayIds: [1] },
-];
+const PDF_IMPORT_MOCK = []; 
 
 const App = () => {
   const [currentView, setCurrentView] = useState('student'); 
@@ -104,12 +97,19 @@ const App = () => {
   const [activities, setActivities] = useState([]); 
   const [pendingImports, setPendingImports] = useState(PDF_IMPORT_MOCK);
   
-  // Import Form State (V1.7 New)
+  // Import Form State
   const [bulkInput, setBulkInput] = useState('');
   const [importActivity, setImportActivity] = useState('無人機班');
   const [importTime, setImportTime] = useState('15:30-16:30');
   const [importLocation, setImportLocation] = useState('禮堂');
   const [importDayId, setImportDayId] = useState(1);
+  
+  // V1.9: Multi-Date Picker State
+  const [importDates, setImportDates] = useState([]); // Array of date strings 'YYYY-MM-DD'
+  const [tempDateInput, setTempDateInput] = useState('');
+
+  // Reconcile UI State
+  const [selectedMatchIds, setSelectedMatchIds] = useState(new Set());
 
   // UI
   const [searchTerm, setSearchTerm] = useState('');
@@ -138,35 +138,67 @@ const App = () => {
       setCurrentView('student'); 
   };
 
-  // Logic: Bulk Import (The core of your request)
+  // Logic: Multi-Date Management (V1.9)
+  const handleAddDate = () => {
+      if (tempDateInput && !importDates.includes(tempDateInput)) {
+          const newDates = [...importDates, tempDateInput].sort();
+          setImportDates(newDates);
+          
+          // Auto-update dayId based on the first date added
+          if (newDates.length === 1) {
+              const date = new Date(tempDateInput);
+              setImportDayId(date.getDay());
+          }
+      }
+      setTempDateInput(''); // Clear input for next
+  };
+
+  const handleRemoveDate = (dateToRemove) => {
+      setImportDates(prev => prev.filter(d => d !== dateToRemove));
+  };
+
+  const handleClearDates = () => {
+      setImportDates([]);
+  };
+
+  // Logic: Bulk Import
   const handleBulkImport = () => {
       const lines = bulkInput.trim().split('\n');
       const newItems = [];
       const dayMap = {1:'逢星期一', 2:'逢星期二', 3:'逢星期三', 4:'逢星期四', 5:'逢星期五', 6:'逢星期六', 0:'逢星期日'};
 
+      // Construct Date Text
+      let finalDateText = dayMap[importDayId];
+      if (importDates.length > 0) {
+          finalDateText = `共${importDates.length}堂 (${importDates[0]}起)`;
+      }
+
       lines.forEach((line) => {
-          const cleanLine = line.trim().replace(/['"]/g, ''); // 清理引號
+          const cleanLine = line.trim().replace(/['"]/g, ''); 
           if(!cleanLine) return;
 
-          // 智能識別：嘗試從一行文字中抓出 "班別", "學號", "姓名"
-          // 支援格式: "4A 蔡舒朗", "2A1 陳嘉瑩", "2A 1 陳嘉瑩"
           const mixedClassRegex = /([1-6][A-E])(\d{0,2})/; 
-          const nameRegex = /[\u4e00-\u9fa5]{2,}/; // 至少兩個中文字
+          const nameRegex = /[\u4e00-\u9fa5]{2,}/; 
+          const phoneRegex = /[569]\d{7}/; 
 
           const classMatch = cleanLine.match(mixedClassRegex);
           const nameMatch = cleanLine.match(nameRegex);
+          const phoneMatch = cleanLine.match(phoneRegex);
 
           if (classMatch && nameMatch) {
               newItems.push({
                   id: Date.now() + Math.random(),
                   rawName: nameMatch[0],
                   rawClass: classMatch[1],
-                  rawClassNo: classMatch[2] ? classMatch[2].padStart(2, '0') : '00', // 如果沒學號就填00
+                  rawClassNo: classMatch[2] ? classMatch[2].padStart(2, '0') : '00', 
+                  rawPhone: phoneMatch ? phoneMatch[0] : '', 
                   activity: importActivity,
                   time: importTime,
                   location: importLocation,
-                  dateText: dayMap[importDayId],
-                  dayIds: [parseInt(importDayId)]
+                  dateText: finalDateText,
+                  dayIds: [parseInt(importDayId)], // Main day for recurring
+                  specificDates: importDates, // Store specific dates if any
+                  forceConflict: false 
               });
           }
       });
@@ -174,7 +206,7 @@ const App = () => {
       if (newItems.length > 0) {
           setPendingImports(prev => [...prev, ...newItems]);
           setBulkInput('');
-          alert(`成功識別並載入 ${newItems.length} 筆資料！請在左側校對區確認。`);
+          alert(`成功識別並載入 ${newItems.length} 筆資料！`);
       } else {
           alert("無法識別資料。請確保每行包含班別(如 4A) 和 中文姓名。");
       }
@@ -185,6 +217,11 @@ const App = () => {
     const matched = [];
     const conflicts = [];
     pendingImports.forEach(item => {
+      if (item.forceConflict) {
+          conflicts.push({ ...item, status: 'manual_conflict' });
+          return;
+      }
+
       let student = masterList.find(s => s.classCode === item.rawClass && s.chiName === item.rawName);
       if (!student && item.rawClassNo !== '00') {
           student = masterList.find(s => s.classCode === item.rawClass && s.classNo === item.rawClassNo);
@@ -193,6 +230,7 @@ const App = () => {
         const potential = masterList.filter(s => s.chiName === item.rawName);
         if (potential.length === 1) student = potential[0];
       }
+
       if (student) {
         matched.push({
           ...item,
@@ -208,14 +246,52 @@ const App = () => {
     return { matched, conflicts };
   }, [pendingImports, masterList]);
 
+  // Auto-Select All Matched on change
+  useEffect(() => {
+      const allIds = new Set(matched.map(m => m.id));
+      setSelectedMatchIds(allIds);
+  }, [matched.length]);
+
+  const toggleSelectMatch = (id) => {
+      const newSet = new Set(selectedMatchIds);
+      if (newSet.has(id)) newSet.delete(id);
+      else newSet.add(id);
+      setSelectedMatchIds(newSet);
+  };
+
+  const toggleSelectAll = () => {
+      if (selectedMatchIds.size === matched.length) {
+          setSelectedMatchIds(new Set()); 
+      } else {
+          setSelectedMatchIds(new Set(matched.map(m => m.id)));
+      }
+  };
+
   const handlePublish = () => {
+    const toPublish = matched.filter(m => selectedMatchIds.has(m.id));
+    
+    if (toPublish.length === 0) {
+        alert("請至少選擇一筆資料進行發布");
+        return;
+    }
+
     setActivities(prev => {
-        const newIds = new Set(matched.map(m => m.id));
+        const newIds = new Set(toPublish.map(m => m.id));
         const kept = prev.filter(p => !newIds.has(p.id));
-        return [...kept, ...matched];
+        return [...kept, ...toPublish];
     });
-    setPendingImports(conflicts); 
-    alert(`成功發布 ${matched.length} 筆活動資料！`);
+    
+    const publishedIds = new Set(toPublish.map(m => m.id));
+    setPendingImports(prev => prev.filter(p => !publishedIds.has(p.id)));
+    
+    alert(`成功發布 ${toPublish.length} 筆活動資料！`);
+  };
+
+  const handleManualConflict = (id) => {
+      setPendingImports(prev => prev.map(item => {
+          if (item.id === id) return { ...item, forceConflict: true };
+          return item;
+      }));
   };
 
   const handleResolveConflict = (item, correctStudent) => {
@@ -224,7 +300,8 @@ const App = () => {
       verifiedName: correctStudent.chiName,
       verifiedClass: correctStudent.classCode,
       verifiedClassNo: correctStudent.classNo,
-      status: 'verified'
+      status: 'verified',
+      forceConflict: false 
     };
     setActivities(prev => [...prev, fixedItem]);
     setPendingImports(prev => prev.filter(i => i.id !== item.id));
@@ -334,6 +411,7 @@ const App = () => {
                       <th className="p-3">活動名稱</th>
                       <th className="p-3">時間</th>
                       <th className="p-3">地點</th>
+                      <th className="p-3 text-blue-600">聯絡電話 (內部)</th>
                     </tr>
                   </thead>
                   <tbody className="text-slate-700">
@@ -344,9 +422,10 @@ const App = () => {
                         <td className="p-3 font-bold text-slate-800">{act.activity}</td>
                         <td className="p-3 text-sm">{act.time}</td>
                         <td className="p-3 text-sm flex items-center"><MapPin size={14} className="mr-1 text-red-400"/> {act.location}</td>
+                        <td className="p-3 text-sm font-mono text-blue-600">{act.rawPhone || '-'}</td>
                       </tr>
                     )) : (
-                      <tr><td colSpan="5" className="p-12 text-center text-slate-400">沒有找到相關資料</td></tr>
+                      <tr><td colSpan="6" className="p-12 text-center text-slate-400">沒有找到相關資料</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -401,27 +480,38 @@ const App = () => {
                   {/* Verified Block */}
                   <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                      <div className="flex justify-between items-center mb-4">
-                        <h3 className="font-bold text-lg text-green-700 flex items-center"><CheckCircle className="mr-2" size={20} /> 等待發布 ({matched.length})</h3>
-                        {matched.length > 0 && (<button onClick={handlePublish} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center shadow-md active:scale-95 transition"><Save size={18} className="mr-2" /> 立即發布</button>)}
+                        <div className="flex items-center space-x-3">
+                            <h3 className="font-bold text-lg text-green-700 flex items-center"><CheckCircle className="mr-2" size={20} /> 等待發布 ({matched.length})</h3>
+                            <button onClick={toggleSelectAll} className="text-sm text-slate-500 flex items-center hover:text-slate-800">
+                                {selectedMatchIds.size === matched.length ? <CheckSquare size={16} className="mr-1"/> : <Square size={16} className="mr-1"/>}
+                                全選/取消
+                            </button>
+                        </div>
+                        {matched.length > 0 && (<button onClick={handlePublish} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center shadow-md active:scale-95 transition"><Save size={18} className="mr-2" /> 發布選取項目 ({selectedMatchIds.size})</button>)}
                      </div>
                      <div className="bg-green-50 rounded-lg border border-green-100 max-h-96 overflow-y-auto">
                         {matched.length > 0 ? (
                             <table className="w-full text-sm">
                                 <thead className="bg-green-100/50 text-green-800 sticky top-0 border-b border-green-200">
                                     <tr>
+                                        <th className="py-2 px-2 w-8"></th>
                                         <th className="py-2 px-4 text-left w-1/3">原始 PDF 資料</th>
                                         <th className="py-2 px-4 text-center w-10"></th>
                                         <th className="py-2 px-4 text-left w-1/3">Master Data (真理)</th>
-                                        <th className="py-2 px-4 text-right">活動</th>
+                                        <th className="py-2 px-4 text-right">操作</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {matched.map(m => (
-                                        <tr key={m.id} className="border-b border-green-100 last:border-0 hover:bg-green-100/40 transition-colors">
+                                        <tr key={m.id} className={`border-b border-green-100 last:border-0 hover:bg-green-100/40 transition-colors ${selectedMatchIds.has(m.id) ? 'bg-green-100/20' : 'opacity-50'}`}>
+                                            <td className="py-3 px-2 text-center">
+                                                <input type="checkbox" checked={selectedMatchIds.has(m.id)} onChange={() => toggleSelectMatch(m.id)} className="w-4 h-4 rounded text-green-600 focus:ring-green-500" />
+                                            </td>
                                             <td className="py-3 px-4">
                                                 <div className="text-slate-500 text-xs uppercase mb-0.5">PDF Source</div>
                                                 <div className="font-medium text-slate-700">{m.rawClass} {m.rawName}</div>
                                                 <div className="text-xs text-red-400 font-mono">{m.rawClassNo === '00' ? '缺學號' : m.rawClassNo}</div>
+                                                {m.rawPhone && <div className="text-xs text-blue-500 font-mono flex items-center mt-1"><Phone size={10} className="mr-1"/>{m.rawPhone}</div>}
                                             </td>
                                             <td className="py-3 px-2 text-center text-slate-300"><ArrowRight size={16} /></td>
                                             <td className="py-3 px-4 bg-green-100/30">
@@ -433,8 +523,11 @@ const App = () => {
                                                 </div>
                                             </td>
                                             <td className="py-3 px-4 text-right">
-                                                <div className="font-bold text-slate-700">{m.activity}</div>
-                                                <div className="text-xs text-slate-500">{m.dateText}</div>
+                                                <button onClick={() => handleManualConflict(m.id)} className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded hover:bg-red-200 flex items-center ml-auto">
+                                                    <AlertTriangle size={12} className="mr-1" /> 轉為異常
+                                                </button>
+                                                <div className="text-xs text-slate-400 mt-1">{m.activity}</div>
+                                                {m.specificDates && m.specificDates.length > 0 && <div className="text-xs bg-blue-100 text-blue-600 px-1 rounded inline-block mt-1">共 {m.specificDates.length} 堂</div>}
                                             </td>
                                         </tr>
                                     ))}
@@ -453,7 +546,8 @@ const App = () => {
                               <div key={item.id} className="border border-red-100 rounded-lg p-4 bg-red-50/50 flex flex-col md:flex-row items-center justify-between gap-4">
                                  <div className="flex-1">
                                     <div className="font-bold text-slate-800">{item.rawClass} {item.rawName}</div>
-                                    <div className="text-xs text-slate-500">{item.activity}</div>
+                                    <div className="text-xs text-slate-500">{item.activity} {item.rawPhone && `| ${item.rawPhone}`}</div>
+                                    {item.status === 'manual_conflict' && <div className="text-xs text-red-600 font-bold mt-1">* 人手標記異常</div>}
                                  </div>
                                  <ArrowRight className="text-slate-300 md:rotate-0 rotate-90" />
                                  <div className="flex-1 w-full">
@@ -475,9 +569,8 @@ const App = () => {
                   )}
                </div>
 
-               {/* Right Side: Import Panel (V1.7) */}
+               {/* Right Side: Import Panel */}
                <div className="space-y-6">
-                  {/* Master DB Status */}
                   <div className="bg-slate-800 text-slate-300 p-6 rounded-xl shadow-md">
                       <h3 className="font-bold text-white mb-4 flex items-center"><Database className="mr-2" size={16}/> 數據庫狀態</h3>
                       <div className="space-y-4">
@@ -492,7 +585,7 @@ const App = () => {
                       </div>
                   </div>
 
-                  {/* Import Panel */}
+                  {/* Import Panel (V1.9) */}
                   <div className="bg-white p-6 rounded-xl shadow-md border-t-4 border-blue-500">
                       <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center">
                           <PlusCircle className="mr-2 text-blue-500" /> 新增活動資料
@@ -513,8 +606,39 @@ const App = () => {
                                   <input type="text" className="w-full p-2 border rounded" value={importLocation} onChange={e => setImportLocation(e.target.value)} />
                               </div>
                           </div>
+                          
+                          {/* Multi-Date Picker */}
+                          <div className="border border-slate-200 rounded p-3 bg-slate-50">
+                              <label className="text-xs text-slate-500 font-bold uppercase mb-2 block">選擇日期 (多選)</label>
+                              <div className="flex gap-2 mb-2">
+                                  <input 
+                                    type="date" 
+                                    className="flex-1 p-2 border rounded text-sm" 
+                                    value={tempDateInput} 
+                                    onChange={(e) => setTempDateInput(e.target.value)} 
+                                  />
+                                  <button onClick={handleAddDate} className="bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 flex items-center">
+                                      <Plus size={16} />
+                                  </button>
+                              </div>
+                              
+                              <div className="flex flex-wrap gap-2 mb-2">
+                                  {importDates.map(date => (
+                                      <span key={date} className="bg-white border border-blue-200 text-blue-800 text-xs px-2 py-1 rounded-full flex items-center shadow-sm">
+                                          {date}
+                                          <button onClick={() => handleRemoveDate(date)} className="ml-1 text-blue-400 hover:text-red-500"><X size={12} /></button>
+                                      </span>
+                                  ))}
+                              </div>
+                              
+                              <div className="flex justify-between items-center text-xs">
+                                  <span className="font-bold text-slate-600">已選: {importDates.length} 天 (共{importDates.length}堂)</span>
+                                  {importDates.length > 0 && <button onClick={handleClearDates} className="text-red-400 hover:underline">清空</button>}
+                              </div>
+                          </div>
+
                           <div>
-                              <label className="text-xs text-slate-500 font-bold uppercase">星期</label>
+                              <label className="text-xs text-slate-500 font-bold uppercase">星期 (自動/預設)</label>
                               <select className="w-full p-2 border rounded" value={importDayId} onChange={e => setImportDayId(e.target.value)}>
                                   <option value="1">逢星期一</option>
                                   <option value="2">逢星期二</option>
@@ -530,11 +654,11 @@ const App = () => {
                       <div className="mb-4">
                           <label className="text-xs text-slate-500 font-bold uppercase flex justify-between">
                               <span>貼上名單 (PDF Copy/Paste)</span>
-                              <span className="text-blue-500 cursor-pointer flex items-center" title="格式範例: 4A 蔡舒朗"><FileText size={12} className="mr-1"/> 說明</span>
+                              <span className="text-blue-500 cursor-pointer flex items-center" title="格式: 4A 蔡舒朗 (可含電話)"><FileText size={12} className="mr-1"/> 說明</span>
                           </label>
                           <textarea 
                               className="w-full h-32 p-2 border rounded bg-slate-50 text-sm font-mono"
-                              placeholder={`4A 蔡舒朗\n4A 鍾柏宇\n2A1 陳嘉瑩`}
+                              placeholder={`4A 蔡舒朗 91234567\n2A1 陳嘉瑩`}
                               value={bulkInput}
                               onChange={e => setBulkInput(e.target.value)}
                           ></textarea>
