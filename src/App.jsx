@@ -33,40 +33,44 @@ const mockAuth = {
 // -----------------------------------------------------------------------------
 // 1. MASTER DATA (Default fallback)
 // -----------------------------------------------------------------------------
+// Mock CSV content reflecting the structure: Class, ClassNo, EngName, ChiName, Sex
 const RAW_CSV_CONTENT = `
-1A,1,S9900448,CHAN CHIT HIM JAYDON,陳哲謙,M
-1A,2,N0417791,CHAN HAU MAN,陳孝敏,F
-1A,3,N0101050,CHAN KA FAI,陳嘉輝,M
-2A,1,S1234567,CHAN KA YING,陳嘉瑩,F
-2A,7,S1234568,LEUNG MAN NEI,梁嫚妮,F
-3C,20,S1234569,WU MAN LAM,胡曼琳,F
-4A,20,S2222222,CHOI SO LONG,蔡舒朗,M
-4A,21,S2222223,CHUNG PAK YU,鍾柏宇,M
-4A,22,S2222224,HO SZE WING,何思穎,F
-4A,23,S2222225,WONG CHI YIN,黃稚然,M
-4A,24,S2222226,WEI PAK YUI,魏柏叡,M
-4A,28,S0000001,HUI SUM NGA,許心雅,F
-4B,25,S2222227,CHOI YIK YEUNG,蔡翼陽,M
-5A,10,S3333333,LAU CHIU WAN,劉照允,M
-5A,11,S3333334,WONG SZE KI,王詩萁,F
-5A,12,S3333335,CHENG MAN YI,鄭文一,M
-5B,15,S3333336,CHAN YING TUNG,陳映彤,F
-6B,13,S6666666,MAK KA CHUN,麥家臻,M
-6D,5,S686629A,CHU LOK KI,褚樂埼,M
-6D,13,S686016A,LIN HEI CHIT,連希哲,M
+1A,1,CHAN CHIT HIM JAYDON,陳哲謙,M
+1A,2,CHAN HAU MAN,陳孝敏,F
+1A,3,CHAN KA FAI,陳嘉輝,M
+2A,1,CHAN KA YING,陳嘉瑩,F
+2A,7,LEUNG MAN NEI,梁嫚妮,F
+3C,20,WU MAN LAM,胡曼琳,F
+4A,20,CHOI SO LONG,蔡舒朗,M
+4A,21,CHUNG PAK YU,鍾柏宇,M
+4A,22,HO SZE WING,何思穎,F
+4A,23,WONG CHI YIN,黃稚然,M
+4A,24,WEI PAK YUI,魏柏叡,M
+4A,28,HUI SUM NGA,許心雅,F
+4B,25,CHOI YIK YEUNG,蔡翼陽,M
+5A,10,LAU CHIU WAN,劉照允,M
+5A,11,WONG SZE KI,王詩萁,F
+5A,12,CHENG MAN YI,鄭文一,M
+5B,15,CHAN YING TUNG,陳映彤,F
+6B,13,MAK KA CHUN,麥家臻,M
+6D,5,CHU LOK KI,褚樂埼,M
+6D,13,LIN HEI CHIT,連希哲,M
 `;
 
+// V2.1 Fix: Updated Column Mapping
+// A=Class(0), B=No(1), C=EngName(2), D=ChiName(3), E=Sex(4)
 const parseMasterCSV = (csvText) => {
   const lines = csvText.trim().split('\n');
   return lines.map(line => {
     const cols = line.split(',');
-    if (cols.length < 5) return null;
+    if (cols.length < 4) return null; // At least up to Chinese Name
     return {
-      classCode: cols[0].trim(),
-      classNo: cols[1].trim().padStart(2, '0'),
-      engName: cols[3].trim(),
-      chiName: cols[4].trim(),
-      key: `${cols[0].trim()}-${cols[4].trim()}` 
+      classCode: cols[0].trim(), // Col A
+      classNo: cols[1].trim().padStart(2, '0'), // Col B
+      engName: cols[2].trim(), // Col C
+      chiName: cols[3].trim(), // Col D
+      sex: cols[4] ? cols[4].trim() : '', // Col E
+      key: `${cols[0].trim()}-${cols[3].trim()}` 
     };
   }).filter(item => item !== null);
 };
@@ -100,9 +104,9 @@ const App = () => {
   const [tempDateInput, setTempDateInput] = useState('');
 
   // Admin UI State
-  const [adminTab, setAdminTab] = useState('import'); // 'import' | 'manage_db'
+  const [adminTab, setAdminTab] = useState('import'); 
   const [selectedMatchIds, setSelectedMatchIds] = useState(new Set());
-  const fileInputRef = useRef(null); // Ref for hidden file input
+  const fileInputRef = useRef(null); 
 
   // DB Editing State
   const [editingId, setEditingId] = useState(null);
@@ -135,7 +139,7 @@ const App = () => {
       setCurrentView('student'); 
   };
 
-  // Logic: Master CSV Upload (V2.0)
+  // Logic: Master CSV Upload
   const handleMasterUploadTrigger = () => {
       fileInputRef.current.click();
   };
@@ -151,7 +155,7 @@ const App = () => {
               const newMaster = parseMasterCSV(text);
               if (newMaster.length > 0) {
                   setMasterList(newMaster);
-                  alert(`成功更新真理數據庫！共載入 ${newMaster.length} 筆學生資料。`);
+                  alert(`成功更新真理數據庫！共載入 ${newMaster.length} 筆學生資料。\n(請確認 CSV 欄位順序: 班別,學號,英文名,中文名,性別)`);
               } else {
                   alert("CSV 格式無法識別或無資料。");
               }
@@ -327,7 +331,7 @@ const App = () => {
     setPendingImports(prev => prev.filter(i => i.id !== id));
   };
 
-  // Logic: Database Management (V2.0)
+  // Logic: Database Management
   const handleDeleteActivity = (id) => {
       if(window.confirm('確定要刪除這筆紀錄嗎？')) {
           setActivities(prev => prev.filter(a => a.id !== id));
@@ -510,7 +514,7 @@ const App = () => {
       </div>
   );
 
-  // V2.0 Database Management Sub-View
+  // Database Management Sub-View
   const renderDatabaseManager = () => (
       <div className="bg-white p-6 rounded-xl shadow-md min-h-[500px]">
           <div className="flex justify-between items-center mb-6">
@@ -601,7 +605,7 @@ const App = () => {
                 onChange={handleMasterFileChange} 
             />
 
-            {/* V2.0: Toggle Views */}
+            {/* Toggle Views */}
             {adminTab === 'manage_db' ? renderDatabaseManager() : (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Left: Reconcile Action Area */}
