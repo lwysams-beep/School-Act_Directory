@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key } from 'lucide-react';
+import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText } from 'lucide-react';
 
 // =============================================================================
 //  CONFIGURATION: FIREBASE SETUP
@@ -31,7 +31,7 @@ const mockAuth = {
 };
 
 // -----------------------------------------------------------------------------
-// 1. MASTER DATA (更新自 student_list.csv)
+// 1. MASTER DATA
 // -----------------------------------------------------------------------------
 const RAW_CSV_CONTENT = `
 1A,1,S9900448,CHAN CHIT HIM JAYDON,陳哲謙,M
@@ -90,13 +90,10 @@ const PDF_IMPORT_MOCK = [
   { id: 304, rawName: '許心雅', rawClass: '4A', rawClassNo: '28', activity: '初級壁球訓練班', time: '16:00-17:30', location: '和興體育館', dateText: '逢星期四', dayIds: [4] },
   { id: 305, rawName: '麥家臻', rawClass: '6B', rawClassNo: '13', activity: '初級壁球訓練班', time: '16:00-17:30', location: '和興體育館', dateText: '逢星期四', dayIds: [4] },
   { id: 401, rawName: '何沛津', rawClass: '4A', rawClassNo: '00', activity: 'e-樂團', time: '15:30-16:30', location: '學校音樂室', dateText: '逢星期一', dayIds: [1] },
-  { id: 999, rawName: '張大文', rawClass: '1A', rawClassNo: '00', activity: '足球班', time: '15:00-16:00', location: '球場', dateText: '逢星期五', dayIds: [5] },
 ];
 
 const App = () => {
   const [currentView, setCurrentView] = useState('student'); 
-  
-  // Auth
   const [user, setUser] = useState(null); 
   const [authLoading, setAuthLoading] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
@@ -107,6 +104,13 @@ const App = () => {
   const [activities, setActivities] = useState([]); 
   const [pendingImports, setPendingImports] = useState(PDF_IMPORT_MOCK);
   
+  // Import Form State (V1.7 New)
+  const [bulkInput, setBulkInput] = useState('');
+  const [importActivity, setImportActivity] = useState('無人機班');
+  const [importTime, setImportTime] = useState('15:30-16:30');
+  const [importLocation, setImportLocation] = useState('禮堂');
+  const [importDayId, setImportDayId] = useState(1);
+
   // UI
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedClass, setSelectedClass] = useState('1A');
@@ -114,7 +118,6 @@ const App = () => {
   const [studentResult, setStudentResult] = useState(null);
   const [todayDay, setTodayDay] = useState(new Date().getDay());
 
-  // Logic: Auth
   const handleLogin = async (e) => {
       e.preventDefault();
       setAuthLoading(true);
@@ -133,6 +136,48 @@ const App = () => {
       await mockAuth.signOut();
       setUser(null);
       setCurrentView('student'); 
+  };
+
+  // Logic: Bulk Import (The core of your request)
+  const handleBulkImport = () => {
+      const lines = bulkInput.trim().split('\n');
+      const newItems = [];
+      const dayMap = {1:'逢星期一', 2:'逢星期二', 3:'逢星期三', 4:'逢星期四', 5:'逢星期五', 6:'逢星期六', 0:'逢星期日'};
+
+      lines.forEach((line) => {
+          const cleanLine = line.trim().replace(/['"]/g, ''); // 清理引號
+          if(!cleanLine) return;
+
+          // 智能識別：嘗試從一行文字中抓出 "班別", "學號", "姓名"
+          // 支援格式: "4A 蔡舒朗", "2A1 陳嘉瑩", "2A 1 陳嘉瑩"
+          const mixedClassRegex = /([1-6][A-E])(\d{0,2})/; 
+          const nameRegex = /[\u4e00-\u9fa5]{2,}/; // 至少兩個中文字
+
+          const classMatch = cleanLine.match(mixedClassRegex);
+          const nameMatch = cleanLine.match(nameRegex);
+
+          if (classMatch && nameMatch) {
+              newItems.push({
+                  id: Date.now() + Math.random(),
+                  rawName: nameMatch[0],
+                  rawClass: classMatch[1],
+                  rawClassNo: classMatch[2] ? classMatch[2].padStart(2, '0') : '00', // 如果沒學號就填00
+                  activity: importActivity,
+                  time: importTime,
+                  location: importLocation,
+                  dateText: dayMap[importDayId],
+                  dayIds: [parseInt(importDayId)]
+              });
+          }
+      });
+
+      if (newItems.length > 0) {
+          setPendingImports(prev => [...prev, ...newItems]);
+          setBulkInput('');
+          alert(`成功識別並載入 ${newItems.length} 筆資料！請在左側校對區確認。`);
+      } else {
+          alert("無法識別資料。請確保每行包含班別(如 4A) 和 中文姓名。");
+      }
   };
 
   // Logic: Reconciliation
@@ -205,7 +250,7 @@ const App = () => {
   );
 
   // -------------------------------------------------------------------------
-  // Render Functions (Fix: Changed from Components to Render Functions to avoid re-mount)
+  // Render Functions
   // -------------------------------------------------------------------------
 
   const renderTopNavBar = () => (
@@ -430,17 +475,77 @@ const App = () => {
                   )}
                </div>
 
-               <div className="bg-slate-800 text-slate-300 p-6 rounded-xl shadow-md h-fit">
-                  <h3 className="font-bold text-white mb-4 flex items-center"><Database className="mr-2" size={16}/> 數據庫狀態</h3>
-                  <div className="space-y-4">
-                      <div className="bg-slate-700 p-3 rounded-lg flex justify-between items-center">
-                          <div className="text-xs text-slate-400 uppercase">已發布活動</div>
-                          <div className="text-2xl font-bold text-white">{activities.length}</div>
+               {/* Right Side: Import Panel (V1.7) */}
+               <div className="space-y-6">
+                  {/* Master DB Status */}
+                  <div className="bg-slate-800 text-slate-300 p-6 rounded-xl shadow-md">
+                      <h3 className="font-bold text-white mb-4 flex items-center"><Database className="mr-2" size={16}/> 數據庫狀態</h3>
+                      <div className="space-y-4">
+                          <div className="bg-slate-700 p-3 rounded-lg flex justify-between items-center">
+                              <div className="text-xs text-slate-400 uppercase">已發布活動</div>
+                              <div className="text-2xl font-bold text-white">{activities.length}</div>
+                          </div>
+                          <div className="bg-slate-700 p-3 rounded-lg flex justify-between items-center">
+                              <div className="text-xs text-slate-400 uppercase">學生總數</div>
+                              <div className="text-2xl font-bold text-white">{masterList.length}</div>
+                          </div>
                       </div>
-                      <div className="bg-slate-700 p-3 rounded-lg flex justify-between items-center">
-                          <div className="text-xs text-slate-400 uppercase">學生總數</div>
-                          <div className="text-2xl font-bold text-white">{masterList.length}</div>
+                  </div>
+
+                  {/* Import Panel */}
+                  <div className="bg-white p-6 rounded-xl shadow-md border-t-4 border-blue-500">
+                      <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center">
+                          <PlusCircle className="mr-2 text-blue-500" /> 新增活動資料
+                      </h3>
+                      
+                      <div className="space-y-3 mb-4">
+                          <div>
+                              <label className="text-xs text-slate-500 font-bold uppercase">活動名稱</label>
+                              <input type="text" className="w-full p-2 border rounded" value={importActivity} onChange={e => setImportActivity(e.target.value)} />
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                  <label className="text-xs text-slate-500 font-bold uppercase">時間</label>
+                                  <input type="text" className="w-full p-2 border rounded" value={importTime} onChange={e => setImportTime(e.target.value)} />
+                              </div>
+                              <div>
+                                  <label className="text-xs text-slate-500 font-bold uppercase">地點</label>
+                                  <input type="text" className="w-full p-2 border rounded" value={importLocation} onChange={e => setImportLocation(e.target.value)} />
+                              </div>
+                          </div>
+                          <div>
+                              <label className="text-xs text-slate-500 font-bold uppercase">星期</label>
+                              <select className="w-full p-2 border rounded" value={importDayId} onChange={e => setImportDayId(e.target.value)}>
+                                  <option value="1">逢星期一</option>
+                                  <option value="2">逢星期二</option>
+                                  <option value="3">逢星期三</option>
+                                  <option value="4">逢星期四</option>
+                                  <option value="5">逢星期五</option>
+                                  <option value="6">逢星期六</option>
+                                  <option value="0">逢星期日</option>
+                              </select>
+                          </div>
                       </div>
+
+                      <div className="mb-4">
+                          <label className="text-xs text-slate-500 font-bold uppercase flex justify-between">
+                              <span>貼上名單 (PDF Copy/Paste)</span>
+                              <span className="text-blue-500 cursor-pointer flex items-center" title="格式範例: 4A 蔡舒朗"><FileText size={12} className="mr-1"/> 說明</span>
+                          </label>
+                          <textarea 
+                              className="w-full h-32 p-2 border rounded bg-slate-50 text-sm font-mono"
+                              placeholder={`4A 蔡舒朗\n4A 鍾柏宇\n2A1 陳嘉瑩`}
+                              value={bulkInput}
+                              onChange={e => setBulkInput(e.target.value)}
+                          ></textarea>
+                      </div>
+
+                      <button 
+                          onClick={handleBulkImport}
+                          className="w-full py-2 bg-blue-600 text-white font-bold rounded hover:bg-blue-700 transition"
+                      >
+                          識別並載入
+                      </button>
                   </div>
                </div>
             </div>
