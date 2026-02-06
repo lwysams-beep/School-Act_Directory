@@ -5,6 +5,7 @@ import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, Arrow
 //  FIREBASE IMPORTS & CONFIGURATION
 // =============================================================================
 import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
 import { 
   getAuth, 
   signInWithEmailAndPassword, 
@@ -27,16 +28,18 @@ import {
 
 // *** 請在此填入你的真實 Firebase Config ***
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY_HERE",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+    apiKey: "AIzaSyDXZClMosztnJBd0CK6cpS6PPtJTTpgDkQ",
+    authDomain: "school-act-directory.firebaseapp.com",
+    projectId: "school-act-directory",
+    storageBucket: "school-act-directory.firebasestorage.app",
+    messagingSenderId: "351532359820",
+    appId: "1:351532359820:web:29a353f54826ac80a41ba9",
+    measurementId: "G-K5G20KH0RH"
 };
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
