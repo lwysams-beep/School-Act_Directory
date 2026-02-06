@@ -1,11 +1,10 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, Phone, CheckSquare, Square, RefreshCcw, X, Plus, Edit2, FileSpreadsheet, BarChart, History, TrendingUp, Filter, Cloud, UserX, Save as SaveIcon } from 'lucide-react';
+import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, Phone, CheckSquare, Square, RefreshCcw, X, Plus, Edit2, FileSpreadsheet, BarChart, History, TrendingUp, Filter, Cloud, UserX, Save as SaveIcon, MoreHorizontal } from 'lucide-react';
 
 // =============================================================================
 //  FIREBASE IMPORTS & CONFIGURATION
 // =============================================================================
 import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
 import { 
   getAuth, 
   signInWithEmailAndPassword, 
@@ -23,23 +22,22 @@ import {
   updateDoc, 
   onSnapshot, 
   query, 
-  orderBy 
+  orderBy,
+  writeBatch 
 } from "firebase/firestore";
 
 // *** 請在此填入你的真實 Firebase Config ***
 const firebaseConfig = {
-    apiKey: "AIzaSyDXZClMosztnJBd0CK6cpS6PPtJTTpgDkQ",
-    authDomain: "school-act-directory.firebaseapp.com",
-    projectId: "school-act-directory",
-    storageBucket: "school-act-directory.firebasestorage.app",
-    messagingSenderId: "351532359820",
-    appId: "1:351532359820:web:29a353f54826ac80a41ba9",
-    measurementId: "G-K5G20KH0RH"
+  apiKey: "YOUR_API_KEY_HERE",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
 };
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
@@ -106,7 +104,13 @@ const App = () => {
   const [statsEditingKey, setStatsEditingKey] = useState(null); 
   const [statsEditForm, setStatsEditForm] = useState({});
 
-  // DB Editing State
+  // DB Management UI State (V3.1)
+  const [dbSearchTerm, setDbSearchTerm] = useState('');
+  const [dbSelectedIds, setDbSelectedIds] = useState(new Set());
+  const [dbBatchMode, setDbBatchMode] = useState(false);
+  const [batchEditForm, setBatchEditForm] = useState({ activity: '', time: '', location: '', dateText: '' });
+
+  // DB Editing State (Single Row)
   const [editingId, setEditingId] = useState(null);
   const [editFormData, setEditFormData] = useState({});
 
@@ -248,14 +252,12 @@ const App = () => {
           const newMasterList = masterList.map(s => 
               s.key === statsEditingKey ? { ...statsEditForm, key: `${statsEditForm.classCode}-${statsEditForm.chiName}` } : s 
           );
-          
           await setDoc(doc(db, "settings", "master_list"), {
               students: newMasterList,
               schoolYearStart: schoolYearStart,
               updatedAt: new Date().toISOString(),
               updatedBy: user.email
           });
-          
           setMasterList(newMasterList);
           setStatsEditingKey(null);
       } catch (error) {
@@ -267,7 +269,6 @@ const App = () => {
 
   const handleDeleteStudent = async (studentToDelete) => {
       if (!window.confirm(`確定要將學生移除嗎？\n\n${studentToDelete.classCode} (${studentToDelete.classNo}) ${studentToDelete.chiName}\n\n注意：這將會從「真理數據庫」中永久刪除此學生。`)) return;
-
       setIsMasterLoading(true);
       try {
           const newMasterList = masterList.filter(s => s.key !== studentToDelete.key);
@@ -288,47 +289,26 @@ const App = () => {
   // ---------------------------------------------------------------------------
   // DATA LOGIC (Date & Import)
   // ---------------------------------------------------------------------------
-  
-  // V3.0: Updated Date Logic (DDMM format)
   const handleAddDate = () => {
       if (!tempDateInput) return;
-
       let dateString = tempDateInput;
-      // Regex for DDMM (e.g., 0209 for 2nd Sep) or DMM (e.g. 209, flexible but assume 4 digits preferred)
-      // Capture 1: Day, Capture 2: Month
       const ddmmRegex = /^(\d{1,2})(\d{2})$/;
       const match = tempDateInput.match(ddmmRegex);
 
       if (match) {
           const day = parseInt(match[1]);
           const month = parseInt(match[2]);
-          
-          // Validation
           if (month < 1 || month > 12) { alert("無效的月份"); return; }
           if (day < 1 || day > 31) { alert("無效的日期"); return; }
-
-          // Logic: Sep (9) to Dec (12) -> Start Year
-          // Logic: Jan (1) to Aug (8) -> Start Year + 1
           let year = schoolYearStart;
-          if (month >= 1 && month <= 8) {
-              year = schoolYearStart + 1;
-          } else if (month >= 9 && month <= 12) {
-              year = schoolYearStart;
-          }
-
-          // Format to YYYY-MM-DD for storage/sorting
+          if (month >= 1 && month <= 8) year = schoolYearStart + 1;
+          else if (month >= 9 && month <= 12) year = schoolYearStart;
           const fMonth = String(month).padStart(2, '0');
           const fDay = String(day).padStart(2, '0');
           dateString = `${year}-${fMonth}-${fDay}`;
       } else {
-          // Fallback if user types with slashes or other formats not matching DDMM
           const d = new Date(tempDateInput);
-          if (isNaN(d.getTime())) {
-              alert("日期格式錯誤，請輸入 DDMM (如 0209 代表 9月2日)");
-              return;
-          }
-          // If valid standard date string, use it
-          // But highly recommend sticking to DDMM logic to avoid US/UK date confusion
+          if (isNaN(d.getTime())) { alert("日期格式錯誤，請輸入 DDMM"); return; }
       }
 
       if (!importDates.includes(dateString)) {
@@ -340,26 +320,18 @@ const App = () => {
           }
       }
       setTempDateInput(''); 
-      // Auto-focus back
       if(dateInputRef.current) dateInputRef.current.focus();
   };
 
   const handleDateInputKeyDown = (e) => {
-      if (e.key === 'Enter') {
-          e.preventDefault();
-          handleAddDate();
-      }
+      if (e.key === 'Enter') { e.preventDefault(); handleAddDate(); }
   };
 
   const handleRemoveDate = (d) => setImportDates(prev => prev.filter(x => x !== d));
   const handleClearDates = () => setImportDates([]);
-
-  // Helper to display DDMM from YYYY-MM-DD
   const formatDisplayDate = (isoDate) => {
       const parts = isoDate.split('-');
-      if (parts.length === 3) {
-          return `${parts[2]}${parts[1]}`; // DDMM
-      }
+      if (parts.length === 3) return `${parts[2]}${parts[1]}`; 
       return isoDate;
   };
 
@@ -407,7 +379,6 @@ const App = () => {
       }
   };
 
-  // ... (Reconciliation Logic) ...
   const { matched, conflicts } = useMemo(() => {
     const matched = [];
     const conflicts = [];
@@ -458,13 +429,92 @@ const App = () => {
   };
   const handleDeleteImport = (id) => setPendingImports(prev => prev.filter(i => i.id !== id));
 
-  // Logic: DB Management
+  // ---------------------------------------------------------------------------
+  // DB MANAGEMENT LOGIC (V3.1 Upgraded)
+  // ---------------------------------------------------------------------------
+  
+  // Filter activities based on search
+  const filteredDbActivities = useMemo(() => {
+      if (!dbSearchTerm) return activities;
+      const lower = dbSearchTerm.toLowerCase();
+      return activities.filter(a => 
+          a.activity?.toLowerCase().includes(lower) || 
+          a.verifiedName?.includes(lower) || 
+          a.verifiedClass?.includes(lower)
+      );
+  }, [activities, dbSearchTerm]);
+
+  // Handle DB Selection
+  const toggleDbSelect = (id) => {
+      const newSet = new Set(dbSelectedIds);
+      if (newSet.has(id)) newSet.delete(id); else newSet.add(id);
+      setDbSelectedIds(newSet);
+  };
+
+  const toggleDbSelectAll = () => {
+      if (dbSelectedIds.size === filteredDbActivities.length) {
+          setDbSelectedIds(new Set());
+      } else {
+          setDbSelectedIds(new Set(filteredDbActivities.map(a => a.id)));
+      }
+  };
+
+  // Batch Delete
+  const handleBatchDelete = async () => {
+      if (!window.confirm(`確定要刪除選取的 ${dbSelectedIds.size} 筆資料嗎？`)) return;
+      
+      const batch = writeBatch(db);
+      dbSelectedIds.forEach(id => {
+          const ref = doc(db, "activities", id);
+          batch.delete(ref);
+      });
+
+      try {
+          await batch.commit();
+          setDbSelectedIds(new Set());
+          alert("批量刪除成功！");
+      } catch (e) {
+          alert("批量刪除失敗: " + e.message);
+      }
+  };
+
+  // Batch Edit
+  const handleBatchEdit = async () => {
+      if (!window.confirm(`確定要將選取的 ${dbSelectedIds.size} 筆資料統一修改嗎？`)) return;
+
+      const batch = writeBatch(db);
+      const updates = {};
+      if (batchEditForm.activity) updates.activity = batchEditForm.activity;
+      if (batchEditForm.time) updates.time = batchEditForm.time;
+      if (batchEditForm.location) updates.location = batchEditForm.location;
+      if (batchEditForm.dateText) updates.dateText = batchEditForm.dateText;
+
+      if (Object.keys(updates).length === 0) return alert("請輸入要修改的內容");
+
+      dbSelectedIds.forEach(id => {
+          const ref = doc(db, "activities", id);
+          batch.update(ref, updates);
+      });
+
+      try {
+          await batch.commit();
+          setDbSelectedIds(new Set());
+          setDbBatchMode(false);
+          setBatchEditForm({ activity: '', time: '', location: '', dateText: '' });
+          alert("批量修改成功！");
+      } catch (e) {
+          alert("批量修改失敗: " + e.message);
+      }
+  };
+
+  // Single Delete
   const handleDeleteActivity = async (id) => {
       if(window.confirm('確定要刪除這筆紀錄嗎？')) {
           try { await deleteDoc(doc(db, "activities", id)); } catch(e) { alert("刪除失敗:" + e.message) }
       }
   };
 
+  // Single Edit
   const startEditActivity = (act) => {
       setEditingId(act.id);
       setEditFormData({ activity: act.activity, time: act.time, location: act.location, dateText: act.dateText });
@@ -555,16 +605,130 @@ const App = () => {
       </div>
   );
 
+  // V3.1: Enhanced Database Manager with Batch Ops & Filtering
   const renderDatabaseManager = () => (
       <div className="bg-white p-6 rounded-xl shadow-md min-h-[500px]">
-          <div className="flex justify-between items-center mb-6"><button onClick={() => setAdminTab('import')} className="flex items-center text-slate-500 hover:text-blue-600"><ArrowLeft className="mr-2" size={20} /> 返回導入介面</button><h2 className="text-2xl font-bold text-slate-800 flex items-center"><Database className="mr-2 text-blue-600" /> 數據庫管理</h2><div className="w-24"></div></div>
-          <div className="overflow-x-auto"><table className="w-full text-left text-sm border-collapse"><thead className="bg-slate-100 text-slate-600 uppercase"><tr><th className="p-3">學生</th><th className="p-3">活動名稱</th><th className="p-3">時間</th><th className="p-3">地點</th><th className="p-3">日期/備註</th><th className="p-3 text-right">操作</th></tr></thead><tbody>
-              {activities.map(act => (<tr key={act.id} className="border-b hover:bg-slate-50">
-                  <td className="p-3"><div className="font-bold text-slate-800">{act.verifiedClass} ({act.verifiedClassNo})</div><div className="text-slate-500">{act.verifiedName}</div></td>
-                  {editingId === act.id ? (<><td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.activity} onChange={e => setEditFormData({...editFormData, activity: e.target.value})} /></td><td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.time} onChange={e => setEditFormData({...editFormData, time: e.target.value})} /></td><td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.location} onChange={e => setEditFormData({...editFormData, location: e.target.value})} /></td><td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.dateText} onChange={e => setEditFormData({...editFormData, dateText: e.target.value})} /></td><td className="p-3 text-right"><div className="flex justify-end gap-2"><button onClick={() => saveEditActivity(act.id)} className="bg-green-100 text-green-700 p-1 rounded hover:bg-green-200"><CheckCircle size={18} /></button><button onClick={cancelEdit} className="bg-slate-100 text-slate-600 p-1 rounded hover:bg-slate-200"><X size={18} /></button></div></td></>) : (<><td className="p-3 font-bold text-blue-700">{act.activity}</td><td className="p-3">{act.time}</td><td className="p-3">{act.location}</td><td className="p-3 text-slate-500">{act.dateText}</td><td className="p-3 text-right"><div className="flex justify-end gap-2"><button onClick={() => startEditActivity(act)} className="text-blue-500 hover:text-blue-700 p-1"><Edit2 size={18} /></button><button onClick={() => handleDeleteActivity(act.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={18} /></button></div></td></>)}
-              </tr>))}
-              {activities.length === 0 && <tr><td colSpan="6" className="p-8 text-center text-slate-400">目前沒有資料，請先導入。</td></tr>}
-          </tbody></table></div>
+          <div className="flex justify-between items-center mb-6">
+              <button onClick={() => setAdminTab('import')} className="flex items-center text-slate-500 hover:text-blue-600">
+                  <ArrowLeft className="mr-2" size={20} /> 返回導入介面
+              </button>
+              <h2 className="text-2xl font-bold text-slate-800 flex items-center">
+                  <Database className="mr-2 text-blue-600" /> 數據庫管理
+              </h2>
+              <div className="w-24"></div>
+          </div>
+
+          {/* V3.1: Filter & Batch Actions */}
+          <div className="mb-4 space-y-4">
+              <div className="flex gap-4 items-center">
+                  <div className="flex-1 bg-slate-50 border rounded-lg flex items-center px-3 py-2">
+                      <Search size={18} className="text-slate-400 mr-2" />
+                      <input 
+                          type="text" 
+                          placeholder="搜尋學生、活動或日期..." 
+                          className="bg-transparent outline-none w-full text-sm"
+                          value={dbSearchTerm}
+                          onChange={(e) => setDbSearchTerm(e.target.value)}
+                      />
+                  </div>
+                  {dbSelectedIds.size > 0 && (
+                      <div className="flex items-center gap-2">
+                          <button onClick={() => setDbBatchMode(!dbBatchMode)} className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-bold flex items-center hover:bg-blue-700">
+                              <Edit2 size={16} className="mr-2" /> 批量修改 ({dbSelectedIds.size})
+                          </button>
+                          <button onClick={handleBatchDelete} className="bg-red-50 text-red-600 px-3 py-2 rounded-lg text-sm font-bold flex items-center hover:bg-red-100 border border-red-200">
+                              <Trash2 size={16} className="mr-2" /> 刪除
+                          </button>
+                      </div>
+                  )}
+              </div>
+
+              {/* Batch Edit Panel */}
+              {dbBatchMode && dbSelectedIds.size > 0 && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 animate-in slide-in-from-top-2">
+                      <h3 className="font-bold text-blue-800 text-sm mb-3">批量修改選取的 {dbSelectedIds.size} 筆資料 (留空則不修改)</h3>
+                      <div className="grid grid-cols-4 gap-2 mb-3">
+                          <input className="p-2 border rounded text-sm" placeholder="新活動名稱..." value={batchEditForm.activity} onChange={e => setBatchEditForm({...batchEditForm, activity: e.target.value})} />
+                          <input className="p-2 border rounded text-sm" placeholder="新時間..." value={batchEditForm.time} onChange={e => setBatchEditForm({...batchEditForm, time: e.target.value})} />
+                          <input className="p-2 border rounded text-sm" placeholder="新地點..." value={batchEditForm.location} onChange={e => setBatchEditForm({...batchEditForm, location: e.target.value})} />
+                          <input className="p-2 border rounded text-sm" placeholder="新備註/日期..." value={batchEditForm.dateText} onChange={e => setBatchEditForm({...batchEditForm, dateText: e.target.value})} />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                          <button onClick={() => setDbBatchMode(false)} className="px-3 py-1 text-slate-500 hover:text-slate-800 text-sm">取消</button>
+                          <button onClick={handleBatchEdit} className="bg-blue-600 text-white px-4 py-1 rounded text-sm font-bold hover:bg-blue-700">確認修改</button>
+                      </div>
+                  </div>
+              )}
+          </div>
+
+          <div className="overflow-x-auto border rounded-lg">
+              <table className="w-full text-left text-sm border-collapse">
+                  <thead className="bg-slate-100 text-slate-600 uppercase">
+                      <tr>
+                          <th className="p-3 w-10 text-center">
+                              <input 
+                                  type="checkbox" 
+                                  checked={filteredDbActivities.length > 0 && dbSelectedIds.size === filteredDbActivities.length}
+                                  onChange={toggleDbSelectAll}
+                                  className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
+                              />
+                          </th>
+                          <th className="p-3">學生</th>
+                          <th className="p-3">活動名稱</th>
+                          <th className="p-3">時間</th>
+                          <th className="p-3">地點</th>
+                          <th className="p-3">日期/備註</th>
+                          <th className="p-3 text-right">操作</th>
+                      </tr>
+                  </thead>
+                  <tbody>
+                      {filteredDbActivities.map(act => (
+                          <tr key={act.id} className={`border-b hover:bg-slate-50 ${dbSelectedIds.has(act.id) ? 'bg-blue-50/50' : ''}`}>
+                              <td className="p-3 text-center">
+                                  <input 
+                                      type="checkbox" 
+                                      checked={dbSelectedIds.has(act.id)}
+                                      onChange={() => toggleDbSelect(act.id)}
+                                      className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                  />
+                              </td>
+                              <td className="p-3">
+                                  <div className="font-bold text-slate-800">{act.verifiedClass} ({act.verifiedClassNo})</div>
+                                  <div className="text-slate-500">{act.verifiedName}</div>
+                              </td>
+                              {editingId === act.id ? (
+                                  <>
+                                      <td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.activity} onChange={e => setEditFormData({...editFormData, activity: e.target.value})} /></td>
+                                      <td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.time} onChange={e => setEditFormData({...editFormData, time: e.target.value})} /></td>
+                                      <td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.location} onChange={e => setEditFormData({...editFormData, location: e.target.value})} /></td>
+                                      <td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.dateText} onChange={e => setEditFormData({...editFormData, dateText: e.target.value})} /></td>
+                                      <td className="p-3 text-right">
+                                          <div className="flex justify-end gap-2">
+                                              <button onClick={() => saveEditActivity(act.id)} className="bg-green-100 text-green-700 p-1 rounded hover:bg-green-200"><CheckCircle size={18} /></button>
+                                              <button onClick={cancelEdit} className="bg-slate-100 text-slate-600 p-1 rounded hover:bg-slate-200"><X size={18} /></button>
+                                          </div>
+                                      </td>
+                                  </>
+                              ) : (
+                                  <>
+                                      <td className="p-3 font-bold text-blue-700">{act.activity}</td>
+                                      <td className="p-3">{act.time}</td>
+                                      <td className="p-3">{act.location}</td>
+                                      <td className="p-3 text-slate-500">{act.dateText}</td>
+                                      <td className="p-3 text-right">
+                                          <div className="flex justify-end gap-2">
+                                              <button onClick={() => startEditActivity(act)} className="text-blue-500 hover:text-blue-700 p-1"><Edit2 size={18} /></button>
+                                              <button onClick={() => handleDeleteActivity(act.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={18} /></button>
+                                          </div>
+                                      </td>
+                                  </>
+                              )}
+                          </tr>
+                      ))}
+                      {filteredDbActivities.length === 0 && <tr><td colSpan="7" className="p-8 text-center text-slate-400">沒有符合搜尋的資料。</td></tr>}
+                  </tbody>
+              </table>
+          </div>
       </div>
   );
 
