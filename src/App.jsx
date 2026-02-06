@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, Phone, CheckSquare, Square, RefreshCcw, X, Plus, Edit2, FileSpreadsheet, BarChart, History, TrendingUp, Filter, Cloud, UserX } from 'lucide-react';
+import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, Phone, CheckSquare, Square, RefreshCcw, X, Plus, Edit2, FileSpreadsheet, BarChart, History, TrendingUp, Filter, Cloud, UserX, Save as SaveIcon } from 'lucide-react';
 
 // =============================================================================
 //  FIREBASE IMPORTS & CONFIGURATION
@@ -58,7 +58,7 @@ const parseMasterCSV = (csvText) => {
       engName: cols[2].trim(), 
       chiName: cols[3].trim(), 
       sex: cols[4] ? cols[4].trim() : '', 
-      key: `${cols[0].trim()}-${cols[3].trim()}` // Unique Key for internal use
+      key: `${cols[0].trim()}-${cols[3].trim()}` 
     };
   }).filter(item => item !== null);
 };
@@ -81,6 +81,9 @@ const App = () => {
   // Loading States
   const [isMasterLoading, setIsMasterLoading] = useState(false);
 
+  // V2.9: School Year State
+  const [schoolYearStart, setSchoolYearStart] = useState(2025); // Default start year (e.g., 2025 for 25-26)
+
   // Import Form State
   const [bulkInput, setBulkInput] = useState('');
   const [importActivity, setImportActivity] = useState('無人機班');
@@ -89,6 +92,7 @@ const App = () => {
   const [importDayId, setImportDayId] = useState(1);
   const [importDates, setImportDates] = useState([]); 
   const [tempDateInput, setTempDateInput] = useState('');
+  const dateInputRef = useRef(null); // Ref for auto-focus
 
   // Admin UI State
   const [adminTab, setAdminTab] = useState('import'); 
@@ -99,8 +103,11 @@ const App = () => {
   // Stats UI State
   const [statsSort, setStatsSort] = useState('most');
   const [statsActivityFilter, setStatsActivityFilter] = useState('');
+  // V2.9: Stats Editing State
+  const [statsEditingKey, setStatsEditingKey] = useState(null); // Key of the student being edited
+  const [statsEditForm, setStatsEditForm] = useState({});
 
-  // DB Editing State
+  // DB Editing State (Activities)
   const [editingId, setEditingId] = useState(null);
   const [editFormData, setEditFormData] = useState({});
 
@@ -140,6 +147,8 @@ const App = () => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 if (data.students) setMasterList(data.students);
+                // V2.9: Load School Year if saved, otherwise default
+                if (data.schoolYearStart) setSchoolYearStart(data.schoolYearStart);
             }
         } catch (error) {
             console.error("Error fetching master list:", error);
@@ -170,7 +179,7 @@ const App = () => {
   };
 
   // ---------------------------------------------------------------------------
-  // MASTER DATA ACTIONS (Upload & Delete)
+  // MASTER DATA ACTIONS (Upload & Edit & Delete)
   // ---------------------------------------------------------------------------
   const handleMasterUploadTrigger = () => fileInputRef.current.click();
 
@@ -189,6 +198,7 @@ const App = () => {
                       try {
                           await setDoc(doc(db, "settings", "master_list"), {
                               students: newMaster,
+                              schoolYearStart: schoolYearStart, // Save year too
                               updatedAt: new Date().toISOString(),
                               updatedBy: user.email
                           });
@@ -209,23 +219,71 @@ const App = () => {
       };
   };
 
-  // V2.8: Delete Student from Master List
+  // Update School Year
+  const handleSchoolYearChange = async (e) => {
+      const newYear = parseInt(e.target.value);
+      setSchoolYearStart(newYear);
+      // Sync to cloud silently
+      if (user) {
+          try {
+              await setDoc(doc(db, "settings", "master_list"), {
+                  students: masterList,
+                  schoolYearStart: newYear,
+                  updatedAt: new Date().toISOString(),
+                  updatedBy: user.email
+              });
+          } catch (err) { console.error("Failed to sync year", err); }
+      }
+  };
+
+  // V2.9: Edit Student in Master List
+  const startEditStudent = (student) => {
+      setStatsEditingKey(student.key);
+      setStatsEditForm({ ...student });
+  };
+
+  const cancelEditStudent = () => {
+      setStatsEditingKey(null);
+      setStatsEditForm({});
+  };
+
+  const saveEditStudent = async () => {
+      setIsMasterLoading(true);
+      try {
+          const newMasterList = masterList.map(s => 
+              s.key === statsEditingKey ? { ...statsEditForm, key: `${statsEditForm.classCode}-${statsEditForm.chiName}` } : s // Update key if changed, though risky if duplicates
+          );
+          
+          await setDoc(doc(db, "settings", "master_list"), {
+              students: newMasterList,
+              schoolYearStart: schoolYearStart,
+              updatedAt: new Date().toISOString(),
+              updatedBy: user.email
+          });
+          
+          setMasterList(newMasterList);
+          setStatsEditingKey(null);
+      } catch (error) {
+          alert("更新失敗: " + error.message);
+      } finally {
+          setIsMasterLoading(false);
+      }
+  };
+
+  // V2.8: Delete Student
   const handleDeleteStudent = async (studentToDelete) => {
       if (!window.confirm(`確定要將學生移除嗎？\n\n${studentToDelete.classCode} (${studentToDelete.classNo}) ${studentToDelete.chiName}\n\n注意：這將會從「真理數據庫」中永久刪除此學生。`)) return;
 
       setIsMasterLoading(true);
       try {
           const newMasterList = masterList.filter(s => s.key !== studentToDelete.key);
-          
-          // Sync to Firebase
           await setDoc(doc(db, "settings", "master_list"), {
               students: newMasterList,
+              schoolYearStart: schoolYearStart,
               updatedAt: new Date().toISOString(),
               updatedBy: user.email
           });
-          
           setMasterList(newMasterList);
-          // Optional: alert("已移除學生");
       } catch (error) {
           alert("刪除失敗: " + error.message);
       } finally {
@@ -234,22 +292,64 @@ const App = () => {
   };
 
   // ---------------------------------------------------------------------------
-  // DATA LOGIC (Import / Reconcile)
+  // DATA LOGIC (Date & Import)
   // ---------------------------------------------------------------------------
   
+  // V2.9: Smart Date Logic
   const handleAddDate = () => {
-      if (tempDateInput && !importDates.includes(tempDateInput)) {
-          const newDates = [...importDates, tempDateInput].sort();
+      if (!tempDateInput) return;
+
+      let dateString = tempDateInput;
+      // 1. Try to parse MM/DD or M/D
+      // Regex for M/D or MM/DD
+      const shortDateRegex = /^(\d{1,2})[\/\-\.](\d{1,2})$/;
+      const match = tempDateInput.match(shortDateRegex);
+
+      if (match) {
+          const month = parseInt(match[1]);
+          const day = parseInt(match[2]);
+          
+          // Logic: Sep (9) to Dec (12) -> Start Year
+          // Logic: Jan (1) to Aug (8) -> Start Year + 1
+          let year = schoolYearStart;
+          if (month >= 1 && month <= 8) {
+              year = schoolYearStart + 1;
+          } else if (month >= 9 && month <= 12) {
+              year = schoolYearStart;
+          } else {
+              alert("無效的月份");
+              return;
+          }
+
+          // Format to YYYY-MM-DD
+          const fMonth = String(month).padStart(2, '0');
+          const fDay = String(day).padStart(2, '0');
+          dateString = `${year}-${fMonth}-${fDay}`;
+      } else {
+          // If it's already YYYY-MM-DD (from strict date picker fallback), keep it
+          // Or validate
+      }
+
+      // Check if valid date
+      const d = new Date(dateString);
+      if (isNaN(d.getTime())) {
+          alert("日期格式錯誤，請輸入如 09/02 或 9/2");
+          return;
+      }
+
+      if (!importDates.includes(dateString)) {
+          const newDates = [...importDates, dateString].sort();
           setImportDates(newDates);
           if (newDates.length === 1) {
-              const date = new Date(tempDateInput);
-              setImportDayId(date.getDay());
+              setImportDayId(d.getDay());
           }
       }
       setTempDateInput(''); 
+      // V2.9: Auto-focus back
+      if(dateInputRef.current) dateInputRef.current.focus();
   };
 
-  // V2.8: Handle Enter key on Date Input
+  // V2.8: Handle Enter key
   const handleDateInputKeyDown = (e) => {
       if (e.key === 'Enter') {
           e.preventDefault();
@@ -304,6 +404,7 @@ const App = () => {
       }
   };
 
+  // ... (Reconciliation Logic same as V2.5) ...
   const { matched, conflicts } = useMemo(() => {
     const matched = [];
     const conflicts = [];
@@ -349,12 +450,12 @@ const App = () => {
   };
 
   const handleManualConflict = (id) => setPendingImports(prev => prev.map(i => i.id === id ? { ...i, forceConflict: true } : i));
-  
   const handleResolveConflict = (item, correctStudent) => {
     setPendingImports(prev => prev.map(i => i.id === item.id ? { ...i, rawClass: correctStudent.classCode, rawName: correctStudent.chiName, rawClassNo: correctStudent.classNo, forceConflict: false } : i));
   };
   const handleDeleteImport = (id) => setPendingImports(prev => prev.filter(i => i.id !== id));
 
+  // Logic: DB Management
   const handleDeleteActivity = async (id) => {
       if(window.confirm('確定要刪除這筆紀錄嗎？')) {
           try { await deleteDoc(doc(db, "activities", id)); } catch(e) { alert("刪除失敗:" + e.message) }
@@ -374,14 +475,12 @@ const App = () => {
   };
   const cancelEdit = () => { setEditingId(null); setEditFormData({}); };
 
+  // Logic: Search
   const handleStudentSearch = () => {
     const formattedClassNo = selectedClassNo.padStart(2, '0');
     const student = masterList.find(s => s.classCode === selectedClass && s.classNo === formattedClassNo);
-    
-    // Log query (Local)
     const newLog = { id: Date.now(), timestamp: new Date().toLocaleString('zh-HK'), class: selectedClass, classNo: formattedClassNo, name: student ? student.chiName : '未知', success: !!student };
     setQueryLogs(prev => [newLog, ...prev]);
-
     const results = activities.filter(item => item.verifiedClass === selectedClass && item.verifiedClassNo === formattedClassNo);
     setStudentResult(results);
     setCurrentView('kiosk_result');
@@ -410,6 +509,7 @@ const App = () => {
     </div>
   );
 
+  // ... (Student, Staff, Login, DB Manager Views same as previous) ...
   const renderStudentView = () => (
     <div className="flex-1 flex flex-col bg-gradient-to-b from-orange-50 to-white">
         <div className="flex-1 flex flex-col items-center justify-center p-4">
@@ -453,7 +553,20 @@ const App = () => {
       </div>
   );
 
-  // Stats View with Delete Function
+  const renderDatabaseManager = () => (
+      <div className="bg-white p-6 rounded-xl shadow-md min-h-[500px]">
+          <div className="flex justify-between items-center mb-6"><button onClick={() => setAdminTab('import')} className="flex items-center text-slate-500 hover:text-blue-600"><ArrowLeft className="mr-2" size={20} /> 返回導入介面</button><h2 className="text-2xl font-bold text-slate-800 flex items-center"><Database className="mr-2 text-blue-600" /> 數據庫管理</h2><div className="w-24"></div></div>
+          <div className="overflow-x-auto"><table className="w-full text-left text-sm border-collapse"><thead className="bg-slate-100 text-slate-600 uppercase"><tr><th className="p-3">學生</th><th className="p-3">活動名稱</th><th className="p-3">時間</th><th className="p-3">地點</th><th className="p-3">日期/備註</th><th className="p-3 text-right">操作</th></tr></thead><tbody>
+              {activities.map(act => (<tr key={act.id} className="border-b hover:bg-slate-50">
+                  <td className="p-3"><div className="font-bold text-slate-800">{act.verifiedClass} ({act.verifiedClassNo})</div><div className="text-slate-500">{act.verifiedName}</div></td>
+                  {editingId === act.id ? (<><td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.activity} onChange={e => setEditFormData({...editFormData, activity: e.target.value})} /></td><td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.time} onChange={e => setEditFormData({...editFormData, time: e.target.value})} /></td><td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.location} onChange={e => setEditFormData({...editFormData, location: e.target.value})} /></td><td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.dateText} onChange={e => setEditFormData({...editFormData, dateText: e.target.value})} /></td><td className="p-3 text-right"><div className="flex justify-end gap-2"><button onClick={() => saveEditActivity(act.id)} className="bg-green-100 text-green-700 p-1 rounded hover:bg-green-200"><CheckCircle size={18} /></button><button onClick={cancelEdit} className="bg-slate-100 text-slate-600 p-1 rounded hover:bg-slate-200"><X size={18} /></button></div></td></>) : (<><td className="p-3 font-bold text-blue-700">{act.activity}</td><td className="p-3">{act.time}</td><td className="p-3">{act.location}</td><td className="p-3 text-slate-500">{act.dateText}</td><td className="p-3 text-right"><div className="flex justify-end gap-2"><button onClick={() => startEditActivity(act)} className="text-blue-500 hover:text-blue-700 p-1"><Edit2 size={18} /></button><button onClick={() => handleDeleteActivity(act.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={18} /></button></div></td></>)}
+              </tr>))}
+              {activities.length === 0 && <tr><td colSpan="6" className="p-8 text-center text-slate-400">目前沒有資料，請先導入。</td></tr>}
+          </tbody></table></div>
+      </div>
+  );
+
+  // Stats View with Delete & V2.9 Edit Function
   const renderStatsView = () => {
       const studentStats = masterList.map(student => {
           const studentActs = activities.filter(a => a.verifiedClass === student.classCode && a.verifiedClassNo === student.classNo);
@@ -470,24 +583,47 @@ const App = () => {
                   <div className="flex flex-col h-full"><h3 className="font-bold text-lg text-slate-700 mb-4 flex items-center"><History className="mr-2" size={20} /> 最近查詢紀錄 (暫存)</h3><div className="bg-slate-50 border rounded-xl flex-1 overflow-y-auto max-h-[500px]"><table className="w-full text-sm text-left"><thead className="bg-slate-100 text-slate-500 sticky top-0"><tr><th className="p-3">時間</th><th className="p-3">查詢對象</th><th className="p-3">狀態</th></tr></thead><tbody>{queryLogs.length > 0 ? queryLogs.map((log, i) => (<tr key={i} className="border-b last:border-0 hover:bg-white"><td className="p-3 text-slate-500 text-xs">{log.timestamp}</td><td className="p-3 font-bold text-slate-700">{log.class} ({log.classNo}) {log.name}</td><td className="p-3">{log.success ? <span className="text-green-600 text-xs bg-green-100 px-2 py-1 rounded">成功</span> : <span className="text-red-500 text-xs">失敗</span>}</td></tr>)) : (<tr><td colSpan="3" className="p-8 text-center text-slate-400">暫無查詢紀錄</td></tr>)}</tbody></table></div></div>
                   <div className="flex flex-col h-full"><h3 className="font-bold text-lg text-slate-700 mb-4 flex items-center"><TrendingUp className="mr-2" size={20} /> 全校活動統計</h3>
                   <div className="bg-blue-50 p-4 rounded-xl mb-4 space-y-3"><div className="flex gap-2"><button onClick={() => setStatsSort('most')} className={`flex-1 py-1 text-xs rounded font-bold ${statsSort === 'most' ? 'bg-blue-600 text-white' : 'bg-white text-blue-600 border border-blue-200'}`}>最多活動</button><button onClick={() => setStatsSort('least')} className={`flex-1 py-1 text-xs rounded font-bold ${statsSort === 'least' ? 'bg-blue-600 text-white' : 'bg-white text-blue-600 border border-blue-200'}`}>最少活動</button></div><div className="flex items-center bg-white border border-blue-200 rounded px-2"><Filter size={14} className="text-blue-400 mr-2" /><input type="text" placeholder="以活動名稱搜尋 (如: 無人機)" className="w-full py-2 text-sm outline-none" value={statsActivityFilter} onChange={(e) => setStatsActivityFilter(e.target.value)} /></div></div>
-                  <div className="bg-white border rounded-xl flex-1 overflow-y-auto max-h-[400px]"><table className="w-full text-sm text-left"><thead className="bg-slate-100 text-slate-500 sticky top-0"><tr><th className="p-3">排名</th><th className="p-3">學生</th><th className="p-3 text-center">數量</th><th className="p-3">參與活動</th><th className="p-3 text-right">管理</th></tr></thead><tbody>{displayStats.map((s, i) => (<tr key={s.key} className="border-b hover:bg-slate-50"><td className="p-3 text-slate-400 font-mono">{i + 1}</td><td className="p-3"><div className="font-bold text-slate-700">{s.classCode} ({s.classNo})</div><div className="text-xs text-slate-500">{s.chiName}</div></td><td className="p-3 text-center"><span className={`inline-block w-8 h-8 leading-8 rounded-full font-bold ${s.count > 0 ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'}`}>{s.count}</span></td><td className="p-3 text-xs text-slate-500">{s.actList.join(', ')}</td><td className="p-3 text-right"><button onClick={() => handleDeleteStudent(s)} className="text-red-300 hover:text-red-600 hover:bg-red-50 p-1 rounded transition" title="刪除學生 (離校)"><UserX size={16} /></button></td></tr>))}</tbody></table></div></div>
+                  <div className="bg-white border rounded-xl flex-1 overflow-y-auto max-h-[400px]"><table className="w-full text-sm text-left"><thead className="bg-slate-100 text-slate-500 sticky top-0"><tr><th className="p-3">排名</th><th className="p-3">學生</th><th className="p-3 text-center">數量</th><th className="p-3">參與活動</th><th className="p-3 text-right">管理</th></tr></thead><tbody>{displayStats.map((s, i) => (
+                      <tr key={s.key} className="border-b hover:bg-slate-50">
+                          <td className="p-3 text-slate-400 font-mono">{i + 1}</td>
+                          {statsEditingKey === s.key ? (
+                              <>
+                                <td className="p-3" colSpan="2">
+                                    <div className="flex space-x-1 mb-1">
+                                        <input className="w-12 p-1 border rounded text-xs" value={statsEditForm.classCode} onChange={e => setStatsEditForm({...statsEditForm, classCode: e.target.value})} placeholder="班" />
+                                        <input className="w-12 p-1 border rounded text-xs" value={statsEditForm.classNo} onChange={e => setStatsEditForm({...statsEditForm, classNo: e.target.value})} placeholder="號" />
+                                    </div>
+                                    <div className="flex space-x-1">
+                                        <input className="w-20 p-1 border rounded text-xs" value={statsEditForm.chiName} onChange={e => setStatsEditForm({...statsEditForm, chiName: e.target.value})} placeholder="中文" />
+                                        <input className="w-24 p-1 border rounded text-xs" value={statsEditForm.engName} onChange={e => setStatsEditForm({...statsEditForm, engName: e.target.value})} placeholder="Eng" />
+                                    </div>
+                                </td>
+                                <td className="p-3 text-right">
+                                    <div className="flex justify-end space-x-1">
+                                        <button onClick={saveEditStudent} className="bg-green-100 text-green-700 p-1 rounded"><CheckCircle size={16}/></button>
+                                        <button onClick={cancelEditStudent} className="bg-slate-100 text-slate-500 p-1 rounded"><X size={16}/></button>
+                                    </div>
+                                </td>
+                              </>
+                          ) : (
+                              <>
+                                <td className="p-3"><div className="font-bold text-slate-700">{s.classCode} ({s.classNo})</div><div className="text-xs text-slate-500">{s.chiName}</div></td>
+                                <td className="p-3 text-center"><span className={`inline-block w-8 h-8 leading-8 rounded-full font-bold ${s.count > 0 ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'}`}>{s.count}</span></td>
+                                <td className="p-3 text-xs text-slate-500">{s.actList.join(', ')}</td>
+                                <td className="p-3 text-right">
+                                    <div className="flex justify-end space-x-1">
+                                        <button onClick={() => startEditStudent(s)} className="text-blue-400 hover:text-blue-600 hover:bg-blue-50 p-1 rounded transition" title="修改資料"><Edit2 size={16} /></button>
+                                        <button onClick={() => handleDeleteStudent(s)} className="text-red-300 hover:text-red-600 hover:bg-red-50 p-1 rounded transition" title="刪除學生 (離校)"><UserX size={16} /></button>
+                                    </div>
+                                </td>
+                              </>
+                          )}
+                      </tr>
+                  ))}</tbody></table></div></div>
               </div>
           </div>
       );
   };
-
-  const renderDatabaseManager = () => (
-      <div className="bg-white p-6 rounded-xl shadow-md min-h-[500px]">
-          <div className="flex justify-between items-center mb-6"><button onClick={() => setAdminTab('import')} className="flex items-center text-slate-500 hover:text-blue-600"><ArrowLeft className="mr-2" size={20} /> 返回導入介面</button><h2 className="text-2xl font-bold text-slate-800 flex items-center"><Database className="mr-2 text-blue-600" /> 數據庫管理</h2><div className="w-24"></div></div>
-          <div className="overflow-x-auto"><table className="w-full text-left text-sm border-collapse"><thead className="bg-slate-100 text-slate-600 uppercase"><tr><th className="p-3">學生</th><th className="p-3">活動名稱</th><th className="p-3">時間</th><th className="p-3">地點</th><th className="p-3">日期/備註</th><th className="p-3 text-right">操作</th></tr></thead><tbody>
-              {activities.map(act => (<tr key={act.id} className="border-b hover:bg-slate-50">
-                  <td className="p-3"><div className="font-bold text-slate-800">{act.verifiedClass} ({act.verifiedClassNo})</div><div className="text-slate-500">{act.verifiedName}</div></td>
-                  {editingId === act.id ? (<><td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.activity} onChange={e => setEditFormData({...editFormData, activity: e.target.value})} /></td><td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.time} onChange={e => setEditFormData({...editFormData, time: e.target.value})} /></td><td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.location} onChange={e => setEditFormData({...editFormData, location: e.target.value})} /></td><td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.dateText} onChange={e => setEditFormData({...editFormData, dateText: e.target.value})} /></td><td className="p-3 text-right"><div className="flex justify-end gap-2"><button onClick={() => saveEditActivity(act.id)} className="bg-green-100 text-green-700 p-1 rounded hover:bg-green-200"><CheckCircle size={18} /></button><button onClick={cancelEdit} className="bg-slate-100 text-slate-600 p-1 rounded hover:bg-slate-200"><X size={18} /></button></div></td></>) : (<><td className="p-3 font-bold text-blue-700">{act.activity}</td><td className="p-3">{act.time}</td><td className="p-3">{act.location}</td><td className="p-3 text-slate-500">{act.dateText}</td><td className="p-3 text-right"><div className="flex justify-end gap-2"><button onClick={() => startEditActivity(act)} className="text-blue-500 hover:text-blue-700 p-1"><Edit2 size={18} /></button><button onClick={() => handleDeleteActivity(act.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={18} /></button></div></td></>)}
-              </tr>))}
-              {activities.length === 0 && <tr><td colSpan="6" className="p-8 text-center text-slate-400">目前沒有資料，請先導入。</td></tr>}
-          </tbody></table></div>
-      </div>
-  );
 
   const renderAdminView = () => (
       <div className="min-h-screen bg-slate-100 p-6 flex-1">
@@ -519,11 +655,16 @@ const App = () => {
                     <div className="flex justify-end mb-1"><select className="text-xs p-1 border border-slate-300 rounded bg-white text-slate-600 outline-none focus:ring-1 focus:ring-emerald-500" value={csvEncoding} onChange={(e) => setCsvEncoding(e.target.value)}><option value="Big5">CSV 編碼: Big5 (解決 Excel 亂碼)</option><option value="UTF-8">CSV 編碼: UTF-8 (通用格式)</option></select></div>
                     <button onClick={handleMasterUploadTrigger} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white p-4 rounded-xl flex items-center justify-center font-bold shadow-md transition"><Cloud className="mr-2" /> 上載真理 Data (雲端版)</button>
                     <div className="bg-white p-6 rounded-xl shadow-md border-t-4 border-blue-500">
-                        <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center"><PlusCircle className="mr-2 text-blue-500" /> 新增活動資料</h3>
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-bold text-lg text-slate-800 flex items-center"><PlusCircle className="mr-2 text-blue-500" /> 新增活動資料</h3>
+                            <div className="text-xs bg-slate-100 px-2 py-1 rounded text-slate-500">
+                                年度: <select className="bg-transparent font-bold outline-none" value={schoolYearStart} onChange={handleSchoolYearChange}><option value={2024}>24-25</option><option value={2025}>25-26</option><option value={2026}>26-27</option></select>
+                            </div>
+                        </div>
                         <div className="space-y-3 mb-4">
                             <div><label className="text-xs text-slate-500 font-bold uppercase">活動名稱</label><input type="text" className="w-full p-2 border rounded" value={importActivity} onChange={e => setImportActivity(e.target.value)} /></div>
                             <div className="grid grid-cols-2 gap-2"><div><label className="text-xs text-slate-500 font-bold uppercase">時間</label><input type="text" className="w-full p-2 border rounded" value={importTime} onChange={e => setImportTime(e.target.value)} /></div><div><label className="text-xs text-slate-500 font-bold uppercase">地點</label><input type="text" className="w-full p-2 border rounded" value={importLocation} onChange={e => setImportLocation(e.target.value)} /></div></div>
-                            <div className="border border-slate-200 rounded p-3 bg-slate-50"><label className="text-xs text-slate-500 font-bold uppercase mb-2 block">選擇日期 (多選)</label><div className="flex gap-2 mb-2"><input type="date" className="flex-1 p-2 border rounded text-sm" value={tempDateInput} onChange={(e) => setTempDateInput(e.target.value)} onKeyDown={handleDateInputKeyDown} /><button onClick={handleAddDate} className="bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 flex items-center"><Plus size={16} /></button></div><div className="flex flex-wrap gap-2 mb-2">{importDates.map(date => (<span key={date} className="bg-white border border-blue-200 text-blue-800 text-xs px-2 py-1 rounded-full flex items-center shadow-sm">{date}<button onClick={() => handleRemoveDate(date)} className="ml-1 text-blue-400 hover:text-red-500"><X size={12} /></button></span>))}</div><div className="flex justify-between items-center text-xs"><span className="font-bold text-slate-600">已選: {importDates.length} 天 (共{importDates.length}堂)</span>{importDates.length > 0 && <button onClick={handleClearDates} className="text-red-400 hover:underline">清空</button>}</div></div>
+                            <div className="border border-slate-200 rounded p-3 bg-slate-50"><label className="text-xs text-slate-500 font-bold uppercase mb-2 block">選擇日期 (輸入 02/09 即 2月9日)</label><div className="flex gap-2 mb-2"><input type="text" ref={dateInputRef} placeholder="MM/DD" className="flex-1 p-2 border rounded text-sm" value={tempDateInput} onChange={(e) => setTempDateInput(e.target.value)} onKeyDown={handleDateInputKeyDown} /><button onClick={handleAddDate} className="bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 flex items-center"><Plus size={16} /></button></div><div className="flex flex-wrap gap-2 mb-2">{importDates.map(date => (<span key={date} className="bg-white border border-blue-200 text-blue-800 text-xs px-2 py-1 rounded-full flex items-center shadow-sm">{date}<button onClick={() => handleRemoveDate(date)} className="ml-1 text-blue-400 hover:text-red-500"><X size={12} /></button></span>))}</div><div className="flex justify-between items-center text-xs"><span className="font-bold text-slate-600">已選: {importDates.length} 天 (共{importDates.length}堂)</span>{importDates.length > 0 && <button onClick={handleClearDates} className="text-red-400 hover:underline">清空</button>}</div></div>
                             <div><label className="text-xs text-slate-500 font-bold uppercase">星期 (自動/預設)</label><select className="w-full p-2 border rounded" value={importDayId} onChange={e => setImportDayId(e.target.value)}><option value="1">逢星期一</option><option value="2">逢星期二</option><option value="3">逢星期三</option><option value="4">逢星期四</option><option value="5">逢星期五</option><option value="6">逢星期六</option><option value="0">逢星期日</option></select></div>
                         </div>
                         <div className="mb-4"><label className="text-xs text-slate-500 font-bold uppercase flex justify-between"><span>貼上名單 (PDF Copy/Paste)</span><span className="text-blue-500 cursor-pointer flex items-center" title="格式: 4A 蔡舒朗 (可含電話)"><FileText size={12} className="mr-1"/> 說明</span></label><textarea className="w-full h-32 p-2 border rounded bg-slate-50 text-sm font-mono" placeholder={`4A 蔡舒朗 91234567\n2A1 陳嘉瑩`} value={bulkInput} onChange={e => setBulkInput(e.target.value)}></textarea></div>
