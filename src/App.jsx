@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, Phone, CheckSquare, Square, RefreshCcw, X, Plus } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, Phone, CheckSquare, Square, RefreshCcw, X, Plus, Edit2, FileSpreadsheet } from 'lucide-react';
 
 // =============================================================================
 //  CONFIGURATION: FIREBASE SETUP
@@ -31,19 +31,12 @@ const mockAuth = {
 };
 
 // -----------------------------------------------------------------------------
-// 1. MASTER DATA
+// 1. MASTER DATA (Default fallback)
 // -----------------------------------------------------------------------------
 const RAW_CSV_CONTENT = `
 1A,1,S9900448,CHAN CHIT HIM JAYDON,陳哲謙,M
 1A,2,N0417791,CHAN HAU MAN,陳孝敏,F
 1A,3,N0101050,CHAN KA FAI,陳嘉輝,M
-1A,4,S9866797,CHAN SUM YUET ASHLEY,陳芯月,F
-1A,5,N0281040,CHENG YU KIU,鄭羽喬,F
-1A,6,N0120675,CHEUNG HOI KI,張凱琪,F
-1A,7,N0075084,DINH YAT LONG,丁一朗,M
-1A,8,N001641A,FUNG SAN HOI,馮薪凱,M
-1A,9,N008198A,HO TSZ KAI,何子鍇,M
-1A,10,42064116,HUANG ZHIXIN,黃芷昕,F
 2A,1,S1234567,CHAN KA YING,陳嘉瑩,F
 2A,7,S1234568,LEUNG MAN NEI,梁嫚妮,F
 3C,20,S1234569,WU MAN LAM,胡曼琳,F
@@ -78,10 +71,10 @@ const parseMasterCSV = (csvText) => {
   }).filter(item => item !== null);
 };
 
-const MASTER_DB = parseMasterCSV(RAW_CSV_CONTENT);
+const INITIAL_MASTER_DB = parseMasterCSV(RAW_CSV_CONTENT);
 
 // -----------------------------------------------------------------------------
-// 2. IMPORT DATA (Cleaned for V1.8)
+// 2. IMPORT DATA
 // -----------------------------------------------------------------------------
 const PDF_IMPORT_MOCK = []; 
 
@@ -93,7 +86,7 @@ const App = () => {
   const [loginPwd, setLoginPwd] = useState('');
   
   // Data
-  const [masterList, setMasterList] = useState(MASTER_DB);
+  const [masterList, setMasterList] = useState(INITIAL_MASTER_DB);
   const [activities, setActivities] = useState([]); 
   const [pendingImports, setPendingImports] = useState(PDF_IMPORT_MOCK);
   
@@ -103,13 +96,17 @@ const App = () => {
   const [importTime, setImportTime] = useState('15:30-16:30');
   const [importLocation, setImportLocation] = useState('禮堂');
   const [importDayId, setImportDayId] = useState(1);
-  
-  // V1.9: Multi-Date Picker State
-  const [importDates, setImportDates] = useState([]); // Array of date strings 'YYYY-MM-DD'
+  const [importDates, setImportDates] = useState([]); 
   const [tempDateInput, setTempDateInput] = useState('');
 
-  // Reconcile UI State
+  // Admin UI State
+  const [adminTab, setAdminTab] = useState('import'); // 'import' | 'manage_db'
   const [selectedMatchIds, setSelectedMatchIds] = useState(new Set());
+  const fileInputRef = useRef(null); // Ref for hidden file input
+
+  // DB Editing State
+  const [editingId, setEditingId] = useState(null);
+  const [editFormData, setEditFormData] = useState({});
 
   // UI
   const [searchTerm, setSearchTerm] = useState('');
@@ -138,19 +135,44 @@ const App = () => {
       setCurrentView('student'); 
   };
 
-  // Logic: Multi-Date Management (V1.9)
+  // Logic: Master CSV Upload (V2.0)
+  const handleMasterUploadTrigger = () => {
+      fileInputRef.current.click();
+  };
+
+  const handleMasterFileChange = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+          const text = event.target.result;
+          try {
+              const newMaster = parseMasterCSV(text);
+              if (newMaster.length > 0) {
+                  setMasterList(newMaster);
+                  alert(`成功更新真理數據庫！共載入 ${newMaster.length} 筆學生資料。`);
+              } else {
+                  alert("CSV 格式無法識別或無資料。");
+              }
+          } catch (err) {
+              alert("解析 CSV 失敗: " + err.message);
+          }
+      };
+      reader.readAsText(file);
+  };
+
+  // Logic: Multi-Date Management
   const handleAddDate = () => {
       if (tempDateInput && !importDates.includes(tempDateInput)) {
           const newDates = [...importDates, tempDateInput].sort();
           setImportDates(newDates);
-          
-          // Auto-update dayId based on the first date added
           if (newDates.length === 1) {
               const date = new Date(tempDateInput);
               setImportDayId(date.getDay());
           }
       }
-      setTempDateInput(''); // Clear input for next
+      setTempDateInput(''); 
   };
 
   const handleRemoveDate = (dateToRemove) => {
@@ -167,7 +189,6 @@ const App = () => {
       const newItems = [];
       const dayMap = {1:'逢星期一', 2:'逢星期二', 3:'逢星期三', 4:'逢星期四', 5:'逢星期五', 6:'逢星期六', 0:'逢星期日'};
 
-      // Construct Date Text
       let finalDateText = dayMap[importDayId];
       if (importDates.length > 0) {
           finalDateText = `共${importDates.length}堂 (${importDates[0]}起)`;
@@ -196,8 +217,8 @@ const App = () => {
                   time: importTime,
                   location: importLocation,
                   dateText: finalDateText,
-                  dayIds: [parseInt(importDayId)], // Main day for recurring
-                  specificDates: importDates, // Store specific dates if any
+                  dayIds: [parseInt(importDayId)], 
+                  specificDates: importDates, 
                   forceConflict: false 
               });
           }
@@ -246,7 +267,6 @@ const App = () => {
     return { matched, conflicts };
   }, [pendingImports, masterList]);
 
-  // Auto-Select All Matched on change
   useEffect(() => {
       const allIds = new Set(matched.map(m => m.id));
       setSelectedMatchIds(allIds);
@@ -269,21 +289,17 @@ const App = () => {
 
   const handlePublish = () => {
     const toPublish = matched.filter(m => selectedMatchIds.has(m.id));
-    
     if (toPublish.length === 0) {
         alert("請至少選擇一筆資料進行發布");
         return;
     }
-
     setActivities(prev => {
         const newIds = new Set(toPublish.map(m => m.id));
         const kept = prev.filter(p => !newIds.has(p.id));
         return [...kept, ...toPublish];
     });
-    
     const publishedIds = new Set(toPublish.map(m => m.id));
     setPendingImports(prev => prev.filter(p => !publishedIds.has(p.id)));
-    
     alert(`成功發布 ${toPublish.length} 筆活動資料！`);
   };
 
@@ -311,6 +327,39 @@ const App = () => {
     setPendingImports(prev => prev.filter(i => i.id !== id));
   };
 
+  // Logic: Database Management (V2.0)
+  const handleDeleteActivity = (id) => {
+      if(window.confirm('確定要刪除這筆紀錄嗎？')) {
+          setActivities(prev => prev.filter(a => a.id !== id));
+      }
+  };
+
+  const startEditActivity = (act) => {
+      setEditingId(act.id);
+      setEditFormData({
+          activity: act.activity,
+          time: act.time,
+          location: act.location,
+          dateText: act.dateText
+      });
+  };
+
+  const saveEditActivity = (id) => {
+      setActivities(prev => prev.map(a => {
+          if (a.id === id) {
+              return { ...a, ...editFormData };
+          }
+          return a;
+      }));
+      setEditingId(null);
+  };
+
+  const cancelEdit = () => {
+      setEditingId(null);
+      setEditFormData({});
+  };
+
+  // Logic: Search
   const handleStudentSearch = () => {
     const formattedClassNo = selectedClassNo.padStart(2, '0');
     const results = activities.filter(item => 
@@ -461,6 +510,74 @@ const App = () => {
       </div>
   );
 
+  // V2.0 Database Management Sub-View
+  const renderDatabaseManager = () => (
+      <div className="bg-white p-6 rounded-xl shadow-md min-h-[500px]">
+          <div className="flex justify-between items-center mb-6">
+              <button onClick={() => setAdminTab('import')} className="flex items-center text-slate-500 hover:text-blue-600">
+                  <ArrowLeft className="mr-2" size={20} /> 返回導入介面
+              </button>
+              <h2 className="text-2xl font-bold text-slate-800 flex items-center">
+                  <Database className="mr-2 text-blue-600" /> 數據庫管理
+              </h2>
+              <div className="w-24"></div>
+          </div>
+
+          <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm border-collapse">
+                  <thead className="bg-slate-100 text-slate-600 uppercase">
+                      <tr>
+                          <th className="p-3">學生</th>
+                          <th className="p-3">活動名稱</th>
+                          <th className="p-3">時間</th>
+                          <th className="p-3">地點</th>
+                          <th className="p-3">日期/備註</th>
+                          <th className="p-3 text-right">操作</th>
+                      </tr>
+                  </thead>
+                  <tbody>
+                      {activities.map(act => (
+                          <tr key={act.id} className="border-b hover:bg-slate-50">
+                              <td className="p-3">
+                                  <div className="font-bold text-slate-800">{act.verifiedClass} ({act.verifiedClassNo})</div>
+                                  <div className="text-slate-500">{act.verifiedName}</div>
+                              </td>
+                              {editingId === act.id ? (
+                                  <>
+                                      <td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.activity} onChange={e => setEditFormData({...editFormData, activity: e.target.value})} /></td>
+                                      <td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.time} onChange={e => setEditFormData({...editFormData, time: e.target.value})} /></td>
+                                      <td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.location} onChange={e => setEditFormData({...editFormData, location: e.target.value})} /></td>
+                                      <td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.dateText} onChange={e => setEditFormData({...editFormData, dateText: e.target.value})} /></td>
+                                      <td className="p-3 text-right">
+                                          <div className="flex justify-end gap-2">
+                                              <button onClick={() => saveEditActivity(act.id)} className="bg-green-100 text-green-700 p-1 rounded hover:bg-green-200"><CheckCircle size={18} /></button>
+                                              <button onClick={cancelEdit} className="bg-slate-100 text-slate-600 p-1 rounded hover:bg-slate-200"><X size={18} /></button>
+                                          </div>
+                                      </td>
+                                  </>
+                              ) : (
+                                  <>
+                                      <td className="p-3 font-bold text-blue-700">{act.activity}</td>
+                                      <td className="p-3">{act.time}</td>
+                                      <td className="p-3">{act.location}</td>
+                                      <td className="p-3 text-slate-500">{act.dateText}</td>
+                                      <td className="p-3 text-right">
+                                          <div className="flex justify-end gap-2">
+                                              <button onClick={() => startEditActivity(act)} className="text-blue-500 hover:text-blue-700 p-1"><Edit2 size={18} /></button>
+                                              <button onClick={() => handleDeleteActivity(act.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={18} /></button>
+                                          </div>
+                                      </td>
+                                  </>
+                              )}
+                          </tr>
+                      ))}
+                      {activities.length === 0 && <tr><td colSpan="6" className="p-8 text-center text-slate-400">目前沒有資料，請先導入。</td></tr>}
+                  </tbody>
+              </table>
+          </div>
+      </div>
+  );
+
   const renderAdminView = () => (
       <div className="min-h-screen bg-slate-100 p-6 flex-1">
         <div className="max-w-7xl mx-auto">
@@ -475,204 +592,228 @@ const App = () => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-               <div className="lg:col-span-2 space-y-6">
-                  {/* Verified Block */}
-                  <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                     <div className="flex justify-between items-center mb-4">
-                        <div className="flex items-center space-x-3">
-                            <h3 className="font-bold text-lg text-green-700 flex items-center"><CheckCircle className="mr-2" size={20} /> 等待發布 ({matched.length})</h3>
-                            <button onClick={toggleSelectAll} className="text-sm text-slate-500 flex items-center hover:text-slate-800">
-                                {selectedMatchIds.size === matched.length ? <CheckSquare size={16} className="mr-1"/> : <Square size={16} className="mr-1"/>}
-                                全選/取消
-                            </button>
+            {/* Hidden File Input for Master Data */}
+            <input 
+                type="file" 
+                ref={fileInputRef} 
+                className="hidden" 
+                accept=".csv"
+                onChange={handleMasterFileChange} 
+            />
+
+            {/* V2.0: Toggle Views */}
+            {adminTab === 'manage_db' ? renderDatabaseManager() : (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Left: Reconcile Action Area */}
+                <div className="lg:col-span-2 space-y-6">
+                    {/* Verified Block */}
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                        <div className="flex justify-between items-center mb-4">
+                            <div className="flex items-center space-x-3">
+                                <h3 className="font-bold text-lg text-green-700 flex items-center"><CheckCircle className="mr-2" size={20} /> 等待發布 ({matched.length})</h3>
+                                <button onClick={toggleSelectAll} className="text-sm text-slate-500 flex items-center hover:text-slate-800">
+                                    {selectedMatchIds.size === matched.length ? <CheckSquare size={16} className="mr-1"/> : <Square size={16} className="mr-1"/>}
+                                    全選/取消
+                                </button>
+                            </div>
+                            {matched.length > 0 && (<button onClick={handlePublish} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center shadow-md active:scale-95 transition"><Save size={18} className="mr-2" /> 發布選取項目 ({selectedMatchIds.size})</button>)}
                         </div>
-                        {matched.length > 0 && (<button onClick={handlePublish} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center shadow-md active:scale-95 transition"><Save size={18} className="mr-2" /> 發布選取項目 ({selectedMatchIds.size})</button>)}
-                     </div>
-                     <div className="bg-green-50 rounded-lg border border-green-100 max-h-96 overflow-y-auto">
-                        {matched.length > 0 ? (
-                            <table className="w-full text-sm">
-                                <thead className="bg-green-100/50 text-green-800 sticky top-0 border-b border-green-200">
-                                    <tr>
-                                        <th className="py-2 px-2 w-8"></th>
-                                        <th className="py-2 px-4 text-left w-1/3">原始 PDF 資料</th>
-                                        <th className="py-2 px-4 text-center w-10"></th>
-                                        <th className="py-2 px-4 text-left w-1/3">Master Data (真理)</th>
-                                        <th className="py-2 px-4 text-right">操作</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {matched.map(m => (
-                                        <tr key={m.id} className={`border-b border-green-100 last:border-0 hover:bg-green-100/40 transition-colors ${selectedMatchIds.has(m.id) ? 'bg-green-100/20' : 'opacity-50'}`}>
-                                            <td className="py-3 px-2 text-center">
-                                                <input type="checkbox" checked={selectedMatchIds.has(m.id)} onChange={() => toggleSelectMatch(m.id)} className="w-4 h-4 rounded text-green-600 focus:ring-green-500" />
-                                            </td>
-                                            <td className="py-3 px-4">
-                                                <div className="text-slate-500 text-xs uppercase mb-0.5">PDF Source</div>
-                                                <div className="font-medium text-slate-700">{m.rawClass} {m.rawName}</div>
-                                                <div className="text-xs text-red-400 font-mono">{m.rawClassNo === '00' ? '缺學號' : m.rawClassNo}</div>
-                                                {m.rawPhone && <div className="text-xs text-blue-500 font-mono flex items-center mt-1"><Phone size={10} className="mr-1"/>{m.rawPhone}</div>}
-                                            </td>
-                                            <td className="py-3 px-2 text-center text-slate-300"><ArrowRight size={16} /></td>
-                                            <td className="py-3 px-4 bg-green-100/30">
-                                                <div className="text-green-600 text-xs uppercase font-bold flex items-center mb-0.5"><Database size={10} className="mr-1" /> Master Data</div>
-                                                <div className="font-bold text-green-700 text-lg flex items-center">
-                                                   <span className="mr-2">{m.verifiedClass}</span>
-                                                   <span className="bg-white text-green-800 border border-green-200 px-1.5 rounded text-sm min-w-[24px] text-center mr-2">{m.verifiedClassNo}</span>
-                                                   <span>{m.verifiedName}</span>
-                                                </div>
-                                            </td>
-                                            <td className="py-3 px-4 text-right">
-                                                <button onClick={() => handleManualConflict(m.id)} className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded hover:bg-red-200 flex items-center ml-auto">
-                                                    <AlertTriangle size={12} className="mr-1" /> 轉為異常
-                                                </button>
-                                                <div className="text-xs text-slate-400 mt-1">{m.activity}</div>
-                                                {m.specificDates && m.specificDates.length > 0 && <div className="text-xs bg-blue-100 text-blue-600 px-1 rounded inline-block mt-1">共 {m.specificDates.length} 堂</div>}
-                                            </td>
+                        <div className="bg-green-50 rounded-lg border border-green-100 max-h-96 overflow-y-auto">
+                            {matched.length > 0 ? (
+                                <table className="w-full text-sm">
+                                    <thead className="bg-green-100/50 text-green-800 sticky top-0 border-b border-green-200">
+                                        <tr>
+                                            <th className="py-2 px-2 w-8"></th>
+                                            <th className="py-2 px-4 text-left w-1/3">原始 PDF 資料</th>
+                                            <th className="py-2 px-4 text-center w-10"></th>
+                                            <th className="py-2 px-4 text-left w-1/3">Master Data (真理)</th>
+                                            <th className="py-2 px-4 text-right">操作</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        ) : (<div className="text-center text-green-800/50 py-8">暫無自動配對資料</div>)}
-                     </div>
-                  </div>
-
-                  {/* Conflict Block */}
-                  {conflicts.length > 0 && (
-                      <div className="bg-white p-6 rounded-xl shadow-md border-l-4 border-red-500 animate-pulse-border">
-                         <h3 className="font-bold text-lg text-red-700 flex items-center mb-4"><AlertTriangle className="mr-2" /> 異常資料需修正 ({conflicts.length})</h3>
-                        <div className="space-y-3">
-                           {conflicts.map(item => (
-                              <div key={item.id} className="border border-red-100 rounded-lg p-4 bg-red-50/50 flex flex-col md:flex-row items-center justify-between gap-4">
-                                 <div className="flex-1">
-                                    <div className="font-bold text-slate-800">{item.rawClass} {item.rawName}</div>
-                                    <div className="text-xs text-slate-500">{item.activity} {item.rawPhone && `| ${item.rawPhone}`}</div>
-                                    {item.status === 'manual_conflict' && <div className="text-xs text-red-600 font-bold mt-1">* 人手標記異常</div>}
-                                 </div>
-                                 <ArrowRight className="text-slate-300 md:rotate-0 rotate-90" />
-                                 <div className="flex-1 w-full">
-                                    <select className="w-full p-2 border border-slate-300 rounded-lg bg-white text-sm" onChange={(e) => { if(e.target.value) { const student = masterList.find(s => s.key === e.target.value); if(student) handleResolveConflict(item, student); }}} defaultValue="">
-                                        <option value="" disabled>-- 選擇正確學生 --</option>
-                                        <optgroup label="智能推薦">
-                                            {masterList.filter(s => s.classCode === item.rawClass || s.chiName.includes(item.rawName[0])).map(s => (
-                                                <option key={s.key} value={s.key}>{s.classCode} ({s.classNo}) {s.chiName}</option>
-                                            ))}
-                                        </optgroup>
-                                        <optgroup label="全部名單"><option value="search">...</option></optgroup>
-                                    </select>
-                                 </div>
-                                 <button onClick={() => handleDeleteImport(item.id)} className="p-2 text-red-400 hover:bg-red-100 rounded"><Trash2 size={18} /></button>
-                              </div>
-                           ))}
+                                    </thead>
+                                    <tbody>
+                                        {matched.map(m => (
+                                            <tr key={m.id} className={`border-b border-green-100 last:border-0 hover:bg-green-100/40 transition-colors ${selectedMatchIds.has(m.id) ? 'bg-green-100/20' : 'opacity-50'}`}>
+                                                <td className="py-3 px-2 text-center">
+                                                    <input type="checkbox" checked={selectedMatchIds.has(m.id)} onChange={() => toggleSelectMatch(m.id)} className="w-4 h-4 rounded text-green-600 focus:ring-green-500" />
+                                                </td>
+                                                <td className="py-3 px-4">
+                                                    <div className="text-slate-500 text-xs uppercase mb-0.5">PDF Source</div>
+                                                    <div className="font-medium text-slate-700">{m.rawClass} {m.rawName}</div>
+                                                    <div className="text-xs text-red-400 font-mono">{m.rawClassNo === '00' ? '缺學號' : m.rawClassNo}</div>
+                                                    {m.rawPhone && <div className="text-xs text-blue-500 font-mono flex items-center mt-1"><Phone size={10} className="mr-1"/>{m.rawPhone}</div>}
+                                                </td>
+                                                <td className="py-3 px-2 text-center text-slate-300"><ArrowRight size={16} /></td>
+                                                <td className="py-3 px-4 bg-green-100/30">
+                                                    <div className="text-green-600 text-xs uppercase font-bold flex items-center mb-0.5"><Database size={10} className="mr-1" /> Master Data</div>
+                                                    <div className="font-bold text-green-700 text-lg flex items-center">
+                                                    <span className="mr-2">{m.verifiedClass}</span>
+                                                    <span className="bg-white text-green-800 border border-green-200 px-1.5 rounded text-sm min-w-[24px] text-center mr-2">{m.verifiedClassNo}</span>
+                                                    <span>{m.verifiedName}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="py-3 px-4 text-right">
+                                                    <button onClick={() => handleManualConflict(m.id)} className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded hover:bg-red-200 flex items-center ml-auto">
+                                                        <AlertTriangle size={12} className="mr-1" /> 轉為異常
+                                                    </button>
+                                                    <div className="text-xs text-slate-400 mt-1">{m.activity}</div>
+                                                    {m.specificDates && m.specificDates.length > 0 && <div className="text-xs bg-blue-100 text-blue-600 px-1 rounded inline-block mt-1">共 {m.specificDates.length} 堂</div>}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            ) : (<div className="text-center text-green-800/50 py-8">暫無自動配對資料</div>)}
                         </div>
-                      </div>
-                  )}
-               </div>
+                    </div>
 
-               {/* Right Side: Import Panel */}
-               <div className="space-y-6">
-                  <div className="bg-slate-800 text-slate-300 p-6 rounded-xl shadow-md">
-                      <h3 className="font-bold text-white mb-4 flex items-center"><Database className="mr-2" size={16}/> 數據庫狀態</h3>
-                      <div className="space-y-4">
-                          <div className="bg-slate-700 p-3 rounded-lg flex justify-between items-center">
-                              <div className="text-xs text-slate-400 uppercase">已發布活動</div>
-                              <div className="text-2xl font-bold text-white">{activities.length}</div>
-                          </div>
-                          <div className="bg-slate-700 p-3 rounded-lg flex justify-between items-center">
-                              <div className="text-xs text-slate-400 uppercase">學生總數</div>
-                              <div className="text-2xl font-bold text-white">{masterList.length}</div>
-                          </div>
-                      </div>
-                  </div>
+                    {/* Conflict Block */}
+                    {conflicts.length > 0 && (
+                        <div className="bg-white p-6 rounded-xl shadow-md border-l-4 border-red-500 animate-pulse-border">
+                            <h3 className="font-bold text-lg text-red-700 flex items-center mb-4"><AlertTriangle className="mr-2" /> 異常資料需修正 ({conflicts.length})</h3>
+                            <div className="space-y-3">
+                            {conflicts.map(item => (
+                                <div key={item.id} className="border border-red-100 rounded-lg p-4 bg-red-50/50 flex flex-col md:flex-row items-center justify-between gap-4">
+                                    <div className="flex-1">
+                                        <div className="font-bold text-slate-800">{item.rawClass} {item.rawName}</div>
+                                        <div className="text-xs text-slate-500">{item.activity} {item.rawPhone && `| ${item.rawPhone}`}</div>
+                                        {item.status === 'manual_conflict' && <div className="text-xs text-red-600 font-bold mt-1">* 人手標記異常</div>}
+                                    </div>
+                                    <ArrowRight className="text-slate-300 md:rotate-0 rotate-90" />
+                                    <div className="flex-1 w-full">
+                                        <select className="w-full p-2 border border-slate-300 rounded-lg bg-white text-sm" onChange={(e) => { if(e.target.value) { const student = masterList.find(s => s.key === e.target.value); if(student) handleResolveConflict(item, student); }}} defaultValue="">
+                                            <option value="" disabled>-- 選擇正確學生 --</option>
+                                            <optgroup label="智能推薦">
+                                                {masterList.filter(s => s.classCode === item.rawClass || s.chiName.includes(item.rawName[0])).map(s => (
+                                                    <option key={s.key} value={s.key}>{s.classCode} ({s.classNo}) {s.chiName}</option>
+                                                ))}
+                                            </optgroup>
+                                            <optgroup label="全部名單"><option value="search">...</option></optgroup>
+                                        </select>
+                                    </div>
+                                    <button onClick={() => handleDeleteImport(item.id)} className="p-2 text-red-400 hover:bg-red-100 rounded"><Trash2 size={18} /></button>
+                                </div>
+                            ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
 
-                  {/* Import Panel (V1.9) */}
-                  <div className="bg-white p-6 rounded-xl shadow-md border-t-4 border-blue-500">
-                      <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center">
-                          <PlusCircle className="mr-2 text-blue-500" /> 新增活動資料
-                      </h3>
-                      
-                      <div className="space-y-3 mb-4">
-                          <div>
-                              <label className="text-xs text-slate-500 font-bold uppercase">活動名稱</label>
-                              <input type="text" className="w-full p-2 border rounded" value={importActivity} onChange={e => setImportActivity(e.target.value)} />
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                  <label className="text-xs text-slate-500 font-bold uppercase">時間</label>
-                                  <input type="text" className="w-full p-2 border rounded" value={importTime} onChange={e => setImportTime(e.target.value)} />
-                              </div>
-                              <div>
-                                  <label className="text-xs text-slate-500 font-bold uppercase">地點</label>
-                                  <input type="text" className="w-full p-2 border rounded" value={importLocation} onChange={e => setImportLocation(e.target.value)} />
-                              </div>
-                          </div>
-                          
-                          {/* Multi-Date Picker */}
-                          <div className="border border-slate-200 rounded p-3 bg-slate-50">
-                              <label className="text-xs text-slate-500 font-bold uppercase mb-2 block">選擇日期 (多選)</label>
-                              <div className="flex gap-2 mb-2">
-                                  <input 
-                                    type="date" 
-                                    className="flex-1 p-2 border rounded text-sm" 
-                                    value={tempDateInput} 
-                                    onChange={(e) => setTempDateInput(e.target.value)} 
-                                  />
-                                  <button onClick={handleAddDate} className="bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 flex items-center">
-                                      <Plus size={16} />
-                                  </button>
-                              </div>
-                              
-                              <div className="flex flex-wrap gap-2 mb-2">
-                                  {importDates.map(date => (
-                                      <span key={date} className="bg-white border border-blue-200 text-blue-800 text-xs px-2 py-1 rounded-full flex items-center shadow-sm">
-                                          {date}
-                                          <button onClick={() => handleRemoveDate(date)} className="ml-1 text-blue-400 hover:text-red-500"><X size={12} /></button>
-                                      </span>
-                                  ))}
-                              </div>
-                              
-                              <div className="flex justify-between items-center text-xs">
-                                  <span className="font-bold text-slate-600">已選: {importDates.length} 天 (共{importDates.length}堂)</span>
-                                  {importDates.length > 0 && <button onClick={handleClearDates} className="text-red-400 hover:underline">清空</button>}
-                              </div>
-                          </div>
+                {/* Right Side: Import Panel */}
+                <div className="space-y-6">
+                    <div className="bg-slate-800 text-slate-300 p-6 rounded-xl shadow-md cursor-pointer hover:bg-slate-750 transition border border-slate-700 group" onClick={() => setAdminTab('manage_db')}>
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-bold text-white flex items-center group-hover:text-blue-300 transition"><Database className="mr-2" size={16}/> 數據庫狀態</h3>
+                            <span className="text-xs bg-blue-600 text-white px-2 py-1 rounded">點擊管理</span>
+                        </div>
+                        <div className="space-y-4">
+                            <div className="bg-slate-700 p-3 rounded-lg flex justify-between items-center">
+                                <div className="text-xs text-slate-400 uppercase">已發布活動</div>
+                                <div className="text-2xl font-bold text-white">{activities.length}</div>
+                            </div>
+                            <div className="bg-slate-700 p-3 rounded-lg flex justify-between items-center">
+                                <div className="text-xs text-slate-400 uppercase">學生總數</div>
+                                <div className="text-2xl font-bold text-white">{masterList.length}</div>
+                            </div>
+                        </div>
+                    </div>
 
-                          <div>
-                              <label className="text-xs text-slate-500 font-bold uppercase">星期 (自動/預設)</label>
-                              <select className="w-full p-2 border rounded" value={importDayId} onChange={e => setImportDayId(e.target.value)}>
-                                  <option value="1">逢星期一</option>
-                                  <option value="2">逢星期二</option>
-                                  <option value="3">逢星期三</option>
-                                  <option value="4">逢星期四</option>
-                                  <option value="5">逢星期五</option>
-                                  <option value="6">逢星期六</option>
-                                  <option value="0">逢星期日</option>
-                              </select>
-                          </div>
-                      </div>
+                    {/* V2.0: Master CSV Upload Button */}
+                    <button 
+                        onClick={handleMasterUploadTrigger}
+                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white p-4 rounded-xl flex items-center justify-center font-bold shadow-md transition"
+                    >
+                        <FileSpreadsheet className="mr-2" /> 上載真理 Data (CSV)
+                    </button>
 
-                      <div className="mb-4">
-                          <label className="text-xs text-slate-500 font-bold uppercase flex justify-between">
-                              <span>貼上名單 (PDF Copy/Paste)</span>
-                              <span className="text-blue-500 cursor-pointer flex items-center" title="格式: 4A 蔡舒朗 (可含電話)"><FileText size={12} className="mr-1"/> 說明</span>
-                          </label>
-                          <textarea 
-                              className="w-full h-32 p-2 border rounded bg-slate-50 text-sm font-mono"
-                              placeholder={`4A 蔡舒朗 91234567\n2A1 陳嘉瑩`}
-                              value={bulkInput}
-                              onChange={e => setBulkInput(e.target.value)}
-                          ></textarea>
-                      </div>
+                    {/* Import Panel */}
+                    <div className="bg-white p-6 rounded-xl shadow-md border-t-4 border-blue-500">
+                        <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center">
+                            <PlusCircle className="mr-2 text-blue-500" /> 新增活動資料
+                        </h3>
+                        
+                        <div className="space-y-3 mb-4">
+                            <div>
+                                <label className="text-xs text-slate-500 font-bold uppercase">活動名稱</label>
+                                <input type="text" className="w-full p-2 border rounded" value={importActivity} onChange={e => setImportActivity(e.target.value)} />
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label className="text-xs text-slate-500 font-bold uppercase">時間</label>
+                                    <input type="text" className="w-full p-2 border rounded" value={importTime} onChange={e => setImportTime(e.target.value)} />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-slate-500 font-bold uppercase">地點</label>
+                                    <input type="text" className="w-full p-2 border rounded" value={importLocation} onChange={e => setImportLocation(e.target.value)} />
+                                </div>
+                            </div>
+                            
+                            {/* Multi-Date Picker */}
+                            <div className="border border-slate-200 rounded p-3 bg-slate-50">
+                                <label className="text-xs text-slate-500 font-bold uppercase mb-2 block">選擇日期 (多選)</label>
+                                <div className="flex gap-2 mb-2">
+                                    <input 
+                                        type="date" 
+                                        className="flex-1 p-2 border rounded text-sm" 
+                                        value={tempDateInput} 
+                                        onChange={(e) => setTempDateInput(e.target.value)} 
+                                    />
+                                    <button onClick={handleAddDate} className="bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 flex items-center">
+                                        <Plus size={16} />
+                                    </button>
+                                </div>
+                                
+                                <div className="flex flex-wrap gap-2 mb-2">
+                                    {importDates.map(date => (
+                                        <span key={date} className="bg-white border border-blue-200 text-blue-800 text-xs px-2 py-1 rounded-full flex items-center shadow-sm">
+                                            {date}
+                                            <button onClick={() => handleRemoveDate(date)} className="ml-1 text-blue-400 hover:text-red-500"><X size={12} /></button>
+                                        </span>
+                                    ))}
+                                </div>
+                                
+                                <div className="flex justify-between items-center text-xs">
+                                    <span className="font-bold text-slate-600">已選: {importDates.length} 天 (共{importDates.length}堂)</span>
+                                    {importDates.length > 0 && <button onClick={handleClearDates} className="text-red-400 hover:underline">清空</button>}
+                                </div>
+                            </div>
 
-                      <button 
-                          onClick={handleBulkImport}
-                          className="w-full py-2 bg-blue-600 text-white font-bold rounded hover:bg-blue-700 transition"
-                      >
-                          識別並載入
-                      </button>
-                  </div>
-               </div>
-            </div>
+                            <div>
+                                <label className="text-xs text-slate-500 font-bold uppercase">星期 (自動/預設)</label>
+                                <select className="w-full p-2 border rounded" value={importDayId} onChange={e => setImportDayId(e.target.value)}>
+                                    <option value="1">逢星期一</option>
+                                    <option value="2">逢星期二</option>
+                                    <option value="3">逢星期三</option>
+                                    <option value="4">逢星期四</option>
+                                    <option value="5">逢星期五</option>
+                                    <option value="6">逢星期六</option>
+                                    <option value="0">逢星期日</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="mb-4">
+                            <label className="text-xs text-slate-500 font-bold uppercase flex justify-between">
+                                <span>貼上名單 (PDF Copy/Paste)</span>
+                                <span className="text-blue-500 cursor-pointer flex items-center" title="格式: 4A 蔡舒朗 (可含電話)"><FileText size={12} className="mr-1"/> 說明</span>
+                            </label>
+                            <textarea 
+                                className="w-full h-32 p-2 border rounded bg-slate-50 text-sm font-mono"
+                                placeholder={`4A 蔡舒朗 91234567\n2A1 陳嘉瑩`}
+                                value={bulkInput}
+                                onChange={e => setBulkInput(e.target.value)}
+                            ></textarea>
+                        </div>
+
+                        <button 
+                            onClick={handleBulkImport}
+                            className="w-full py-2 bg-blue-600 text-white font-bold rounded hover:bg-blue-700 transition"
+                        >
+                            識別並載入
+                        </button>
+                    </div>
+                </div>
+                </div>
+            )}
         </div>
       </div>
   );
