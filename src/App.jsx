@@ -2,9 +2,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key } from 'lucide-react';
 
 // =============================================================================
-//  CONFIGURATION: FIREBASE SETUP (StackBlitz 配置)
+//  CONFIGURATION: FIREBASE SETUP
 // =============================================================================
-// 如果你要在 StackBlitz 上連接真實資料庫，請將此設為 true 並填入資料
 const USE_FIREBASE = false; 
 
 const firebaseConfig = {
@@ -16,7 +15,7 @@ const firebaseConfig = {
   appId: "1:123:web:123"
 };
 
-// Mock Auth SDK (模擬 Firebase 登入)
+// Mock Auth SDK
 const mockAuth = {
     currentUser: null,
     signIn: (email, password) => {
@@ -32,7 +31,7 @@ const mockAuth = {
 };
 
 // -----------------------------------------------------------------------------
-// 1. MASTER DATA (已根據上傳的 CSV 進行部分擴充)
+// 1. MASTER DATA (更新自 student_list.csv)
 // -----------------------------------------------------------------------------
 const RAW_CSV_CONTENT = `
 1A,1,S9900448,CHAN CHIT HIM JAYDON,陳哲謙,M
@@ -82,45 +81,33 @@ const parseMasterCSV = (csvText) => {
 const MASTER_DB = parseMasterCSV(RAW_CSV_CONTENT);
 
 // -----------------------------------------------------------------------------
-// 2. MOCK IMPORT DATA (模擬 PDF 識別結果)
+// 2. MOCK IMPORT DATA
 // -----------------------------------------------------------------------------
 const PDF_IMPORT_MOCK = [
-  // 來自 PDF: 4A 蔡舒朗 (無人機)
   { id: 101, rawName: '蔡舒朗', rawClass: '4A', rawClassNo: '00', activity: '無人機培訓班', time: '15:45-16:45', location: '特別室', dateText: '逢星期一', dayIds: [1] },
-  // 來自 PDF: 2A1 陳嘉瑩 (壁球)
   { id: 301, rawName: '陳嘉瑩', rawClass: '2A', rawClassNo: '01', activity: '初級壁球訓練班', time: '16:00-17:30', location: '和興體育館', dateText: '逢星期四', dayIds: [4] },
-  // 來自 PDF: 3C20 胡曼琳 (壁球)
   { id: 303, rawName: '胡曼琳', rawClass: '3C', rawClassNo: '20', activity: '初級壁球訓練班', time: '16:00-17:30', location: '和興體育館', dateText: '逢星期四', dayIds: [4] },
-  // 來自 PDF: 4A 許心雅 (壁球) - 模擬
   { id: 304, rawName: '許心雅', rawClass: '4A', rawClassNo: '28', activity: '初級壁球訓練班', time: '16:00-17:30', location: '和興體育館', dateText: '逢星期四', dayIds: [4] },
-  // 來自 PDF: 6B 麥家臻 (壁球) - 模擬
   { id: 305, rawName: '麥家臻', rawClass: '6B', rawClassNo: '13', activity: '初級壁球訓練班', time: '16:00-17:30', location: '和興體育館', dateText: '逢星期四', dayIds: [4] },
-  // 錯誤模擬
+  { id: 401, rawName: '何沛津', rawClass: '4A', rawClassNo: '00', activity: 'e-樂團', time: '15:30-16:30', location: '學校音樂室', dateText: '逢星期一', dayIds: [1] },
   { id: 999, rawName: '張大文', rawClass: '1A', rawClassNo: '00', activity: '足球班', time: '15:00-16:00', location: '球場', dateText: '逢星期五', dayIds: [5] },
 ];
 
 const App = () => {
   const [currentView, setCurrentView] = useState('student'); 
-  
-  // Auth
   const [user, setUser] = useState(null); 
   const [authLoading, setAuthLoading] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPwd, setLoginPwd] = useState('');
-  
-  // Data
   const [masterList, setMasterList] = useState(MASTER_DB);
   const [activities, setActivities] = useState([]); 
   const [pendingImports, setPendingImports] = useState(PDF_IMPORT_MOCK);
-  
-  // UI
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedClass, setSelectedClass] = useState('1A');
   const [selectedClassNo, setSelectedClassNo] = useState('');
   const [studentResult, setStudentResult] = useState(null);
   const [todayDay, setTodayDay] = useState(new Date().getDay());
 
-  // Logic: Auth
   const handleLogin = async (e) => {
       e.preventDefault();
       setAuthLoading(true);
@@ -141,12 +128,14 @@ const App = () => {
       setCurrentView('student'); 
   };
 
-  // Logic: Reconciliation
   const { matched, conflicts } = useMemo(() => {
     const matched = [];
     const conflicts = [];
     pendingImports.forEach(item => {
       let student = masterList.find(s => s.classCode === item.rawClass && s.chiName === item.rawName);
+      if (!student && item.rawClassNo !== '00') {
+          student = masterList.find(s => s.classCode === item.rawClass && s.classNo === item.rawClassNo);
+      }
       if (!student) {
         const potential = masterList.filter(s => s.chiName === item.rawName);
         if (potential.length === 1) student = potential[0];
@@ -207,7 +196,6 @@ const App = () => {
     item.activity?.includes(searchTerm)
   );
 
-  // Components
   const TopNavBar = () => (
     <div className="bg-slate-900 text-white p-3 flex justify-between items-center shadow-md sticky top-0 z-50">
         <div className="flex items-center space-x-2 cursor-pointer" onClick={() => setCurrentView('student')}>
@@ -353,7 +341,6 @@ const App = () => {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                <div className="lg:col-span-2 space-y-6">
-                  {/* Verified Block */}
                   <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                      <div className="flex justify-between items-center mb-4">
                         <h3 className="font-bold text-lg text-green-700 flex items-center"><CheckCircle className="mr-2" size={20} /> 等待發布 ({matched.length})</h3>
@@ -399,7 +386,6 @@ const App = () => {
                      </div>
                   </div>
 
-                  {/* Conflict Block */}
                   {conflicts.length > 0 && (
                       <div className="bg-white p-6 rounded-xl shadow-md border-l-4 border-red-500 animate-pulse-border">
                          <h3 className="font-bold text-lg text-red-700 flex items-center mb-4"><AlertTriangle className="mr-2" /> 異常資料需修正 ({conflicts.length})</h3>
