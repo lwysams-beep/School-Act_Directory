@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-// V3.6.3: True Proportions - No Auto-Zoom, Ghost Segments in Pie, Fixed Scales
-import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, Phone, CheckSquare, Square, RefreshCcw, X, Plus, Edit2, FileSpreadsheet, BarChart, History, TrendingUp, Filter, Cloud, UserX, PieChart, Download, Activity, Save as SaveIcon, Layers, MousePointerClick, Maximize } from 'lucide-react';
+// V3.7: Alignment Fix, Smart Tooltips, Category Analytics, Auto-Labeling
+import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, Phone, CheckSquare, Square, RefreshCcw, X, Plus, Edit2, FileSpreadsheet, BarChart, History, TrendingUp, Filter, Cloud, UserX, PieChart, Download, Activity, Save as SaveIcon, Layers, MousePointerClick, Maximize, Palette } from 'lucide-react';
 
 // =============================================================================
 //  FIREBASE IMPORTS & CONFIGURATION
@@ -65,7 +65,7 @@ const parseMasterCSV = (csvText) => {
 };
 
 // -----------------------------------------------------------------------------
-// 2. HELPER FUNCTIONS
+// 2. HELPER FUNCTIONS (Including New Auto-Categorizer)
 // -----------------------------------------------------------------------------
 
 const calculateDuration = (timeStr) => {
@@ -103,14 +103,33 @@ const exportToCSV = (data, filename) => {
   document.body.removeChild(link);
 };
 
-// Extended Color Palette
+// V3.7: Smart Category Detector
+const detectCategory = (name) => {
+    const n = name.toLowerCase();
+    if (/足球|籃球|排球|羽毛球|乒乓|田徑|游泳|體育|跆拳|跳繩|sport|ball/.test(n)) return '體育 (Sports)';
+    if (/合唱|樂團|小提琴|鋼琴|古箏|笛|音樂|music|choir|band/.test(n)) return '音樂 (Music)';
+    if (/視藝|繪畫|素描|陶瓷|手工|畫班|art|draw|paint/.test(n)) return '視藝 (Visual Arts)';
+    if (/中|英|數|常|stem|編程|無人機|奧數|辯論|寫作|academic|code|robot/.test(n)) return '學術/STEM';
+    if (/童軍|服務|領袖|義工|service|scout/.test(n)) return '服務/制服 (Service)';
+    return '其他 (Others)';
+};
+
 const CHART_COLORS = [
     '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#6366f1', '#84cc16',
     '#14b8a6', '#d946ef', '#f43f5e', '#eab308', '#22c55e', '#0ea5e9', '#a855f7', '#fb7185', '#fbbf24', '#4ade80'
 ];
 
+const CATEGORY_COLORS = {
+    '體育 (Sports)': '#ef4444',
+    '音樂 (Music)': '#f59e0b',
+    '視藝 (Visual Arts)': '#ec4899',
+    '學術/STEM': '#3b82f6',
+    '服務/制服 (Service)': '#10b981',
+    '其他 (Others)': '#94a3b8'
+};
+
 // -----------------------------------------------------------------------------
-// 3. STATS VIEW COMPONENT (V3.6.3 - True Proportions)
+// 3. STATS VIEW COMPONENT (V3.7 - Alignment Fix & Category)
 // -----------------------------------------------------------------------------
 const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
     const [statsViewMode, setStatsViewMode] = useState('dashboard');
@@ -118,24 +137,22 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
 
     const toggleSelection = (actName) => {
         const newSet = new Set(selectedActs);
-        if (newSet.has(actName)) {
-            newSet.delete(actName);
-        } else {
-            newSet.add(actName);
-        }
+        if (newSet.has(actName)) newSet.delete(actName);
+        else newSet.add(actName);
         setSelectedActs(newSet);
     };
 
     const clearSelection = () => setSelectedActs(new Set());
 
     // Core Data Calculation
-    const { activityStats, gradeDistribution, studentStats, totalHours } = useMemo(() => {
+    const { activityStats, gradeDistribution, categoryStats, studentStats, totalHours } = useMemo(() => {
         if (!masterList || masterList.length === 0 || !activities) {
-            return { activityStats: [], gradeDistribution: [], studentStats: [], totalHours: 0 };
+            return { activityStats: [], gradeDistribution: [], categoryStats: [], studentStats: [], totalHours: 0 };
         }
 
         const actStats = {}; 
         const stuStats = {};
+        const catStats = {}; // { 'Sports': 100, 'Music': 50 }
         const gradeMap = { '1': {}, '2': {}, '3': {}, '4': {}, '5': {}, '6': {} };
         Object.keys(gradeMap).forEach(g => gradeMap[g] = { totalHours: 0, byActivity: {} });
 
@@ -145,19 +162,21 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
 
         activities.forEach(item => {
             const dur = calculateDuration(item.time);
-            
-            // Formula: Duration * Sessions
             const sessionCount = (item.specificDates && item.specificDates.length > 0) ? item.specificDates.length : 1;
             const totalItemHours = dur * sessionCount;
-
             const actName = item.activity || "Unknown";
-            
+            const category = detectCategory(actName);
+
             // 1. Activity Stats
-            if(!actStats[actName]) actStats[actName] = { name: actName, count: 0, hours: 0 };
+            if(!actStats[actName]) actStats[actName] = { name: actName, count: 0, hours: 0, category };
             actStats[actName].count += sessionCount;
             actStats[actName].hours += totalItemHours;
 
-            // 2. Student Stats
+            // 2. Category Stats
+            if(!catStats[category]) catStats[category] = 0;
+            catStats[category] += totalItemHours;
+
+            // 3. Student Stats
             const sKey = `${item.verifiedClass}-${item.verifiedName}`;
             if (stuStats[sKey]) {
                 stuStats[sKey].count += sessionCount;
@@ -165,7 +184,7 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                 if(!stuStats[sKey].acts.includes(actName)) stuStats[sKey].acts.push(actName);
             }
             
-            // 3. Grade Stats
+            // 4. Grade Stats
             const gradeStr = String(item.verifiedClass || '');
             if(gradeStr.length >= 2) {
                 const grade = gradeStr.charAt(0);
@@ -185,58 +204,63 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
 
         const finalActStats = Object.values(actStats).sort((a,b) => b.hours - a.hours);
         const totalH = finalActStats.reduce((acc, cur) => acc + cur.hours, 0);
+        
+        // Format Category Stats for Chart
+        const finalCatStats = Object.entries(catStats)
+            .map(([name, hours]) => ({ name, hours }))
+            .sort((a,b) => b.hours - a.hours);
 
         return { 
             activityStats: finalActStats, 
             gradeDistribution: gradeArr,
+            categoryStats: finalCatStats,
             studentStats: Object.values(stuStats).sort((a,b) => a.hours - b.hours),
             totalHours: totalH
         };
     }, [masterList, activities]);
 
-    // V3.6.3 Logic: Ghost Segment Pie Gradient
-    // We iterate over ALL activities. If an activity is selected, it gets color. If not, it gets Gray.
-    // This preserves the "True Proportion" relative to the full circle.
+    // Data for Visuals
+    const filteredActivityList = useMemo(() => {
+        if (selectedActs.size === 0) return activityStats;
+        return activityStats.filter(a => selectedActs.has(a.name));
+    }, [activityStats, selectedActs]);
+
+    const filteredTotalHours = useMemo(() => {
+        if (selectedActs.size === 0) return totalHours;
+        return filteredActivityList.reduce((acc, cur) => acc + cur.hours, 0);
+    }, [filteredActivityList, totalHours, selectedActs]);
+
     const ghostPieGradient = useMemo(() => {
         if (totalHours === 0) return '#e2e8f0 0deg 360deg';
         let currentDeg = 0;
         return activityStats.map((item, idx) => {
             const deg = (item.hours / totalHours) * 360;
-            
-            // Logic: Is this slice selected?
-            // If nothing selected => All colored (Default view)
-            // If something selected => Only selected are colored, others are ghost gray
             const isSelected = selectedActs.size === 0 || selectedActs.has(item.name);
-            
-            const color = isSelected 
-                ? CHART_COLORS[idx % CHART_COLORS.length] 
-                : '#f1f5f9'; // Slate-100 for Ghost Segment
-
+            const color = isSelected ? CHART_COLORS[idx % CHART_COLORS.length] : '#f1f5f9';
             const str = `${color} ${currentDeg}deg ${currentDeg + deg}deg`;
             currentDeg += deg;
             return str;
         }).join(', ');
     }, [activityStats, totalHours, selectedActs]);
 
-    // Calculate totals for display
-    const currentSelectedHours = useMemo(() => {
-        if (selectedActs.size === 0) return totalHours;
-        return activityStats
-            .filter(a => selectedActs.has(a.name))
-            .reduce((acc, cur) => acc + cur.hours, 0);
-    }, [activityStats, selectedActs, totalHours]);
-
-    // Filtered Lists for Tables
-    const filteredActivityList = useMemo(() => {
-        if (selectedActs.size === 0) return activityStats;
-        return activityStats.filter(a => selectedActs.has(a.name));
-    }, [activityStats, selectedActs]);
+    const categoryPieGradient = useMemo(() => {
+        if (totalHours === 0) return '#e2e8f0 0deg 360deg';
+        let currentDeg = 0;
+        return categoryStats.map((item) => {
+            const deg = (item.hours / totalHours) * 360;
+            const color = CATEGORY_COLORS[item.name] || '#94a3b8';
+            const str = `${color} ${currentDeg}deg ${currentDeg + deg}deg`;
+            currentDeg += deg;
+            return str;
+        }).join(', ');
+    }, [categoryStats, totalHours]);
 
     const filteredStudentList = useMemo(() => {
         if (selectedActs.size === 0) return studentStats;
         return studentStats.filter(s => s.acts.some(act => selectedActs.has(act)));
     }, [studentStats, selectedActs]);
 
+    // Exports
     const exportGradeStats = () => {
         const rows = [];
         gradeDistribution.forEach(g => {
@@ -249,6 +273,14 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
         exportToCSV(rows, 'Grade_Activity_Distribution');
     };
 
+    const exportCategoryStats = () => {
+        exportToCSV(categoryStats, 'Category_Distribution_Report');
+    }
+
+    const maxGradeHours = useMemo(() => {
+        return Math.max(...gradeDistribution.map(g => g.total)) || 1;
+    }, [gradeDistribution]);
+
     return (
         <div className="bg-white p-6 rounded-xl shadow-md min-h-[600px] flex flex-col">
             <div className="flex justify-between items-center mb-6 border-b pb-4">
@@ -256,7 +288,7 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                     <ArrowLeft className="mr-2" size={20} /> 返回
                 </button>
                 <h2 className="text-2xl font-bold text-slate-800 flex items-center">
-                    <BarChart className="mr-2 text-blue-600" /> 校本數據分析中心 (V3.6.3)
+                    <BarChart className="mr-2 text-blue-600" /> 校本數據分析中心 (V3.7)
                 </h2>
                 <div className="w-24"></div>
             </div>
@@ -282,54 +314,28 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                 {statsViewMode === 'dashboard' && (
                     <div className="flex flex-col space-y-12 pb-12">
                         
-                        {/* 1. PIE CHART (Ghost Segment Mode) */}
+                        {/* 1. ACTIVITY PIE CHART */}
                         <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col md:flex-row items-center md:items-start relative min-h-[400px]">
                             <div className="absolute top-4 left-4 z-20">
                                  <button onClick={() => exportToCSV(filteredActivityList, 'Activity_Hours_Report')} className="text-xs bg-indigo-600 text-white border px-3 py-1.5 rounded flex items-center hover:bg-indigo-700 shadow-md transition"><Download size={14} className="mr-1"/> 匯出 CSV</button>
                             </div>
-                            
                             <div className="flex-1 flex flex-col items-center justify-center p-4 pt-10">
-                                <h3 className="font-bold text-slate-700 mb-6 flex items-center text-lg"><Clock className="mr-2 text-orange-500"/> 活動總時數分佈 (真實比例)</h3>
-                                <div className="relative w-72 h-72 rounded-full shadow-2xl border-4 border-white transition-all duration-500"
-                                    style={{ background: `conic-gradient(${ghostPieGradient})` }}
-                                >
+                                <h3 className="font-bold text-slate-700 mb-6 flex items-center text-lg"><Clock className="mr-2 text-orange-500"/> 活動總時數 (課程分佈)</h3>
+                                <div className="relative w-72 h-72 rounded-full shadow-2xl border-4 border-white transition-all duration-500" style={{ background: `conic-gradient(${ghostPieGradient})` }}>
                                     <div className="absolute inset-0 m-auto w-36 h-36 bg-slate-50 rounded-full flex flex-col items-center justify-center shadow-inner">
-                                        <div className="text-xs text-slate-400 mb-1">
-                                            {selectedActs.size > 0 ? "已選 / 總計" : "總學時"}
-                                        </div>
-                                        <div className="flex items-baseline">
-                                            {selectedActs.size > 0 && <span className="text-2xl font-bold text-blue-600 mr-1">{currentSelectedHours.toFixed(0)}</span>}
-                                            {selectedActs.size > 0 && <span className="text-slate-400">/</span>}
-                                            <span className={`font-bold text-slate-800 ${selectedActs.size > 0 ? 'text-lg ml-1' : 'text-4xl'}`}>{totalHours.toFixed(0)}</span>
-                                        </div>
+                                        <span className="text-4xl font-bold text-slate-800">{filteredTotalHours.toFixed(0)}</span>
                                         <span className="text-xs text-slate-400">Hours</span>
                                     </div>
                                 </div>
-                                <p className="text-xs text-slate-400 mt-4"><MousePointerClick size={12} className="inline mr-1"/>點擊右側圖例進行多項對比</p>
                             </div>
-
                             <div className="w-full md:w-80 h-96 border-l border-slate-200 pl-0 md:pl-6 overflow-y-auto">
-                                <h4 className="text-xs font-bold text-slate-400 uppercase mb-3 sticky top-0 bg-slate-50 py-2 z-10 flex justify-between">
-                                    <span>圖例 (點選切換)</span>
-                                    {selectedActs.size > 0 && <span className="text-blue-500">已選 {selectedActs.size} 項</span>}
-                                </h4>
+                                <h4 className="text-xs font-bold text-slate-400 uppercase mb-3 sticky top-0 bg-slate-50 py-2 z-10">圖例 (點擊多選)</h4>
                                 <div className="space-y-1">
                                     {activityStats.map((a, i) => {
-                                        const isSelected = selectedActs.has(a.name);
-                                        const isDimmed = selectedActs.size > 0 && !isSelected;
+                                        const isSelected = selectedActs.size === 0 || selectedActs.has(a.name);
                                         return (
-                                            <button 
-                                                key={i} 
-                                                onClick={() => toggleSelection(a.name)}
-                                                className={`w-full flex items-center justify-between p-2 rounded text-xs transition-all duration-200 
-                                                    ${isSelected ? 'bg-white shadow ring-2 ring-blue-500 scale-[1.02] z-10' : 'hover:bg-white hover:shadow-sm'}
-                                                    ${isDimmed ? 'opacity-40 grayscale' : 'opacity-100'}
-                                                `}
-                                            >
-                                                <div className="flex items-center truncate">
-                                                    <span className="w-3 h-3 rounded-full mr-2 flex-shrink-0" style={{backgroundColor: CHART_COLORS[i % CHART_COLORS.length]}}></span>
-                                                    <span className="truncate max-w-[120px]" title={a.name}>{a.name}</span>
-                                                </div>
+                                            <button key={i} onClick={() => toggleSelection(a.name)} className={`w-full flex items-center justify-between p-2 rounded text-xs transition-all duration-200 ${selectedActs.has(a.name) ? 'bg-white ring-2 ring-blue-500 scale-[1.02] z-10' : 'hover:bg-white'} ${!isSelected ? 'opacity-40 grayscale' : 'opacity-100'}`}>
+                                                <div className="flex items-center truncate"><span className="w-3 h-3 rounded-full mr-2 flex-shrink-0" style={{backgroundColor: CHART_COLORS[i % CHART_COLORS.length]}}></span><span className="truncate max-w-[120px]" title={a.name}>{a.name}</span></div>
                                                 <div className="font-bold text-slate-600">{((a.hours/(totalHours||1))*100).toFixed(1)}%</div>
                                             </button>
                                         )
@@ -338,104 +344,130 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                             </div>
                         </div>
 
-                        {/* 2. STACKED BAR CHART (Fixed Scale Contextual) */}
+                        {/* 2. NEW CATEGORY CHART (V3.7) */}
+                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col md:flex-row items-center md:items-start relative min-h-[300px]">
+                            <div className="absolute top-4 left-4 z-20">
+                                 <button onClick={exportCategoryStats} className="text-xs bg-indigo-600 text-white border px-3 py-1.5 rounded flex items-center hover:bg-indigo-700 shadow-md transition"><Download size={14} className="mr-1"/> 匯出 CSV</button>
+                            </div>
+                            <div className="flex-1 flex flex-col items-center justify-center p-4 pt-10">
+                                <h3 className="font-bold text-slate-700 mb-6 flex items-center text-lg"><Palette className="mr-2 text-purple-500"/> 課程範疇分佈 (類別分析)</h3>
+                                <div className="relative w-64 h-64 rounded-full shadow-xl border-4 border-white" style={{ background: `conic-gradient(${categoryPieGradient})` }}>
+                                    <div className="absolute inset-0 m-auto w-32 h-32 bg-slate-50 rounded-full flex flex-col items-center justify-center shadow-inner">
+                                        <span className="text-lg font-bold text-slate-600">學時分類</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="w-full md:w-64 p-4">
+                                <h4 className="text-xs font-bold text-slate-400 uppercase mb-3">類別圖例</h4>
+                                <div className="space-y-2">
+                                    {categoryStats.map((cat, i) => (
+                                        <div key={i} className="flex items-center justify-between p-2 bg-white rounded shadow-sm">
+                                            <div className="flex items-center"><span className="w-3 h-3 rounded-full mr-2" style={{backgroundColor: CATEGORY_COLORS[cat.name] || '#94a3b8'}}></span><span className="text-xs font-bold">{cat.name}</span></div>
+                                            <div className="text-xs font-mono">{((cat.hours/totalHours)*100).toFixed(1)}%</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 3. STACKED BAR CHART (Fixed Alignment V3.7) */}
                         <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 relative flex flex-col h-[600px]">
-                            <div className="flex flex-col md:flex-row justify-between items-start mb-6">
+                            <div className="flex flex-col md:flex-row justify-between items-start mb-6 pl-12">
                                 <div className="flex items-center space-x-4 mb-2 md:mb-0">
                                     <button onClick={exportGradeStats} className="text-xs bg-indigo-600 text-white border px-3 py-1.5 rounded flex items-center hover:bg-indigo-700 shadow-md transition"><Download size={14} className="mr-1"/> 匯出 CSV</button>
                                 </div>
                                 <div className="text-right">
-                                    <h3 className="font-bold text-slate-700 text-lg flex items-center justify-end"><TrendingUp className="mr-2 text-green-500"/> 各級總時數分佈 (固定比例)</h3>
-                                    <p className="text-xs text-slate-500 mt-1">
-                                        {selectedActs.size > 0 ? '灰色: 該級總時數 | 彩色: 所選活動佔比 (顯示真實比例，不自動放大)' : '顯示全校所有活動堆疊'}
-                                    </p>
+                                    <h3 className="font-bold text-slate-700 text-lg flex items-center justify-end"><TrendingUp className="mr-2 text-green-500"/> 各級總時數分佈 (P1 - P6)</h3>
+                                    <p className="text-xs text-slate-500 mt-1">灰色: 全級總數 | 彩色: 選定活動 | 滑鼠移入可查看詳情</p>
                                 </div>
                             </div>
 
-                            <div className="flex-1 flex items-end justify-between space-x-8 border-b-2 border-slate-300 pb-2 px-4 mx-4 relative">
+                            <div className="flex-1 flex items-end justify-between space-x-8 border-b-2 border-slate-300 pb-0 px-4 mx-4 relative">
+                                {/* V3.7 Alignment Fix: All bars use absolute bottom-0 to ensure perfect baseline */}
                                 {gradeDistribution.map((g) => {
-                                    // V3.6.3 Logic: ALWAYS scale relative to GLOBAL MAX (No Zoom)
-                                    const globalMax = Math.max(...gradeDistribution.map(x => x.total)) || 1;
-                                    
-                                    // Ghost Height (Total for Grade)
-                                    const ghostHeightPct = (g.total / globalMax) * 100;
+                                    // Calculate Heights
+                                    const maxScale = maxGradeHours; 
+                                    const ghostHeightPct = (g.total / maxScale) * 100;
 
-                                    // Active Items (Filtered)
                                     const activeItems = Object.entries(g.details)
                                         .filter(([name]) => selectedActs.size === 0 || selectedActs.has(name))
                                         .sort((a,b) => b[1] - a[1]); 
-
-                                    // Sum of filtered items
                                     const selectedTotalHours = activeItems.reduce((acc, cur) => acc + cur[1], 0);
-                                    
-                                    // Active Bar Height (Relative to GLOBAL MAX)
-                                    const activeHeightPct = (selectedTotalHours / globalMax) * 100;
+                                    const activeHeightPct = (selectedTotalHours / maxScale) * 100;
+
+                                    // Generate Label string
+                                    const selectedNames = selectedActs.size === 1 ? Array.from(selectedActs)[0] : (selectedActs.size > 1 ? '多項選取' : '所有活動');
 
                                     return (
-                                        <div key={g.grade} className="flex flex-col items-center flex-1 h-full justify-end group relative">
+                                        <div key={g.grade} className="flex flex-col items-center flex-1 h-full relative group">
                                             
-                                            {/* Ghost Bar (Always Visible as context container) */}
-                                            <div 
-                                                className="w-full absolute bottom-0 bg-slate-200 rounded-t-lg transition-all duration-700 pointer-events-none" 
-                                                style={{height: `${ghostHeightPct}%`, minHeight: '4px'}}
-                                            />
+                                            {/* 1. Ghost Bar (Background Total) - Absolute Bottom */}
+                                            {selectedActs.size > 0 && (
+                                                <div 
+                                                    className="w-full absolute bottom-0 bg-slate-200 rounded-t-sm transition-all duration-700 pointer-events-none" 
+                                                    style={{height: `${ghostHeightPct}%`}}
+                                                />
+                                            )}
 
-                                            {/* Active Stacked Bar (Sits on bottom, scales naturally) */}
+                                            {/* 2. Active Bar (Foreground Selected) - Absolute Bottom */}
                                             <div 
-                                                className={`w-full flex flex-col-reverse rounded-t-lg overflow-hidden shadow-sm relative transition-all duration-700 ${selectedActs.size > 0 ? 'w-4/5 z-10 shadow-lg' : ''}`}
+                                                className={`w-full absolute bottom-0 flex flex-col-reverse rounded-t-sm overflow-hidden transition-all duration-700 ${selectedActs.size > 0 ? 'w-4/5 z-10 shadow-lg left-1/2 -translate-x-1/2' : 'bg-slate-200'}`}
                                                 style={{height: `${activeHeightPct}%`}}
                                             >
-                                                {activeItems.map(([actName, hrs], idx) => {
+                                                {activeItems.map(([actName, hrs]) => {
                                                     const colorIdx = activityStats.findIndex(a => a.name === actName);
                                                     const color = colorIdx >= 0 ? CHART_COLORS[colorIdx % CHART_COLORS.length] : '#cbd5e1';
-                                                    // This % is within the ACTIVE stack height
                                                     const pctOfStack = (hrs / selectedTotalHours) * 100;
-                                                    
                                                     return (
-                                                        <div 
-                                                            key={actName} 
-                                                            onClick={(e) => { e.stopPropagation(); toggleSelection(actName); }}
-                                                            className="w-full transition-all duration-300 hover:opacity-80 cursor-pointer relative group/segment" 
-                                                            style={{height: `${pctOfStack}%`, backgroundColor: color}}
-                                                        >
-                                                            <div className="hidden group-hover/segment:block absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-black/80 text-white text-[10px] p-1 rounded whitespace-nowrap z-50 shadow-xl">
-                                                                {actName}: {hrs.toFixed(1)}h
-                                                            </div>
-                                                        </div>
+                                                        <div key={actName} className="w-full relative" style={{height: `${pctOfStack}%`, backgroundColor: color}} />
                                                     );
                                                 })}
                                             </div>
 
-                                            <div className="mt-3 text-sm font-bold text-slate-600">{g.grade}</div>
-                                            <div className="text-xs font-mono">
-                                                {selectedActs.size > 0 ? (
-                                                    // Show Selected / Total
-                                                    <span className="text-blue-600 font-bold">{selectedTotalHours.toFixed(0)}<span className="text-slate-400 font-normal">/{g.total.toFixed(0)}h</span></span>
-                                                ) : (
-                                                    <span className="text-slate-400">{g.total.toFixed(0)}h</span>
+                                            {/* 3. Top Label (Hours) - Absolute positioned based on max bar */}
+                                            <div className="absolute w-full text-center -top-6 transition-all duration-500" style={{bottom: `${Math.max(ghostHeightPct, activeHeightPct) + 2}%`}}>
+                                                <span className="text-xs font-bold text-slate-600 bg-white/80 px-1 rounded">
+                                                    {selectedActs.size > 0 ? selectedTotalHours.toFixed(0) : g.total.toFixed(0)}h
+                                                </span>
+                                            </div>
+
+                                            {/* 4. Hover Tooltip (V3.7 Feature) */}
+                                            <div className="hidden group-hover:block absolute bottom-1/2 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-xs p-3 rounded-lg shadow-xl z-50 w-48 pointer-events-none">
+                                                <div className="font-bold border-b border-slate-600 pb-1 mb-1">{g.grade} 統計詳情</div>
+                                                <div className="flex justify-between mb-1"><span>全級總時數:</span> <span className="font-mono">{g.total.toFixed(1)}h</span></div>
+                                                {selectedActs.size > 0 && (
+                                                    <div className="flex justify-between text-yellow-400"><span>{selectedNames}:</span> <span className="font-mono">{selectedTotalHours.toFixed(1)}h</span></div>
                                                 )}
+                                                {selectedActs.size > 0 && (
+                                                    <div className="text-[10px] text-slate-400 mt-1 text-right">佔全級 {((selectedTotalHours/g.total)*100).toFixed(1)}%</div>
+                                                )}
+                                            </div>
+
+                                            {/* X-Axis Label */}
+                                            <div className="absolute -bottom-8 w-full text-center">
+                                                <div className="text-sm font-bold text-slate-700">{g.grade}</div>
                                             </div>
                                         </div>
                                     )
                                 })}
+                                {/* Y-Axis */}
                                 <div className="absolute left-0 top-0 h-full border-l border-dashed border-slate-300 pointer-events-none">
-                                    <span className="absolute top-0 left-1 text-[10px] text-slate-400 bg-slate-50 px-1">
-                                        Max: {(Math.max(...gradeDistribution.map(x => x.total)) || 0).toFixed(0)}h
-                                    </span>
+                                    <span className="absolute top-0 left-1 text-[10px] text-slate-400 bg-slate-50 px-1">Max: {maxGradeHours.toFixed(0)}h</span>
                                 </div>
                             </div>
                         </div>
                     </div>
                 )}
 
+                {/* (Keep existing List Views & Logs View code same as V3.6.2) */}
                 {statsViewMode === 'activities' && (
                     <div className="bg-white border rounded-xl overflow-hidden">
                         <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
-                            <h3 className="font-bold text-slate-700">活動統計列表 (新算法: 單節 x 節數)</h3>
+                            <h3 className="font-bold text-slate-700">活動統計列表</h3>
                             <button onClick={() => exportToCSV(filteredActivityList, 'Activity_Report')} className="text-sm bg-white border px-3 py-1 rounded hover:bg-slate-50 flex items-center text-blue-600 border-blue-200"><Download size={14} className="mr-1"/> 匯出 CSV</button>
                         </div>
                         <table className="w-full text-sm text-left">
-                            <thead className="bg-slate-100 text-slate-500 uppercase"><tr><th className="p-3">活動名稱</th><th className="p-3 text-right">總人次 (Sessions)</th><th className="p-3 text-right">總學時 (Hours)</th></tr></thead>
+                            <thead className="bg-slate-100 text-slate-500 uppercase"><tr><th className="p-3">活動名稱</th><th className="p-3">類別</th><th className="p-3 text-right">總人次</th><th className="p-3 text-right">總學時</th></tr></thead>
                             <tbody className="divide-y">
                                 {filteredActivityList.map((a, i) => (
                                     <tr key={i} className="hover:bg-slate-50">
@@ -443,6 +475,7 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                                             <span className="w-2 h-2 rounded-full mr-2" style={{backgroundColor: CHART_COLORS[activityStats.findIndex(x=>x.name===a.name) % CHART_COLORS.length]}}></span>
                                             {a.name}
                                         </td>
+                                        <td className="p-3 text-xs text-slate-500">{a.category}</td>
                                         <td className="p-3 text-right">{a.count}</td>
                                         <td className="p-3 text-right font-bold text-blue-600">{a.hours.toFixed(1)}</td>
                                     </tr>
