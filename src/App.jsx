@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-// V3.6: Contextual Analytics - Ghost Bars for Total Context, Fixed Scaling
-import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, Phone, CheckSquare, Square, RefreshCcw, X, Plus, Edit2, FileSpreadsheet, BarChart, History, TrendingUp, Filter, Cloud, UserX, PieChart, Download, Activity, Save as SaveIcon, Layers, MousePointerClick } from 'lucide-react';
+// V3.6.1 FIX: UI Layout Fixes, Auto-Zoom Bar Chart, Reactive Pie Chart
+import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, Phone, CheckSquare, Square, RefreshCcw, X, Plus, Edit2, FileSpreadsheet, BarChart, History, TrendingUp, Filter, Cloud, UserX, PieChart, Download, Activity, Save as SaveIcon, Layers, MousePointerClick, Maximize } from 'lucide-react';
 
 // =============================================================================
 //  FIREBASE IMPORTS & CONFIGURATION
@@ -110,7 +110,7 @@ const CHART_COLORS = [
 ];
 
 // -----------------------------------------------------------------------------
-// 3. STATS VIEW COMPONENT (V3.6 - Contextual Bars)
+// 3. STATS VIEW COMPONENT (V3.6.1 - Auto-Zoom & Layout Fixes)
 // -----------------------------------------------------------------------------
 const StatsView = ({ masterList, activities, onBack }) => {
     const [statsViewMode, setStatsViewMode] = useState('dashboard');
@@ -121,8 +121,6 @@ const StatsView = ({ masterList, activities, onBack }) => {
         if (newSet.has(actName)) {
             newSet.delete(actName);
         } else {
-            // V3.6 UX Improvement: If user clicks another item, maybe they want single select for comparison?
-            // For now, keep multi-select logic as requested previously.
             newSet.add(actName);
         }
         setSelectedActs(newSet);
@@ -188,22 +186,34 @@ const StatsView = ({ masterList, activities, onBack }) => {
         };
     }, [masterList, activities]);
 
-    const pieGradient = useMemo(() => {
-        if (totalHours === 0) return '#e2e8f0 0deg 360deg';
-        let currentDeg = 0;
-        return activityStats.map((item, idx) => {
-            const deg = (item.hours / totalHours) * 360;
-            const color = CHART_COLORS[idx % CHART_COLORS.length];
-            const str = `${color} ${currentDeg}deg ${currentDeg + deg}deg`;
-            currentDeg += deg;
-            return str;
-        }).join(', ');
-    }, [activityStats, totalHours]);
-
+    // Filtered Lists
     const filteredActivityList = useMemo(() => {
         if (selectedActs.size === 0) return activityStats;
         return activityStats.filter(a => selectedActs.has(a.name));
     }, [activityStats, selectedActs]);
+
+    const filteredTotalHours = useMemo(() => {
+        if (selectedActs.size === 0) return totalHours;
+        return filteredActivityList.reduce((acc, cur) => acc + cur.hours, 0);
+    }, [filteredActivityList, totalHours, selectedActs]);
+
+    // V3.6.1: Reactive Pie Gradient (follows selection)
+    const pieGradient = useMemo(() => {
+        const dataset = filteredActivityList;
+        const total = filteredTotalHours;
+        
+        if (total === 0) return '#e2e8f0 0deg 360deg';
+        let currentDeg = 0;
+        return dataset.map((item, idx) => {
+            const deg = (item.hours / total) * 360;
+            // Find original color index to maintain consistency
+            const originalIndex = activityStats.findIndex(x => x.name === item.name);
+            const color = CHART_COLORS[originalIndex % CHART_COLORS.length];
+            const str = `${color} ${currentDeg}deg ${currentDeg + deg}deg`;
+            currentDeg += deg;
+            return str;
+        }).join(', ');
+    }, [filteredActivityList, filteredTotalHours, activityStats]);
 
     const filteredStudentList = useMemo(() => {
         if (selectedActs.size === 0) return studentStats;
@@ -222,6 +232,22 @@ const StatsView = ({ masterList, activities, onBack }) => {
         exportToCSV(rows, 'Grade_Activity_Distribution');
     };
 
+    // V3.6.1: Calculate Auto-Zoom Scale for Bar Chart
+    const maxGradeHours = useMemo(() => {
+        // Find the maximum hours in any grade based on CURRENT SELECTION
+        // If selection is empty, use global max.
+        // If selection exists, calculate the max of (selected items sum) per grade.
+        const max = Math.max(...gradeDistribution.map(g => {
+            if (selectedActs.size === 0) return g.total;
+            // Sum only selected activities for this grade
+            const selectedSum = Object.entries(g.details)
+                .filter(([name]) => selectedActs.has(name))
+                .reduce((acc, cur) => acc + cur[1], 0);
+            return selectedSum;
+        }));
+        return max || 1; // Prevent div by zero
+    }, [gradeDistribution, selectedActs]);
+
     return (
         <div className="bg-white p-6 rounded-xl shadow-md min-h-[600px] flex flex-col">
             <div className="flex justify-between items-center mb-6 border-b pb-4">
@@ -229,7 +255,7 @@ const StatsView = ({ masterList, activities, onBack }) => {
                     <ArrowLeft className="mr-2" size={20} /> 返回
                 </button>
                 <h2 className="text-2xl font-bold text-slate-800 flex items-center">
-                    <BarChart className="mr-2 text-blue-600" /> 校本數據分析中心 (V3.6)
+                    <BarChart className="mr-2 text-blue-600" /> 校本數據分析中心 (V3.6.1)
                 </h2>
                 <div className="w-24"></div>
             </div>
@@ -243,36 +269,42 @@ const StatsView = ({ masterList, activities, onBack }) => {
             {selectedActs.size > 0 && (
                 <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex justify-between items-center animate-in slide-in-from-top-2">
                     <div className="text-sm text-blue-800">
-                        <span className="font-bold flex items-center"><Filter size={16} className="mr-1"/> 已篩選 (顯示所選活動佔總數比例): </span>
+                        <span className="font-bold flex items-center"><Filter size={16} className="mr-1"/> 關注模式: </span>
                         {Array.from(selectedActs).join(', ')}
                     </div>
-                    <button onClick={clearSelection} className="text-xs bg-white text-slate-500 border px-2 py-1 rounded hover:bg-red-50 hover:text-red-500 transition">清除篩選</button>
+                    <button onClick={clearSelection} className="text-xs bg-white text-slate-500 border px-2 py-1 rounded hover:bg-red-50 hover:text-red-500 transition">清除篩選 (顯示全校)</button>
                 </div>
             )}
 
             <div className="flex-1 overflow-y-auto">
                 {statsViewMode === 'dashboard' && (
-                    <div className="flex flex-col space-y-8">
+                    <div className="flex flex-col space-y-12 pb-12">
                         
                         {/* 1. PIE CHART */}
                         <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col md:flex-row items-center md:items-start relative min-h-[400px]">
-                            <button onClick={() => exportToCSV(filteredActivityList, 'Activity_Hours_Report')} className="absolute top-4 right-4 text-xs bg-white border px-2 py-1 rounded flex items-center hover:bg-slate-100 text-slate-600"><Download size={12} className="mr-1"/> 匯出數據</button>
+                            {/* V3.6.1 FIX: Button moved to Header */}
+                            <div className="absolute top-4 right-4 flex items-center">
+                                 <button onClick={() => exportToCSV(filteredActivityList, 'Activity_Hours_Report')} className="text-xs bg-white border px-3 py-1.5 rounded flex items-center hover:bg-slate-100 text-slate-600 font-bold shadow-sm"><Download size={14} className="mr-1"/> 匯出數據</button>
+                            </div>
                             
                             <div className="flex-1 flex flex-col items-center justify-center p-4">
-                                <h3 className="font-bold text-slate-700 mb-6 flex items-center"><Clock className="mr-2 text-orange-500"/> 活動總時數佔比 (所有活動)</h3>
+                                <h3 className="font-bold text-slate-700 mb-6 flex items-center text-lg"><Clock className="mr-2 text-orange-500"/> 活動時數佔比 ({selectedActs.size > 0 ? '已篩選' : '全校'})</h3>
                                 <div className="relative w-72 h-72 rounded-full shadow-2xl border-4 border-white transition-all duration-500"
                                     style={{ background: `conic-gradient(${pieGradient})` }}
                                 >
                                     <div className="absolute inset-0 m-auto w-36 h-36 bg-slate-50 rounded-full flex flex-col items-center justify-center shadow-inner">
-                                        <span className="text-4xl font-bold text-slate-800">{totalHours.toFixed(0)}</span>
-                                        <span className="text-xs text-slate-400">總時數 (h)</span>
+                                        <span className="text-4xl font-bold text-slate-800">{filteredTotalHours.toFixed(0)}</span>
+                                        <span className="text-xs text-slate-400">顯示時數 (h)</span>
                                     </div>
                                 </div>
                                 <p className="text-xs text-slate-400 mt-4"><MousePointerClick size={12} className="inline mr-1"/>點擊右側圖例以篩選多項活動</p>
                             </div>
 
                             <div className="w-full md:w-80 h-96 border-l border-slate-200 pl-0 md:pl-6 overflow-y-auto">
-                                <h4 className="text-xs font-bold text-slate-400 uppercase mb-3 sticky top-0 bg-slate-50 py-2">圖例 (點擊多選)</h4>
+                                <h4 className="text-xs font-bold text-slate-400 uppercase mb-3 sticky top-0 bg-slate-50 py-2 z-10 flex justify-between">
+                                    <span>圖例 (可多選)</span>
+                                    {selectedActs.size > 0 && <span className="text-blue-500">已選 {selectedActs.size} 項</span>}
+                                </h4>
                                 <div className="space-y-1">
                                     {activityStats.map((a, i) => {
                                         const isSelected = selectedActs.has(a.name);
@@ -282,8 +314,8 @@ const StatsView = ({ masterList, activities, onBack }) => {
                                                 key={i} 
                                                 onClick={() => toggleSelection(a.name)}
                                                 className={`w-full flex items-center justify-between p-2 rounded text-xs transition-all duration-200 
-                                                    ${isSelected ? 'bg-white shadow ring-2 ring-blue-500 scale-[1.02]' : 'hover:bg-white hover:shadow-sm'}
-                                                    ${isDimmed ? 'opacity-30 grayscale' : 'opacity-100'}
+                                                    ${isSelected ? 'bg-white shadow ring-2 ring-blue-500 scale-[1.02] z-10' : 'hover:bg-white hover:shadow-sm'}
+                                                    ${isDimmed ? 'opacity-40 grayscale' : 'opacity-100'}
                                                 `}
                                             >
                                                 <div className="flex items-center truncate">
@@ -298,85 +330,83 @@ const StatsView = ({ masterList, activities, onBack }) => {
                             </div>
                         </div>
 
-                        {/* 2. STACKED BAR CHART (Contextual) */}
-                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 relative flex flex-col min-h-[500px]">
-                            <button onClick={exportGradeStats} className="absolute top-4 right-4 text-xs bg-white border px-2 py-1 rounded flex items-center hover:bg-slate-100 text-slate-600"><Download size={12} className="mr-1"/> 匯出數據</button>
-                            <h3 className="font-bold text-slate-700 mb-2 flex items-center"><TrendingUp className="mr-2 text-green-500"/> 各級總時數分佈 (灰色為總量)</h3>
-                            <p className="text-xs text-slate-500 mb-6">點選活動後，灰色長棒代表該級總時數，彩色棒代表所選活動時數。</p>
+                        {/* 2. STACKED BAR CHART (Auto-Zoom Contextual) */}
+                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 relative flex flex-col h-[600px]">
+                            {/* V3.6.1 FIX: Button moved to Header */}
+                            <div className="flex justify-between items-start mb-6">
+                                <div>
+                                    <h3 className="font-bold text-slate-700 text-lg flex items-center"><TrendingUp className="mr-2 text-green-500"/> 各級總時數分佈 (智能比例)</h3>
+                                    <p className="text-xs text-slate-500 mt-1">
+                                        {selectedActs.size > 0 ? '灰色背景為該級「全校總時數」，彩色為「已選活動時數」(高度自動放大以利觀察)' : '顯示全校所有活動堆疊'}
+                                    </p>
+                                </div>
+                                <button onClick={exportGradeStats} className="text-xs bg-white border px-3 py-1.5 rounded flex items-center hover:bg-slate-100 text-slate-600 font-bold shadow-sm"><Download size={14} className="mr-1"/> 匯出數據</button>
+                            </div>
 
-                            <div className="flex-1 flex items-end justify-between space-x-8 h-80 border-b-2 border-slate-300 pb-2 px-4 mx-4">
+                            <div className="flex-1 flex items-end justify-between space-x-8 border-b-2 border-slate-300 pb-2 px-4 mx-4 relative">
                                 {gradeDistribution.map((g) => {
-                                    // Scale Calculation:
-                                    // Always scale relative to the HIGHEST TOTAL HOURS across all grades to ensure proper context.
-                                    const maxGlobal = Math.max(...gradeDistribution.map(x => x.total)) || 1; 
+                                    // V3.6.1 Logic: 
+                                    // 1. Ghost Bar (Gray) uses GLOBAL MAX scale to show true context.
+                                    // 2. Active Bar (Colored) uses ZOOMED scale if selection is active.
                                     
-                                    // 1. Calculate height of the Container (representing TOTAL hours for this grade)
-                                    // This is the "Gray Ghost Bar"
-                                    const totalHeightPct = (g.total / maxGlobal) * 100;
-
-                                    // 2. Identify selected items
+                                    const globalMax = Math.max(...gradeDistribution.map(x => x.total)) || 1;
+                                    
+                                    // Filter Logic
                                     const activeItems = Object.entries(g.details)
                                         .filter(([name]) => selectedActs.size === 0 || selectedActs.has(name))
                                         .sort((a,b) => b[1] - a[1]); 
 
-                                    // 3. Sum of selected items (for text label)
                                     const selectedTotalHours = activeItems.reduce((acc, cur) => acc + cur[1], 0);
 
+                                    // Height Calculations
+                                    // Ghost height is always relative to Global Max
+                                    const ghostHeightPct = (g.total / globalMax) * 100;
+                                    
+                                    // Active Bar Height:
+                                    // If Filter Active: Scale relative to maxGradeHours (Zoomed in)
+                                    // If No Filter: Scale relative to globalMax (Standard Stacked)
+                                    const activeHeightPct = selectedActs.size > 0 
+                                        ? (selectedTotalHours / maxGradeHours) * 100 
+                                        : (selectedTotalHours / globalMax) * 100;
+
                                     return (
-                                        <div key={g.grade} className="flex flex-col items-center flex-1 h-full justify-end group">
+                                        <div key={g.grade} className="flex flex-col items-center flex-1 h-full justify-end group relative">
                                             
-                                            {/* Container: Represents Grade Total (Gray Context) */}
+                                            {/* Ghost Bar (Context) - Only visible if filtering */}
+                                            {selectedActs.size > 0 && (
+                                                <div 
+                                                    className="w-full absolute bottom-0 bg-slate-200/50 rounded-t-lg transition-all duration-700 pointer-events-none" 
+                                                    style={{height: `${ghostHeightPct}%`}}
+                                                />
+                                            )}
+
+                                            {/* Active Stacked Bar */}
                                             <div 
-                                                className="w-full flex flex-col-reverse rounded-t-lg overflow-hidden shadow-sm relative transition-all duration-700 bg-slate-200" 
-                                                style={{height: `${totalHeightPct}%`, minHeight: totalHeightPct > 0 ? '4px' : '0'}}
-                                                title={`該級總時數: ${g.total.toFixed(1)}h`}
+                                                className={`w-full flex flex-col-reverse rounded-t-lg overflow-hidden shadow-sm relative transition-all duration-700 ${selectedActs.size > 0 ? 'w-4/5 z-10 shadow-lg' : 'bg-slate-200'}`}
+                                                style={{height: `${activeHeightPct}%`, minHeight: activeHeightPct > 0 ? '4px' : '0'}}
                                             >
-                                                {/* Filtered Mode: Show Active Items on top of Gray Background */}
-                                                {selectedActs.size > 0 ? (
-                                                    <div className="w-full absolute bottom-0 transition-all duration-500 flex flex-col-reverse" style={{height: '100%'}}>
-                                                        {/* We render an invisible spacer to push items to bottom or absolute? 
-                                                            Actually, simple stacking div at bottom with correct % height relative to PARENT (Total) is better.
-                                                        */}
-                                                        {activeItems.map(([actName, hrs]) => {
-                                                            const colorIdx = activityStats.findIndex(a => a.name === actName);
-                                                            const color = colorIdx >= 0 ? CHART_COLORS[colorIdx % CHART_COLORS.length] : '#cbd5e1';
-                                                            const pctOfTotal = (hrs / g.total) * 100; // % of this grade's total
-                                                            
-                                                            return (
-                                                                <div 
-                                                                    key={actName}
-                                                                    className="w-full transition-all duration-300 relative group/segment"
-                                                                    style={{height: `${pctOfTotal}%`, backgroundColor: color}}
-                                                                    title={`${actName}: ${hrs.toFixed(1)}h`}
-                                                                />
-                                                            );
-                                                        })}
-                                                    </div>
-                                                ) : (
-                                                    // Default Stacked Mode (Fill the gray bar completely)
-                                                    activeItems.map(([actName, hrs]) => {
-                                                        const colorIdx = activityStats.findIndex(a => a.name === actName);
-                                                        const color = colorIdx >= 0 ? CHART_COLORS[colorIdx % CHART_COLORS.length] : '#cbd5e1';
-                                                        const pct = (hrs / g.total) * 100;
-                                                        
-                                                        return (
-                                                            <div 
-                                                                key={actName} 
-                                                                onClick={(e) => { e.stopPropagation(); toggleSelection(actName); }}
-                                                                className="w-full transition-all duration-300 hover:opacity-80 cursor-pointer relative group/segment" 
-                                                                style={{height: `${pct}%`, backgroundColor: color}}
-                                                            >
-                                                                <div className="hidden group-hover/segment:block absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-black/80 text-white text-[10px] p-1 rounded whitespace-nowrap z-10">
-                                                                    {actName}: {hrs.toFixed(1)}h
-                                                                </div>
+                                                {activeItems.map(([actName, hrs], idx) => {
+                                                    const colorIdx = activityStats.findIndex(a => a.name === actName);
+                                                    const color = colorIdx >= 0 ? CHART_COLORS[colorIdx % CHART_COLORS.length] : '#cbd5e1';
+                                                    const pctOfStack = (hrs / selectedTotalHours) * 100;
+                                                    
+                                                    return (
+                                                        <div 
+                                                            key={actName} 
+                                                            onClick={(e) => { e.stopPropagation(); toggleSelection(actName); }}
+                                                            className="w-full transition-all duration-300 hover:opacity-80 cursor-pointer relative group/segment" 
+                                                            style={{height: `${pctOfStack}%`, backgroundColor: color}}
+                                                        >
+                                                            <div className="hidden group-hover/segment:block absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-black/80 text-white text-[10px] p-1 rounded whitespace-nowrap z-50 shadow-xl">
+                                                                {actName}: {hrs.toFixed(1)}h
                                                             </div>
-                                                        );
-                                                    })
-                                                )}
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
+
+                                            {/* Labels */}
                                             <div className="mt-3 text-sm font-bold text-slate-600">{g.grade}</div>
-                                            
-                                            {/* Data Label */}
                                             <div className="text-xs font-mono">
                                                 {selectedActs.size > 0 ? (
                                                     <span className="text-blue-600 font-bold">{selectedTotalHours.toFixed(1)}h</span>
@@ -387,6 +417,13 @@ const StatsView = ({ masterList, activities, onBack }) => {
                                         </div>
                                     )
                                 })}
+                                
+                                {/* Y-Axis Scale Indicator (Approximate) */}
+                                <div className="absolute left-0 top-0 h-full border-l border-dashed border-slate-300 pointer-events-none">
+                                    <span className="absolute top-0 left-1 text-[10px] text-slate-400 bg-slate-50 px-1">
+                                        Max: {selectedActs.size > 0 ? maxGradeHours.toFixed(0) : 'Total'}h
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     </div>
