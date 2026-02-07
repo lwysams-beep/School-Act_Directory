@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-// V3.4.1 FIX: 修正 RenderKioskResultView 中的語法錯誤 (移除多餘的反斜線)
-import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, Phone, CheckSquare, Square, RefreshCcw, X, Plus, Edit2, FileSpreadsheet, BarChart, History, TrendingUp, Filter, Cloud, UserX, PieChart, Download, Activity, Save as SaveIcon, Layers } from 'lucide-react';
+// V3.5: Interactive Analytics - Vertical Layout, Multi-Select, Full Data Visibility
+import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, Phone, CheckSquare, Square, RefreshCcw, X, Plus, Edit2, FileSpreadsheet, BarChart, History, TrendingUp, Filter, Cloud, UserX, PieChart, Download, Activity, Save as SaveIcon, Layers, MousePointerClick } from 'lucide-react';
 
 // =============================================================================
 //  FIREBASE IMPORTS & CONFIGURATION
@@ -103,26 +103,32 @@ const exportToCSV = (data, filename) => {
   document.body.removeChild(link);
 };
 
-// Color Palette for Charts
+// Extended Color Palette for many activities
 const CHART_COLORS = [
-    '#3b82f6', // Blue
-    '#ef4444', // Red
-    '#10b981', // Emerald
-    '#f59e0b', // Amber
-    '#8b5cf6', // Violet
-    '#ec4899', // Pink
-    '#06b6d4', // Cyan
-    '#f97316', // Orange
-    '#6366f1', // Indigo
-    '#84cc16', // Lime
+    '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#6366f1', '#84cc16',
+    '#14b8a6', '#d946ef', '#f43f5e', '#eab308', '#22c55e', '#0ea5e9', '#a855f7', '#fb7185', '#fbbf24', '#4ade80'
 ];
 
 // -----------------------------------------------------------------------------
-// 3. SEPARATE COMPONENT: STATS VIEW (V3.4 Improved)
+// 3. SEPARATE COMPONENT: STATS VIEW (V3.5 Interactive)
 // -----------------------------------------------------------------------------
 const StatsView = ({ masterList, activities, onBack }) => {
     const [statsViewMode, setStatsViewMode] = useState('dashboard');
-    const [selectedActivityFilter, setSelectedActivityFilter] = useState(null); // For Grade Chart interaction
+    // V3.5 New State: Multi-select Set
+    const [selectedActs, setSelectedActs] = useState(new Set()); 
+
+    // Helper to toggle selection
+    const toggleSelection = (actName) => {
+        const newSet = new Set(selectedActs);
+        if (newSet.has(actName)) {
+            newSet.delete(actName);
+        } else {
+            newSet.add(actName);
+        }
+        setSelectedActs(newSet);
+    };
+
+    const clearSelection = () => setSelectedActs(new Set());
 
     // Core Data Calculation
     const { activityStats, gradeDistribution, studentStats, totalHours } = useMemo(() => {
@@ -130,18 +136,13 @@ const StatsView = ({ masterList, activities, onBack }) => {
             return { activityStats: [], gradeDistribution: [], studentStats: [], totalHours: 0 };
         }
 
-        const actStats = {}; // { ActName: { hours: 0, count: 0 } }
-        const stuStats = {}; // { Key: { ...student, hours: 0 } }
-        
-        // Structure: [ { grade: '1', totalHours: 0, activities: { 'Football': 5, 'Art': 2 } } ]
+        const actStats = {}; 
+        const stuStats = {};
         const gradeMap = { '1': {}, '2': {}, '3': {}, '4': {}, '5': {}, '6': {} };
         Object.keys(gradeMap).forEach(g => gradeMap[g] = { totalHours: 0, byActivity: {} });
 
-        // Init students
         masterList.forEach(s => {
-            if (s && s.key) {
-                stuStats[s.key] = { ...s, count: 0, hours: 0, acts: [] };
-            }
+            if (s && s.key) stuStats[s.key] = { ...s, count: 0, hours: 0, acts: [] };
         });
 
         activities.forEach(item => {
@@ -161,7 +162,7 @@ const StatsView = ({ masterList, activities, onBack }) => {
                 if(!stuStats[sKey].acts.includes(actName)) stuStats[sKey].acts.push(actName);
             }
             
-            // 3. Grade Stats (Detailed Breakdown)
+            // 3. Grade Stats
             const gradeStr = String(item.verifiedClass || '');
             if(gradeStr.length >= 2) {
                 const grade = gradeStr.charAt(0);
@@ -173,7 +174,6 @@ const StatsView = ({ masterList, activities, onBack }) => {
             }
         });
 
-        // Convert Grade Map to Array
         const gradeArr = Object.keys(gradeMap).map(g => ({
             grade: `P.${g}`,
             total: gradeMap[g].totalHours,
@@ -191,11 +191,11 @@ const StatsView = ({ masterList, activities, onBack }) => {
         };
     }, [masterList, activities]);
 
-    // Pie Chart Logic (Fixed)
+    // Pie Chart Gradient (Show ALL)
     const pieGradient = useMemo(() => {
         if (totalHours === 0) return '#e2e8f0 0deg 360deg';
         let currentDeg = 0;
-        return activityStats.slice(0, 8).map((item, idx) => {
+        return activityStats.map((item, idx) => {
             const deg = (item.hours / totalHours) * 360;
             const color = CHART_COLORS[idx % CHART_COLORS.length];
             const str = `${color} ${currentDeg}deg ${currentDeg + deg}deg`;
@@ -204,12 +204,26 @@ const StatsView = ({ masterList, activities, onBack }) => {
         }).join(', ');
     }, [activityStats, totalHours]);
 
-    // Helpers for Exports
+    // Filtered Data for Lists & Export
+    const filteredActivityList = useMemo(() => {
+        if (selectedActs.size === 0) return activityStats;
+        return activityStats.filter(a => selectedActs.has(a.name));
+    }, [activityStats, selectedActs]);
+
+    const filteredStudentList = useMemo(() => {
+        if (selectedActs.size === 0) return studentStats;
+        // Show students who participated in AT LEAST ONE of the selected activities
+        return studentStats.filter(s => s.acts.some(act => selectedActs.has(act)));
+    }, [studentStats, selectedActs]);
+
     const exportGradeStats = () => {
         const rows = [];
         gradeDistribution.forEach(g => {
             Object.entries(g.details).forEach(([actName, hours]) => {
-                rows.push({ Grade: g.grade, Activity: actName, Hours: hours.toFixed(2) });
+                // Export filter
+                if (selectedActs.size === 0 || selectedActs.has(actName)) {
+                    rows.push({ Grade: g.grade, Activity: actName, Hours: hours.toFixed(2) });
+                }
             });
         });
         exportToCSV(rows, 'Grade_Activity_Distribution');
@@ -222,115 +236,134 @@ const StatsView = ({ masterList, activities, onBack }) => {
                     <ArrowLeft className="mr-2" size={20} /> 返回
                 </button>
                 <h2 className="text-2xl font-bold text-slate-800 flex items-center">
-                    <BarChart className="mr-2 text-blue-600" /> 校本數據分析中心 (V3.4)
+                    <BarChart className="mr-2 text-blue-600" /> 校本數據分析中心 (V3.5)
                 </h2>
                 <div className="w-24"></div>
             </div>
 
             <div className="flex space-x-2 mb-6 overflow-x-auto pb-2">
                 <button onClick={() => setStatsViewMode('dashboard')} className={`px-4 py-2 rounded-lg flex items-center transition ${statsViewMode === 'dashboard' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}><PieChart size={18} className="mr-2"/> 數據概覽</button>
-                <button onClick={() => setStatsViewMode('activities')} className={`px-4 py-2 rounded-lg flex items-center transition ${statsViewMode === 'activities' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}><Activity size={18} className="mr-2"/> 活動列表</button>
-                <button onClick={() => setStatsViewMode('students')} className={`px-4 py-2 rounded-lg flex items-center transition ${statsViewMode === 'students' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}><Users size={18} className="mr-2"/> 學生監測</button>
+                <button onClick={() => setStatsViewMode('activities')} className={`px-4 py-2 rounded-lg flex items-center transition ${statsViewMode === 'activities' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}><Activity size={18} className="mr-2"/> 活動列表 ({filteredActivityList.length})</button>
+                <button onClick={() => setStatsViewMode('students')} className={`px-4 py-2 rounded-lg flex items-center transition ${statsViewMode === 'students' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}><Users size={18} className="mr-2"/> 學生監測 ({filteredStudentList.length})</button>
             </div>
+
+            {/* Selection Indicator */}
+            {selectedActs.size > 0 && (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex justify-between items-center animate-in slide-in-from-top-2">
+                    <div className="text-sm text-blue-800">
+                        <span className="font-bold flex items-center"><Filter size={16} className="mr-1"/> 已篩選: </span>
+                        {Array.from(selectedActs).join(', ')}
+                    </div>
+                    <button onClick={clearSelection} className="text-xs bg-white text-slate-500 border px-2 py-1 rounded hover:bg-red-50 hover:text-red-500 transition">清除篩選</button>
+                </div>
+            )}
 
             <div className="flex-1 overflow-y-auto">
                 {statsViewMode === 'dashboard' && (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                        {/* 1. PIE CHART */}
-                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col items-center relative">
-                            <button onClick={() => exportToCSV(activityStats, 'Total_Hours_Report')} className="absolute top-4 right-4 text-xs bg-white border px-2 py-1 rounded flex items-center hover:bg-slate-100 text-slate-600"><Download size={12} className="mr-1"/> 匯出數據</button>
-                            <h3 className="font-bold text-slate-700 mb-6 flex items-center self-start"><Clock className="mr-2 text-orange-500"/> 活動總時數分佈 (Top 8)</h3>
+                    // V3.5 Layout: Flex Column instead of Grid for bigger charts
+                    <div className="flex flex-col space-y-8">
+                        
+                        {/* 1. PIE CHART (Top) */}
+                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col md:flex-row items-center md:items-start relative min-h-[400px]">
+                            <button onClick={() => exportToCSV(filteredActivityList, 'Activity_Hours_Report')} className="absolute top-4 right-4 text-xs bg-white border px-2 py-1 rounded flex items-center hover:bg-slate-100 text-slate-600"><Download size={12} className="mr-1"/> 匯出數據</button>
                             
-                            <div className="relative w-64 h-64 rounded-full shadow-xl mb-8"
-                                style={{ background: `conic-gradient(${pieGradient})` }}
-                            >
-                                <div className="absolute inset-0 m-auto w-32 h-32 bg-slate-50 rounded-full flex flex-col items-center justify-center shadow-inner">
-                                    <span className="text-3xl font-bold text-slate-800">{totalHours.toFixed(0)}</span>
-                                    <span className="text-xs text-slate-400">總時數</span>
-                                </div>
-                            </div>
-                            
-                            <div className="w-full grid grid-cols-2 gap-2 text-xs">
-                                {activityStats.slice(0, 8).map((a, i) => (
-                                    <div key={i} className="flex items-center p-1 rounded hover:bg-white transition">
-                                        <span className="w-3 h-3 rounded-full mr-2 shadow-sm" style={{backgroundColor: CHART_COLORS[i % CHART_COLORS.length]}}></span>
-                                        <div className="flex-1 truncate mr-2" title={a.name}>{a.name}</div>
-                                        <div className="font-bold text-slate-600">{((a.hours/(totalHours||1))*100).toFixed(1)}%</div>
+                            {/* Left: Chart */}
+                            <div className="flex-1 flex flex-col items-center justify-center p-4">
+                                <h3 className="font-bold text-slate-700 mb-6 flex items-center"><Clock className="mr-2 text-orange-500"/> 活動總時數佔比 (所有活動)</h3>
+                                <div className="relative w-72 h-72 rounded-full shadow-2xl border-4 border-white transition-all duration-500"
+                                    style={{ background: `conic-gradient(${pieGradient})` }}
+                                >
+                                    <div className="absolute inset-0 m-auto w-36 h-36 bg-slate-50 rounded-full flex flex-col items-center justify-center shadow-inner">
+                                        <span className="text-4xl font-bold text-slate-800">{totalHours.toFixed(0)}</span>
+                                        <span className="text-xs text-slate-400">總時數 (h)</span>
                                     </div>
-                                ))}
+                                </div>
+                                <p className="text-xs text-slate-400 mt-4"><MousePointerClick size={12} className="inline mr-1"/>點擊右側圖例以篩選多項活動</p>
+                            </div>
+
+                            {/* Right: Interactive Legend (Scrollable) */}
+                            <div className="w-full md:w-80 h-96 border-l border-slate-200 pl-0 md:pl-6 overflow-y-auto">
+                                <h4 className="text-xs font-bold text-slate-400 uppercase mb-3 sticky top-0 bg-slate-50 py-2">圖例 (點擊多選)</h4>
+                                <div className="space-y-1">
+                                    {activityStats.map((a, i) => {
+                                        const isSelected = selectedActs.has(a.name);
+                                        const isDimmed = selectedActs.size > 0 && !isSelected;
+                                        return (
+                                            <button 
+                                                key={i} 
+                                                onClick={() => toggleSelection(a.name)}
+                                                className={`w-full flex items-center justify-between p-2 rounded text-xs transition-all duration-200 
+                                                    ${isSelected ? 'bg-white shadow ring-2 ring-blue-500 scale-[1.02]' : 'hover:bg-white hover:shadow-sm'}
+                                                    ${isDimmed ? 'opacity-30 grayscale' : 'opacity-100'}
+                                                `}
+                                            >
+                                                <div className="flex items-center truncate">
+                                                    <span className="w-3 h-3 rounded-full mr-2 flex-shrink-0" style={{backgroundColor: CHART_COLORS[i % CHART_COLORS.length]}}></span>
+                                                    <span className="truncate max-w-[120px]" title={a.name}>{a.name}</span>
+                                                </div>
+                                                <div className="font-bold text-slate-600">{((a.hours/(totalHours||1))*100).toFixed(1)}%</div>
+                                            </button>
+                                        )
+                                    })}
+                                </div>
                             </div>
                         </div>
 
-                        {/* 2. STACKED BAR CHART (INTERACTIVE) */}
-                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 relative flex flex-col">
+                        {/* 2. STACKED BAR CHART (Bottom) */}
+                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 relative flex flex-col min-h-[500px]">
                             <button onClick={exportGradeStats} className="absolute top-4 right-4 text-xs bg-white border px-2 py-1 rounded flex items-center hover:bg-slate-100 text-slate-600"><Download size={12} className="mr-1"/> 匯出數據</button>
-                            <h3 className="font-bold text-slate-700 mb-2 flex items-center"><TrendingUp className="mr-2 text-green-500"/> 各級總時數分佈</h3>
-                            <p className="text-xs text-slate-500 mb-6">點擊下方活動名稱可篩選特定活動</p>
+                            <h3 className="font-bold text-slate-700 mb-2 flex items-center"><TrendingUp className="mr-2 text-green-500"/> 各級總時數分佈 (堆疊圖)</h3>
+                            <p className="text-xs text-slate-500 mb-6">可直接點擊圖表中的色塊進行篩選</p>
 
                             {/* Chart Area */}
-                            <div className="flex-1 flex items-end justify-between space-x-4 h-64 border-b border-slate-300 pb-1 px-2">
+                            <div className="flex-1 flex items-end justify-between space-x-8 h-80 border-b-2 border-slate-300 pb-2 px-4 mx-4">
                                 {gradeDistribution.map((g) => {
-                                    // Calculate height ratio based on max hours (e.g. 500 hours max scale)
-                                    const maxScale = Math.max(...gradeDistribution.map(x => x.total)) || 1; 
-                                    const items = Object.entries(g.details).sort((a,b) => b[1] - a[1]); // Sort pieces by size
+                                    // If selection active, total is sum of selected. Else total is global total.
+                                    // BUT stacked bar usually keeps scale. Let's keep scale relative to MAX global total to show proportion.
+                                    const maxGlobal = Math.max(...gradeDistribution.map(x => x.total)) || 1; 
+                                    
+                                    const items = Object.entries(g.details)
+                                        .filter(([name]) => selectedActs.size === 0 || selectedActs.has(name)) // Filter render
+                                        .sort((a,b) => b[1] - a[1]); 
+
+                                    // Calculate height of this bar relative to global max
+                                    // Current Height = Sum of displayed items
+                                    const currentHeightVal = items.reduce((acc, cur) => acc + cur[1], 0);
                                     
                                     return (
                                         <div key={g.grade} className="flex flex-col items-center flex-1 h-full justify-end group">
-                                            <div className="w-full max-w-[40px] flex flex-col-reverse rounded-t-lg overflow-hidden shadow-sm relative transition-all duration-500" 
-                                                 style={{height: `${(g.total / maxScale) * 100}%`, minHeight: '2px'}}>
+                                            
+                                            {/* Stacked Bar Container */}
+                                            <div className="w-full flex flex-col-reverse rounded-t-lg overflow-hidden shadow-sm relative transition-all duration-500 bg-slate-200/50" 
+                                                 style={{height: `${(currentHeightVal / maxGlobal) * 100}%`, minHeight: currentHeightVal > 0 ? '4px' : '0'}}>
                                                 
-                                                {/* If filter active, show only that one */}
-                                                {selectedActivityFilter ? (
-                                                     <div 
-                                                        className="w-full bg-blue-500 transition-all duration-500"
-                                                        style={{
-                                                            height: `${((g.details[selectedActivityFilter] || 0) / (g.total || 1)) * 100}%`,
-                                                            backgroundColor: CHART_COLORS[activityStats.findIndex(a => a.name === selectedActivityFilter) % CHART_COLORS.length]
-                                                        }}
-                                                     />
-                                                ) : (
-                                                    // Stacked Mode
-                                                    items.map(([actName, hrs], idx) => {
-                                                        const colorIdx = activityStats.findIndex(a => a.name === actName);
-                                                        const color = colorIdx >= 0 ? CHART_COLORS[colorIdx % CHART_COLORS.length] : '#cbd5e1';
-                                                        const pct = (hrs / g.total) * 100;
-                                                        return (
-                                                            <div key={actName} className="w-full" style={{height: `${pct}%`, backgroundColor: color}} title={`${actName}: ${hrs.toFixed(1)}小時`}></div>
-                                                        );
-                                                    })
-                                                )}
+                                                {items.map(([actName, hrs], idx) => {
+                                                    const colorIdx = activityStats.findIndex(a => a.name === actName);
+                                                    const color = colorIdx >= 0 ? CHART_COLORS[colorIdx % CHART_COLORS.length] : '#cbd5e1';
+                                                    const pct = (hrs / currentHeightVal) * 100; // % within this specific bar stack
+                                                    
+                                                    return (
+                                                        <div 
+                                                            key={actName} 
+                                                            onClick={(e) => { e.stopPropagation(); toggleSelection(actName); }}
+                                                            className="w-full transition-all duration-300 hover:opacity-80 cursor-pointer relative group/segment" 
+                                                            style={{height: `${pct}%`, backgroundColor: color}}
+                                                        >
+                                                            {/* Tooltip on hover */}
+                                                            <div className="hidden group-hover/segment:block absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-black/80 text-white text-[10px] p-1 rounded whitespace-nowrap z-10">
+                                                                {actName}: {hrs.toFixed(1)}h
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
-                                            <div className="mt-2 text-xs font-bold text-slate-600">{g.grade}</div>
-                                            <div className="text-[10px] text-slate-400">
-                                                {selectedActivityFilter 
-                                                    ? (g.details[selectedActivityFilter] || 0).toFixed(1) 
-                                                    : g.total.toFixed(0)}h
+                                            <div className="mt-3 text-sm font-bold text-slate-600">{g.grade}</div>
+                                            <div className="text-xs text-slate-400 font-mono">
+                                                {currentHeightVal.toFixed(1)}h
                                             </div>
                                         </div>
                                     )
                                 })}
-                            </div>
-
-                            {/* Legend / Filter Controller */}
-                            <div className="mt-4 flex flex-wrap gap-2 max-h-32 overflow-y-auto">
-                                <button 
-                                    onClick={() => setSelectedActivityFilter(null)}
-                                    className={`text-[10px] px-2 py-1 rounded border transition ${!selectedActivityFilter ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 hover:bg-slate-100'}`}
-                                >
-                                    全部顯示
-                                </button>
-                                {activityStats.map((a, i) => (
-                                    <button 
-                                        key={i}
-                                        onClick={() => setSelectedActivityFilter(selectedActivityFilter === a.name ? null : a.name)}
-                                        className={`text-[10px] px-2 py-1 rounded border flex items-center transition
-                                            ${selectedActivityFilter === a.name ? 'ring-2 ring-offset-1 ring-blue-400 font-bold bg-white' : 'bg-white text-slate-600 hover:bg-slate-50'}
-                                        `}
-                                    >
-                                        <span className="w-2 h-2 rounded-full mr-1" style={{backgroundColor: CHART_COLORS[i % CHART_COLORS.length]}}></span>
-                                        {a.name}
-                                    </button>
-                                ))}
                             </div>
                         </div>
                     </div>
@@ -340,13 +373,21 @@ const StatsView = ({ masterList, activities, onBack }) => {
                     <div className="bg-white border rounded-xl overflow-hidden">
                         <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
                             <h3 className="font-bold text-slate-700">活動統計列表</h3>
-                            <button onClick={() => exportToCSV(activityStats, 'Activity_Report')} className="text-sm bg-white border px-3 py-1 rounded hover:bg-slate-50 flex items-center text-blue-600 border-blue-200"><Download size={14} className="mr-1"/> 匯出 CSV</button>
+                            <button onClick={() => exportToCSV(filteredActivityList, 'Activity_Report')} className="text-sm bg-white border px-3 py-1 rounded hover:bg-slate-50 flex items-center text-blue-600 border-blue-200"><Download size={14} className="mr-1"/> 匯出 CSV</button>
                         </div>
                         <table className="w-full text-sm text-left">
                             <thead className="bg-slate-100 text-slate-500 uppercase"><tr><th className="p-3">活動名稱</th><th className="p-3 text-right">總節數</th><th className="p-3 text-right">總時數</th></tr></thead>
                             <tbody className="divide-y">
-                                {activityStats.map((a, i) => (
-                                    <tr key={i} className="hover:bg-slate-50"><td className="p-3 font-medium flex items-center"><span className="w-2 h-2 rounded-full mr-2" style={{backgroundColor: CHART_COLORS[i % CHART_COLORS.length]}}></span>{a.name}</td><td className="p-3 text-right">{a.count}</td><td className="p-3 text-right font-bold text-blue-600">{a.hours.toFixed(1)}</td></tr>
+                                {filteredActivityList.map((a, i) => (
+                                    <tr key={i} className="hover:bg-slate-50">
+                                        <td className="p-3 font-medium flex items-center">
+                                            {/* We need to find the original index for consistent color */}
+                                            <span className="w-2 h-2 rounded-full mr-2" style={{backgroundColor: CHART_COLORS[activityStats.findIndex(x=>x.name===a.name) % CHART_COLORS.length]}}></span>
+                                            {a.name}
+                                        </td>
+                                        <td className="p-3 text-right">{a.count}</td>
+                                        <td className="p-3 text-right font-bold text-blue-600">{a.hours.toFixed(1)}</td>
+                                    </tr>
                                 ))}
                             </tbody>
                         </table>
@@ -356,14 +397,14 @@ const StatsView = ({ masterList, activities, onBack }) => {
                 {statsViewMode === 'students' && (
                     <div className="bg-white border rounded-xl overflow-hidden">
                             <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
-                            <h3 className="font-bold text-slate-700 flex items-center"><AlertTriangle className="mr-2 text-orange-500" size={18}/> 學生參與度監測 (低至高)</h3>
-                            <button onClick={() => exportToCSV(studentStats, 'Student_Participation')} className="text-sm bg-white border px-3 py-1 rounded hover:bg-slate-50 flex items-center text-blue-600 border-blue-200"><Download size={14} className="mr-1"/> 匯出 CSV</button>
+                            <h3 className="font-bold text-slate-700 flex items-center"><AlertTriangle className="mr-2 text-orange-500" size={18}/> 學生參與度監測</h3>
+                            <button onClick={() => exportToCSV(filteredStudentList, 'Student_Participation')} className="text-sm bg-white border px-3 py-1 rounded hover:bg-slate-50 flex items-center text-blue-600 border-blue-200"><Download size={14} className="mr-1"/> 匯出 CSV</button>
                         </div>
                         <div className="max-h-[500px] overflow-y-auto">
                         <table className="w-full text-sm text-left">
                             <thead className="bg-slate-100 text-slate-500 uppercase sticky top-0"><tr><th className="p-3">班別 (學號)</th><th className="p-3">姓名</th><th className="p-3 text-right">參與時數</th><th className="p-3 text-center">狀態</th></tr></thead>
                             <tbody className="divide-y">
-                                {studentStats.map((s, i) => (
+                                {filteredStudentList.map((s, i) => (
                                     <tr key={i} className={`hover:bg-slate-50 ${s.hours === 0 ? 'bg-red-50' : ''}`}>
                                         <td className="p-3 text-slate-600">{s.classCode} ({s.classNo})</td>
                                         <td className="p-3 font-bold">{s.chiName}</td>
