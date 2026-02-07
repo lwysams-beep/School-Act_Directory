@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-// V3.6.1 FIX: UI Layout Fixes, Auto-Zoom Bar Chart, Reactive Pie Chart
+// V3.6.2: Precision Update - Fix Math Logic, Move Buttons Left, Enhanced Logs
 import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, Phone, CheckSquare, Square, RefreshCcw, X, Plus, Edit2, FileSpreadsheet, BarChart, History, TrendingUp, Filter, Cloud, UserX, PieChart, Download, Activity, Save as SaveIcon, Layers, MousePointerClick, Maximize } from 'lucide-react';
 
 // =============================================================================
@@ -110,9 +110,9 @@ const CHART_COLORS = [
 ];
 
 // -----------------------------------------------------------------------------
-// 3. STATS VIEW COMPONENT (V3.6.1 - Auto-Zoom & Layout Fixes)
+// 3. STATS VIEW COMPONENT (V3.6.2 - Logic & UI Fix)
 // -----------------------------------------------------------------------------
-const StatsView = ({ masterList, activities, onBack }) => {
+const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
     const [statsViewMode, setStatsViewMode] = useState('dashboard');
     const [selectedActs, setSelectedActs] = useState(new Set()); 
 
@@ -145,26 +145,39 @@ const StatsView = ({ masterList, activities, onBack }) => {
 
         activities.forEach(item => {
             const dur = calculateDuration(item.time);
+            
+            // V3.6.2 FIX: Calculate Sessions Count (Logic Update)
+            // If specificDates exists, use its length. Otherwise default to 1 (or assume weekly for X weeks if defined)
+            // For this version, we trust specificDates length.
+            const sessionCount = (item.specificDates && item.specificDates.length > 0) ? item.specificDates.length : 1;
+            
+            // Total hours for THIS student in THIS activity
+            // Formula: Duration * Sessions
+            const totalItemHours = dur * sessionCount;
+
             const actName = item.activity || "Unknown";
             
+            // 1. Activity Stats
             if(!actStats[actName]) actStats[actName] = { name: actName, count: 0, hours: 0 };
-            actStats[actName].count += 1;
-            actStats[actName].hours += dur;
+            actStats[actName].count += sessionCount; // Total sessions provided
+            actStats[actName].hours += totalItemHours; // Total hours provided
 
+            // 2. Student Stats
             const sKey = `${item.verifiedClass}-${item.verifiedName}`;
             if (stuStats[sKey]) {
-                stuStats[sKey].count += 1;
-                stuStats[sKey].hours += dur;
+                stuStats[sKey].count += sessionCount;
+                stuStats[sKey].hours += totalItemHours;
                 if(!stuStats[sKey].acts.includes(actName)) stuStats[sKey].acts.push(actName);
             }
             
+            // 3. Grade Stats
             const gradeStr = String(item.verifiedClass || '');
             if(gradeStr.length >= 2) {
                 const grade = gradeStr.charAt(0);
                 if(gradeMap[grade]) {
-                    gradeMap[grade].totalHours += dur;
+                    gradeMap[grade].totalHours += totalItemHours;
                     if(!gradeMap[grade].byActivity[actName]) gradeMap[grade].byActivity[actName] = 0;
-                    gradeMap[grade].byActivity[actName] += dur;
+                    gradeMap[grade].byActivity[actName] += totalItemHours;
                 }
             }
         });
@@ -186,7 +199,18 @@ const StatsView = ({ masterList, activities, onBack }) => {
         };
     }, [masterList, activities]);
 
-    // Filtered Lists
+    const pieGradient = useMemo(() => {
+        if (totalHours === 0) return '#e2e8f0 0deg 360deg';
+        let currentDeg = 0;
+        return activityStats.map((item, idx) => {
+            const deg = (item.hours / totalHours) * 360;
+            const color = CHART_COLORS[idx % CHART_COLORS.length];
+            const str = `${color} ${currentDeg}deg ${currentDeg + deg}deg`;
+            currentDeg += deg;
+            return str;
+        }).join(', ');
+    }, [activityStats, totalHours]);
+
     const filteredActivityList = useMemo(() => {
         if (selectedActs.size === 0) return activityStats;
         return activityStats.filter(a => selectedActs.has(a.name));
@@ -197,8 +221,8 @@ const StatsView = ({ masterList, activities, onBack }) => {
         return filteredActivityList.reduce((acc, cur) => acc + cur.hours, 0);
     }, [filteredActivityList, totalHours, selectedActs]);
 
-    // V3.6.1: Reactive Pie Gradient (follows selection)
-    const pieGradient = useMemo(() => {
+    // Reactive Pie Gradient
+    const filteredPieGradient = useMemo(() => {
         const dataset = filteredActivityList;
         const total = filteredTotalHours;
         
@@ -206,7 +230,6 @@ const StatsView = ({ masterList, activities, onBack }) => {
         let currentDeg = 0;
         return dataset.map((item, idx) => {
             const deg = (item.hours / total) * 360;
-            // Find original color index to maintain consistency
             const originalIndex = activityStats.findIndex(x => x.name === item.name);
             const color = CHART_COLORS[originalIndex % CHART_COLORS.length];
             const str = `${color} ${currentDeg}deg ${currentDeg + deg}deg`;
@@ -232,20 +255,15 @@ const StatsView = ({ masterList, activities, onBack }) => {
         exportToCSV(rows, 'Grade_Activity_Distribution');
     };
 
-    // V3.6.1: Calculate Auto-Zoom Scale for Bar Chart
     const maxGradeHours = useMemo(() => {
-        // Find the maximum hours in any grade based on CURRENT SELECTION
-        // If selection is empty, use global max.
-        // If selection exists, calculate the max of (selected items sum) per grade.
         const max = Math.max(...gradeDistribution.map(g => {
             if (selectedActs.size === 0) return g.total;
-            // Sum only selected activities for this grade
             const selectedSum = Object.entries(g.details)
                 .filter(([name]) => selectedActs.has(name))
                 .reduce((acc, cur) => acc + cur[1], 0);
             return selectedSum;
         }));
-        return max || 1; // Prevent div by zero
+        return max || 1;
     }, [gradeDistribution, selectedActs]);
 
     return (
@@ -255,7 +273,7 @@ const StatsView = ({ masterList, activities, onBack }) => {
                     <ArrowLeft className="mr-2" size={20} /> 返回
                 </button>
                 <h2 className="text-2xl font-bold text-slate-800 flex items-center">
-                    <BarChart className="mr-2 text-blue-600" /> 校本數據分析中心 (V3.6.1)
+                    <BarChart className="mr-2 text-blue-600" /> 校本數據分析中心 (V3.6.2)
                 </h2>
                 <div className="w-24"></div>
             </div>
@@ -264,6 +282,7 @@ const StatsView = ({ masterList, activities, onBack }) => {
                 <button onClick={() => setStatsViewMode('dashboard')} className={`px-4 py-2 rounded-lg flex items-center transition ${statsViewMode === 'dashboard' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}><PieChart size={18} className="mr-2"/> 數據概覽</button>
                 <button onClick={() => setStatsViewMode('activities')} className={`px-4 py-2 rounded-lg flex items-center transition ${statsViewMode === 'activities' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}><Activity size={18} className="mr-2"/> 活動列表 ({filteredActivityList.length})</button>
                 <button onClick={() => setStatsViewMode('students')} className={`px-4 py-2 rounded-lg flex items-center transition ${statsViewMode === 'students' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}><Users size={18} className="mr-2"/> 學生監測 ({filteredStudentList.length})</button>
+                <button onClick={() => setStatsViewMode('logs')} className={`px-4 py-2 rounded-lg flex items-center transition ${statsViewMode === 'logs' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}><History size={18} className="mr-2"/> 系統紀錄</button>
             </div>
 
             {selectedActs.size > 0 && (
@@ -282,15 +301,15 @@ const StatsView = ({ masterList, activities, onBack }) => {
                         
                         {/* 1. PIE CHART */}
                         <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col md:flex-row items-center md:items-start relative min-h-[400px]">
-                            {/* V3.6.1 FIX: Button moved to Header */}
-                            <div className="absolute top-4 right-4 flex items-center">
-                                 <button onClick={() => exportToCSV(filteredActivityList, 'Activity_Hours_Report')} className="text-xs bg-white border px-3 py-1.5 rounded flex items-center hover:bg-slate-100 text-slate-600 font-bold shadow-sm"><Download size={14} className="mr-1"/> 匯出數據</button>
+                            {/* V3.6.2 FIX: Button Moved Left */}
+                            <div className="absolute top-4 left-4 z-20">
+                                 <button onClick={() => exportToCSV(filteredActivityList, 'Activity_Hours_Report')} className="text-xs bg-indigo-600 text-white border px-3 py-1.5 rounded flex items-center hover:bg-indigo-700 shadow-md transition"><Download size={14} className="mr-1"/> 匯出 CSV</button>
                             </div>
                             
-                            <div className="flex-1 flex flex-col items-center justify-center p-4">
+                            <div className="flex-1 flex flex-col items-center justify-center p-4 pt-10">
                                 <h3 className="font-bold text-slate-700 mb-6 flex items-center text-lg"><Clock className="mr-2 text-orange-500"/> 活動時數佔比 ({selectedActs.size > 0 ? '已篩選' : '全校'})</h3>
                                 <div className="relative w-72 h-72 rounded-full shadow-2xl border-4 border-white transition-all duration-500"
-                                    style={{ background: `conic-gradient(${pieGradient})` }}
+                                    style={{ background: `conic-gradient(${filteredPieGradient})` }}
                                 >
                                     <div className="absolute inset-0 m-auto w-36 h-36 bg-slate-50 rounded-full flex flex-col items-center justify-center shadow-inner">
                                         <span className="text-4xl font-bold text-slate-800">{filteredTotalHours.toFixed(0)}</span>
@@ -330,57 +349,44 @@ const StatsView = ({ masterList, activities, onBack }) => {
                             </div>
                         </div>
 
-                        {/* 2. STACKED BAR CHART (Auto-Zoom Contextual) */}
+                        {/* 2. STACKED BAR CHART */}
                         <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 relative flex flex-col h-[600px]">
-                            {/* V3.6.1 FIX: Button moved to Header */}
-                            <div className="flex justify-between items-start mb-6">
-                                <div>
-                                    <h3 className="font-bold text-slate-700 text-lg flex items-center"><TrendingUp className="mr-2 text-green-500"/> 各級總時數分佈 (智能比例)</h3>
+                            {/* V3.6.2 FIX: Button Moved Left */}
+                            <div className="flex flex-col md:flex-row justify-between items-start mb-6">
+                                <div className="flex items-center space-x-4 mb-2 md:mb-0">
+                                    <button onClick={exportGradeStats} className="text-xs bg-indigo-600 text-white border px-3 py-1.5 rounded flex items-center hover:bg-indigo-700 shadow-md transition"><Download size={14} className="mr-1"/> 匯出 CSV</button>
+                                </div>
+                                <div className="text-right">
+                                    <h3 className="font-bold text-slate-700 text-lg flex items-center justify-end"><TrendingUp className="mr-2 text-green-500"/> 各級總時數分佈 (智能比例)</h3>
                                     <p className="text-xs text-slate-500 mt-1">
-                                        {selectedActs.size > 0 ? '灰色背景為該級「全校總時數」，彩色為「已選活動時數」(高度自動放大以利觀察)' : '顯示全校所有活動堆疊'}
+                                        {selectedActs.size > 0 ? '灰色背景: 該級全校總時數 | 彩色: 已選活動時數' : '顯示全校所有活動堆疊'}
                                     </p>
                                 </div>
-                                <button onClick={exportGradeStats} className="text-xs bg-white border px-3 py-1.5 rounded flex items-center hover:bg-slate-100 text-slate-600 font-bold shadow-sm"><Download size={14} className="mr-1"/> 匯出數據</button>
                             </div>
 
                             <div className="flex-1 flex items-end justify-between space-x-8 border-b-2 border-slate-300 pb-2 px-4 mx-4 relative">
                                 {gradeDistribution.map((g) => {
-                                    // V3.6.1 Logic: 
-                                    // 1. Ghost Bar (Gray) uses GLOBAL MAX scale to show true context.
-                                    // 2. Active Bar (Colored) uses ZOOMED scale if selection is active.
-                                    
                                     const globalMax = Math.max(...gradeDistribution.map(x => x.total)) || 1;
-                                    
-                                    // Filter Logic
                                     const activeItems = Object.entries(g.details)
                                         .filter(([name]) => selectedActs.size === 0 || selectedActs.has(name))
                                         .sort((a,b) => b[1] - a[1]); 
 
                                     const selectedTotalHours = activeItems.reduce((acc, cur) => acc + cur[1], 0);
-
-                                    // Height Calculations
-                                    // Ghost height is always relative to Global Max
                                     const ghostHeightPct = (g.total / globalMax) * 100;
-                                    
-                                    // Active Bar Height:
-                                    // If Filter Active: Scale relative to maxGradeHours (Zoomed in)
-                                    // If No Filter: Scale relative to globalMax (Standard Stacked)
                                     const activeHeightPct = selectedActs.size > 0 
                                         ? (selectedTotalHours / maxGradeHours) * 100 
                                         : (selectedTotalHours / globalMax) * 100;
 
                                     return (
                                         <div key={g.grade} className="flex flex-col items-center flex-1 h-full justify-end group relative">
-                                            
-                                            {/* Ghost Bar (Context) - Only visible if filtering */}
+                                            {/* Ghost Bar */}
                                             {selectedActs.size > 0 && (
                                                 <div 
                                                     className="w-full absolute bottom-0 bg-slate-200/50 rounded-t-lg transition-all duration-700 pointer-events-none" 
                                                     style={{height: `${ghostHeightPct}%`}}
                                                 />
                                             )}
-
-                                            {/* Active Stacked Bar */}
+                                            {/* Active Bar */}
                                             <div 
                                                 className={`w-full flex flex-col-reverse rounded-t-lg overflow-hidden shadow-sm relative transition-all duration-700 ${selectedActs.size > 0 ? 'w-4/5 z-10 shadow-lg' : 'bg-slate-200'}`}
                                                 style={{height: `${activeHeightPct}%`, minHeight: activeHeightPct > 0 ? '4px' : '0'}}
@@ -404,8 +410,6 @@ const StatsView = ({ masterList, activities, onBack }) => {
                                                     );
                                                 })}
                                             </div>
-
-                                            {/* Labels */}
                                             <div className="mt-3 text-sm font-bold text-slate-600">{g.grade}</div>
                                             <div className="text-xs font-mono">
                                                 {selectedActs.size > 0 ? (
@@ -417,8 +421,6 @@ const StatsView = ({ masterList, activities, onBack }) => {
                                         </div>
                                     )
                                 })}
-                                
-                                {/* Y-Axis Scale Indicator (Approximate) */}
                                 <div className="absolute left-0 top-0 h-full border-l border-dashed border-slate-300 pointer-events-none">
                                     <span className="absolute top-0 left-1 text-[10px] text-slate-400 bg-slate-50 px-1">
                                         Max: {selectedActs.size > 0 ? maxGradeHours.toFixed(0) : 'Total'}h
@@ -432,11 +434,11 @@ const StatsView = ({ masterList, activities, onBack }) => {
                 {statsViewMode === 'activities' && (
                     <div className="bg-white border rounded-xl overflow-hidden">
                         <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
-                            <h3 className="font-bold text-slate-700">活動統計列表</h3>
+                            <h3 className="font-bold text-slate-700">活動統計列表 (新算法: 單節 x 節數)</h3>
                             <button onClick={() => exportToCSV(filteredActivityList, 'Activity_Report')} className="text-sm bg-white border px-3 py-1 rounded hover:bg-slate-50 flex items-center text-blue-600 border-blue-200"><Download size={14} className="mr-1"/> 匯出 CSV</button>
                         </div>
                         <table className="w-full text-sm text-left">
-                            <thead className="bg-slate-100 text-slate-500 uppercase"><tr><th className="p-3">活動名稱</th><th className="p-3 text-right">總節數</th><th className="p-3 text-right">總時數</th></tr></thead>
+                            <thead className="bg-slate-100 text-slate-500 uppercase"><tr><th className="p-3">活動名稱</th><th className="p-3 text-right">總人次 (Sessions)</th><th className="p-3 text-right">總學時 (Hours)</th></tr></thead>
                             <tbody className="divide-y">
                                 {filteredActivityList.map((a, i) => (
                                     <tr key={i} className="hover:bg-slate-50">
@@ -449,6 +451,23 @@ const StatsView = ({ masterList, activities, onBack }) => {
                                     </tr>
                                 ))}
                             </tbody>
+                        </table>
+                    </div>
+                )}
+
+                {/* V3.6.2: Enhanced Logs with detailed timestamp and target */}
+                {statsViewMode === 'logs' && (
+                    <div className="bg-white border rounded-xl overflow-hidden">
+                        <div className="p-4 bg-slate-50 border-b"><h3 className="font-bold text-slate-700">查詢日誌 (Audit Log)</h3></div>
+                        <table className="w-full text-sm text-left"><thead className="bg-slate-100 text-slate-500"><tr><th className="p-3">日期</th><th className="p-3">時間</th><th className="p-3">查詢班別</th><th className="p-3">學生姓名</th><th className="p-3">結果</th></tr></thead>
+                        <tbody>{queryLogs.length > 0 ? queryLogs.map((log, i) => (
+                            <tr key={i} className="border-b last:border-0 hover:bg-white">
+                                <td className="p-3 text-slate-600">{log.dateStr}</td>
+                                <td className="p-3 font-mono text-slate-500 text-xs">{log.timeStr}</td>
+                                <td className="p-3 font-bold text-slate-800">{log.class} ({log.classNo})</td>
+                                <td className="p-3">{log.name}</td>
+                                <td className="p-3">{log.success ? <span className="text-green-600 text-xs bg-green-100 px-2 py-1 rounded">成功</span> : <span className="text-red-500 text-xs">無記錄</span>}</td>
+                            </tr>)) : (<tr><td colSpan="5" className="p-8 text-center text-slate-400">暫無查詢紀錄</td></tr>)}</tbody>
                         </table>
                     </div>
                 )}
@@ -872,11 +891,23 @@ const App = () => {
   };
   const cancelEdit = () => { setEditingId(null); setEditFormData({}); };
 
-  // Logic: Search
+  // Logic: Search (Updated with enhanced logging)
   const handleStudentSearch = () => {
     const formattedClassNo = selectedClassNo.padStart(2, '0');
     const student = masterList.find(s => s.classCode === selectedClass && s.classNo === formattedClassNo);
-    const newLog = { id: Date.now(), timestamp: new Date().toLocaleString('zh-HK'), class: selectedClass, classNo: formattedClassNo, name: student ? student.chiName : '未知', success: !!student };
+    
+    // V3.6.2: Enhanced Log
+    const now = new Date();
+    const newLog = { 
+        id: Date.now(), 
+        dateStr: now.toLocaleDateString('zh-HK'),
+        timeStr: now.toLocaleTimeString('zh-HK'),
+        class: selectedClass, 
+        classNo: formattedClassNo, 
+        name: student ? student.chiName : '未知', 
+        success: !!student 
+    };
+    
     setQueryLogs(prev => [newLog, ...prev]);
     const results = activities.filter(item => item.verifiedClass === selectedClass && item.verifiedClassNo === formattedClassNo);
     setStudentResult(results);
@@ -1064,7 +1095,8 @@ const App = () => {
             <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleMasterFileChange} />
             {adminTab === 'manage_db' ? renderDatabaseManager() : adminTab === 'stats' ? (
                 // StatsView Component (Independent)
-                <StatsView masterList={masterList} activities={activities} onBack={() => setAdminTab('import')} />
+                // V3.6.2: Pass queryLogs prop to StatsView
+                <StatsView masterList={masterList} activities={activities} queryLogs={queryLogs} onBack={() => setAdminTab('import')} />
             ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 space-y-6">
