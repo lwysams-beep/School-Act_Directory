@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, Phone, CheckSquare, Square, RefreshCcw, X, Plus, Edit2, FileSpreadsheet, BarChart, History, TrendingUp, Filter, Cloud, UserX, Save as SaveIcon, MoreHorizontal } from 'lucide-react';
+import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, Phone, CheckSquare, Square, RefreshCcw, X, Plus, Edit2, FileSpreadsheet, BarChart, History, TrendingUp, Filter, Cloud, UserX, Save as SaveIcon } from 'lucide-react';
 
 // =============================================================================
 //  FIREBASE IMPORTS & CONFIGURATION
@@ -24,7 +24,7 @@ import {
   onSnapshot, 
   query, 
   orderBy,
-  writeBatch 
+  writeBatch
 } from "firebase/firestore";
 
 // *** 請在此填入你的真實 Firebase Config ***
@@ -107,7 +107,7 @@ const App = () => {
   const [statsEditingKey, setStatsEditingKey] = useState(null); 
   const [statsEditForm, setStatsEditForm] = useState({});
 
-  // DB Management UI State (V3.1)
+  // DB Management UI State
   const [dbSearchTerm, setDbSearchTerm] = useState('');
   const [dbSelectedIds, setDbSelectedIds] = useState(new Set());
   const [dbBatchMode, setDbBatchMode] = useState(false);
@@ -117,12 +117,16 @@ const App = () => {
   const [editingId, setEditingId] = useState(null);
   const [editFormData, setEditFormData] = useState({});
 
+  // Staff View State (V3.2)
+  const [staffShowAll, setStaffShowAll] = useState(false); // Default false = Show Today Only
+
   // Search UI
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedClass, setSelectedClass] = useState('1A');
   const [selectedClassNo, setSelectedClassNo] = useState('');
   const [studentResult, setStudentResult] = useState(null);
   const [todayDay, setTodayDay] = useState(new Date().getDay());
+  const [currentDateTime, setCurrentDateTime] = useState(new Date()); // V3.2 Clock
 
   // ---------------------------------------------------------------------------
   // FIREBASE LISTENERS
@@ -162,6 +166,12 @@ const App = () => {
         }
     };
     fetchMaster();
+  }, []);
+
+  // V3.2: Clock Timer
+  useEffect(() => {
+      const timer = setInterval(() => setCurrentDateTime(new Date()), 1000);
+      return () => clearInterval(timer);
   }, []);
 
   // ---------------------------------------------------------------------------
@@ -433,10 +443,9 @@ const App = () => {
   const handleDeleteImport = (id) => setPendingImports(prev => prev.filter(i => i.id !== id));
 
   // ---------------------------------------------------------------------------
-  // DB MANAGEMENT LOGIC (V3.1 Upgraded)
+  // DB MANAGEMENT LOGIC (V3.1)
   // ---------------------------------------------------------------------------
   
-  // Filter activities based on search
   const filteredDbActivities = useMemo(() => {
       if (!dbSearchTerm) return activities;
       const lower = dbSearchTerm.toLowerCase();
@@ -447,7 +456,6 @@ const App = () => {
       );
   }, [activities, dbSearchTerm]);
 
-  // Handle DB Selection
   const toggleDbSelect = (id) => {
       const newSet = new Set(dbSelectedIds);
       if (newSet.has(id)) newSet.delete(id); else newSet.add(id);
@@ -462,62 +470,32 @@ const App = () => {
       }
   };
 
-  // Batch Delete
   const handleBatchDelete = async () => {
       if (!window.confirm(`確定要刪除選取的 ${dbSelectedIds.size} 筆資料嗎？`)) return;
-      
       const batch = writeBatch(db);
-      dbSelectedIds.forEach(id => {
-          const ref = doc(db, "activities", id);
-          batch.delete(ref);
-      });
-
-      try {
-          await batch.commit();
-          setDbSelectedIds(new Set());
-          alert("批量刪除成功！");
-      } catch (e) {
-          alert("批量刪除失敗: " + e.message);
-      }
+      dbSelectedIds.forEach(id => { const ref = doc(db, "activities", id); batch.delete(ref); });
+      try { await batch.commit(); setDbSelectedIds(new Set()); alert("批量刪除成功！"); } catch (e) { alert("批量刪除失敗: " + e.message); }
   };
 
-  // Batch Edit
   const handleBatchEdit = async () => {
       if (!window.confirm(`確定要將選取的 ${dbSelectedIds.size} 筆資料統一修改嗎？`)) return;
-
       const batch = writeBatch(db);
       const updates = {};
       if (batchEditForm.activity) updates.activity = batchEditForm.activity;
       if (batchEditForm.time) updates.time = batchEditForm.time;
       if (batchEditForm.location) updates.location = batchEditForm.location;
       if (batchEditForm.dateText) updates.dateText = batchEditForm.dateText;
-
       if (Object.keys(updates).length === 0) return alert("請輸入要修改的內容");
-
-      dbSelectedIds.forEach(id => {
-          const ref = doc(db, "activities", id);
-          batch.update(ref, updates);
-      });
-
-      try {
-          await batch.commit();
-          setDbSelectedIds(new Set());
-          setDbBatchMode(false);
-          setBatchEditForm({ activity: '', time: '', location: '', dateText: '' });
-          alert("批量修改成功！");
-      } catch (e) {
-          alert("批量修改失敗: " + e.message);
-      }
+      dbSelectedIds.forEach(id => { const ref = doc(db, "activities", id); batch.update(ref, updates); });
+      try { await batch.commit(); setDbSelectedIds(new Set()); setDbBatchMode(false); setBatchEditForm({ activity: '', time: '', location: '', dateText: '' }); alert("批量修改成功！"); } catch (e) { alert("批量修改失敗: " + e.message); }
   };
 
-  // Single Delete
   const handleDeleteActivity = async (id) => {
       if(window.confirm('確定要刪除這筆紀錄嗎？')) {
           try { await deleteDoc(doc(db, "activities", id)); } catch(e) { alert("刪除失敗:" + e.message) }
       }
   };
 
-  // Single Edit
   const startEditActivity = (act) => {
       setEditingId(act.id);
       setEditFormData({ activity: act.activity, time: act.time, location: act.location, dateText: act.dateText });
@@ -542,9 +520,35 @@ const App = () => {
     setCurrentView('kiosk_result');
   };
 
-  const filteredActivities = activities.filter(item => 
-    item.verifiedName?.includes(searchTerm) || item.verifiedClass?.includes(searchTerm) || item.activity?.includes(searchTerm)
-  );
+  // V3.2: Staff View Logic (Filter by Today)
+  const filteredActivities = useMemo(() => {
+      let result = activities;
+      
+      // If NOT show all, filter for Today only
+      if (!staffShowAll) {
+          const d = new Date();
+          const todayString = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          const currentDayId = d.getDay();
+
+          result = result.filter(act => {
+              if (act.specificDates && act.specificDates.length > 0) {
+                  return act.specificDates.includes(todayString);
+              }
+              return act.dayIds && act.dayIds.includes(currentDayId);
+          });
+      }
+
+      // Apply Search Filter
+      if (searchTerm) {
+          const lower = searchTerm.toLowerCase();
+          result = result.filter(item => 
+            item.verifiedName?.includes(lower) || 
+            item.verifiedClass?.includes(lower) || 
+            item.activity?.includes(lower)
+          );
+      }
+      return result;
+  }, [activities, searchTerm, staffShowAll]);
 
   // -------------------------------------------------------------------------
   // VIEWS
@@ -555,6 +559,13 @@ const App = () => {
             <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center font-bold text-sm">佛</div>
             <span className="font-bold text-lg tracking-wide hidden sm:block">佛教正覺蓮社學校</span>
         </div>
+        
+        {/* V3.2: System Clock */}
+        <div className="hidden md:flex flex-col items-center justify-center text-xs text-slate-400 font-mono">
+            <div>{currentDateTime.toLocaleDateString('zh-HK', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
+            <div className="text-white font-bold text-lg">{currentDateTime.toLocaleTimeString('zh-HK')}</div>
+        </div>
+
         <div className="flex space-x-1">
             <button onClick={() => setCurrentView('student')} className={`px-4 py-2 rounded-lg flex items-center text-sm transition-all ${currentView === 'student' || currentView === 'kiosk_result' ? 'bg-orange-600 text-white font-bold shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}><User size={16} className="mr-2" /> 學生</button>
             <button onClick={() => setCurrentView('staff')} className={`px-4 py-2 rounded-lg flex items-center text-sm transition-all ${currentView === 'staff' ? 'bg-blue-600 text-white font-bold shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}><Users size={16} className="mr-2" /> 教職員</button>
@@ -565,29 +576,87 @@ const App = () => {
     </div>
   );
 
-  const renderStudentView = () => (
-    <div className="flex-1 flex flex-col bg-gradient-to-b from-orange-50 to-white">
-        <div className="flex-1 flex flex-col items-center justify-center p-4">
-          <div className="w-full max-w-lg bg-white p-8 rounded-3xl shadow-xl border border-orange-100">
-            <div className="text-center mb-6"><h1 className="text-2xl font-bold text-slate-800">課外活動查詢</h1><p className="text-slate-500">請輸入你的班別及學號</p></div>
-            <div className="mb-6"><label className="block text-slate-400 text-sm mb-2 font-bold uppercase tracking-wider">班別 Class</label><div className="grid grid-cols-6 gap-2">{['1A', '1B', '1C', '2A', '2B', '2C', '3A', '3B', '4A', '4B', '5A', '5B', '6A', '6B'].map((cls) => (<button key={cls} onClick={() => setSelectedClass(cls)} className={`py-3 rounded-lg font-bold text-lg transition-colors ${selectedClass === cls ? 'bg-orange-500 text-white shadow-lg scale-105' : 'bg-slate-100 text-slate-600 hover:bg-orange-100'}`}>{cls}</button>))}</div></div>
-            <div className="mb-8"><label className="block text-slate-400 text-sm mb-2 font-bold uppercase tracking-wider">學號 Class No.</label><div className="flex items-center justify-center mb-4"><div className="h-20 w-32 bg-slate-100 rounded-2xl flex items-center justify-center text-5xl font-bold tracking-widest text-slate-800 border-2 border-orange-200 shadow-inner">{selectedClassNo || <span className="text-slate-300 text-3xl">--</span>}</div></div><div className="grid grid-cols-3 gap-3">{[1,2,3,4,5,6,7,8,9].map((num) => (<button key={num} onClick={() => { if (selectedClassNo.length < 2) setSelectedClassNo(prev => prev + num); }} className="h-14 bg-white border border-slate-200 rounded-xl text-2xl font-bold text-slate-700 active:bg-orange-100 active:border-orange-500 shadow-sm transition-all">{num}</button>))}<button onClick={() => setSelectedClassNo('')} className="h-14 bg-red-50 text-red-500 rounded-xl font-bold border border-red-100">清除</button><button onClick={() => { if (selectedClassNo.length < 2) setSelectedClassNo(prev => prev + 0); }} className="h-14 bg-white border border-slate-200 rounded-xl text-2xl font-bold text-slate-700 active:bg-orange-100 shadow-sm">0</button><button onClick={() => setSelectedClassNo(prev => prev.slice(0, -1))} className="h-14 bg-slate-100 text-slate-500 rounded-xl font-bold">←</button></div></div>
-            <button onClick={handleStudentSearch} disabled={selectedClassNo.length === 0} className={`w-full py-5 rounded-2xl text-2xl font-bold text-white shadow-xl transition-all flex items-center justify-center ${selectedClassNo.length > 0 ? 'bg-orange-600 hover:bg-orange-700 transform hover:scale-[1.02]' : 'bg-slate-300 cursor-not-allowed'}`}><Search className="mr-2" strokeWidth={3} /> 查詢</button>
-          </div>
+  const renderStudentView = () => {
+    // V3.2: Full 28 Classes List (HK Standard P1-P6)
+    const allClasses = [
+        '1A', '1B', '1C', '1D', '1E',
+        '2A', '2B', '2C', '2D', '2E',
+        '3A', '3B', '3C', '3D', '3E',
+        '4A', '4B', '4C', '4D', '4E',
+        '5A', '5B', '5C', '5D',
+        '6A', '6B', '6C', '6D'
+    ];
+
+    return (
+        <div className="flex-1 flex flex-col bg-gradient-to-b from-orange-50 to-white">
+            <div className="flex-1 flex flex-col items-center justify-center p-4">
+            <div className="w-full max-w-4xl bg-white p-8 rounded-3xl shadow-xl border border-orange-100">
+                <div className="text-center mb-6"><h1 className="text-2xl font-bold text-slate-800">課外活動查詢</h1><p className="text-slate-500">請輸入你的班別及學號</p></div>
+                
+                <div className="mb-6">
+                    <label className="block text-slate-400 text-sm mb-2 font-bold uppercase tracking-wider">班別 Class</label>
+                    <div className="grid grid-cols-5 md:grid-cols-10 gap-2">
+                        {allClasses.map((cls) => (
+                            <button key={cls} onClick={() => setSelectedClass(cls)} className={`py-2 rounded-lg font-bold text-lg transition-colors ${selectedClass === cls ? 'bg-orange-500 text-white shadow-lg scale-105' : 'bg-slate-100 text-slate-600 hover:bg-orange-100'}`}>
+                                {cls}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+                
+                <div className="flex flex-col md:flex-row gap-8">
+                    <div className="flex-1">
+                        <label className="block text-slate-400 text-sm mb-2 font-bold uppercase tracking-wider">學號 Class No.</label>
+                        <div className="flex items-center justify-center mb-4"><div className="h-20 w-32 bg-slate-100 rounded-2xl flex items-center justify-center text-5xl font-bold tracking-widest text-slate-800 border-2 border-orange-200 shadow-inner">{selectedClassNo || <span className="text-slate-300 text-3xl">--</span>}</div></div>
+                        <div className="grid grid-cols-3 gap-3">{[1,2,3,4,5,6,7,8,9].map((num) => (<button key={num} onClick={() => { if (selectedClassNo.length < 2) setSelectedClassNo(prev => prev + num); }} className="h-14 bg-white border border-slate-200 rounded-xl text-2xl font-bold text-slate-700 active:bg-orange-100 active:border-orange-500 shadow-sm transition-all">{num}</button>))}<button onClick={() => setSelectedClassNo('')} className="h-14 bg-red-50 text-red-500 rounded-xl font-bold border border-red-100">清除</button><button onClick={() => { if (selectedClassNo.length < 2) setSelectedClassNo(prev => prev + 0); }} className="h-14 bg-white border border-slate-200 rounded-xl text-2xl font-bold text-slate-700 active:bg-orange-100 shadow-sm">0</button><button onClick={() => setSelectedClassNo(prev => prev.slice(0, -1))} className="h-14 bg-slate-100 text-slate-500 rounded-xl font-bold">←</button></div>
+                    </div>
+                    <div className="flex items-center justify-center md:w-1/3">
+                         <button onClick={handleStudentSearch} disabled={selectedClassNo.length === 0} className={`w-full py-8 rounded-2xl text-3xl font-bold text-white shadow-xl transition-all flex items-center justify-center ${selectedClassNo.length > 0 ? 'bg-orange-600 hover:bg-orange-700 transform hover:scale-[1.02]' : 'bg-slate-300 cursor-not-allowed'}`}><Search className="mr-3" size={32} strokeWidth={3} /> 查詢</button>
+                    </div>
+                </div>
+            </div>
+            </div>
         </div>
-    </div>
-  );
+    );
+  };
 
   const renderStaffView = () => (
       <div className="min-h-screen bg-slate-50 p-6 flex-1">
-        <div className="max-w-5xl mx-auto">
-            <div className="mb-6"><h2 className="text-2xl font-bold text-blue-900 flex items-center"><Users className="mr-2" /> 教職員查詢通道</h2><p className="text-slate-500 text-sm">僅供查閱，資料由管理員維護。</p></div>
+        <div className="max-w-6xl mx-auto">
+            <div className="mb-6 flex justify-between items-end">
+                <div>
+                    <h2 className="text-2xl font-bold text-blue-900 flex items-center"><Users className="mr-2" /> 教職員查詢通道</h2>
+                    <p className="text-slate-500 text-sm">
+                        {staffShowAll ? '顯示所有活動紀錄' : '僅顯示今天 (Today) 的活動，如需查看其他日期請切換。'}
+                    </p>
+                </div>
+                <div className="flex bg-white rounded-lg border border-slate-200 p-1">
+                    <button onClick={() => setStaffShowAll(false)} className={`px-4 py-1 text-sm rounded-md font-bold transition ${!staffShowAll ? 'bg-blue-100 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}>今天</button>
+                    <button onClick={() => setStaffShowAll(true)} className={`px-4 py-1 text-sm rounded-md font-bold transition ${staffShowAll ? 'bg-blue-100 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}>全部</button>
+                </div>
+            </div>
+
             <div className="bg-white p-6 rounded-xl shadow-md border-t-4 border-blue-500">
-              <div className="flex items-center space-x-2 mb-4 bg-slate-100 p-3 rounded-lg"><Search className="text-slate-400" /><input type="text" placeholder="輸入搜尋..." className="bg-transparent w-full outline-none text-lg" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
+              <div className="flex items-center space-x-2 mb-4 bg-slate-100 p-3 rounded-lg"><Search className="text-slate-400" /><input type="text" placeholder="輸入搜尋 (姓名/班別/活動)..." className="bg-transparent w-full outline-none text-lg" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
               <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
                 <table className="w-full text-left border-collapse">
                   <thead className="bg-slate-50 sticky top-0 z-10"><tr className="text-slate-600 text-sm uppercase tracking-wider border-b"><th className="p-3">姓名</th><th className="p-3">班別 (學號)</th><th className="p-3">活動名稱</th><th className="p-3">時間</th><th className="p-3">地點</th><th className="p-3 text-blue-600">聯絡電話</th></tr></thead>
-                  <tbody className="text-slate-700">{filteredActivities.length > 0 ? filteredActivities.map((act) => (<tr key={act.id} className="border-b hover:bg-blue-50 transition-colors"><td className="p-3 font-medium">{act.verifiedName}</td><td className="p-3"><span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-bold">{act.verifiedClass} ({act.verifiedClassNo})</span></td><td className="p-3 font-bold text-slate-800">{act.activity}</td><td className="p-3 text-sm">{act.time}</td><td className="p-3 text-sm flex items-center"><MapPin size={14} className="mr-1 text-red-400"/> {act.location}</td><td className="p-3 text-sm font-mono text-blue-600">{act.rawPhone || '-'}</td></tr>)) : (<tr><td colSpan="6" className="p-12 text-center text-slate-400">沒有找到相關資料</td></tr>)}</tbody>
+                  <tbody className="text-slate-700">
+                      {filteredActivities.length > 0 ? filteredActivities.map((act) => (
+                          <tr key={act.id} className="border-b hover:bg-blue-50 transition-colors">
+                              <td className="p-3 font-medium">{act.verifiedName}</td>
+                              <td className="p-3"><span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-bold">{act.verifiedClass} ({act.verifiedClassNo})</span></td>
+                              <td className="p-3 font-bold text-slate-800">{act.activity}</td>
+                              <td className="p-3 text-sm">{act.time}</td>
+                              <td className="p-3 text-sm flex items-center"><MapPin size={14} className="mr-1 text-red-400"/> {act.location}</td>
+                              <td className="p-3 text-sm font-mono text-blue-600">{act.rawPhone || '-'}</td>
+                          </tr>
+                      )) : (
+                          <tr><td colSpan="6" className="p-12 text-center text-slate-400">
+                              {staffShowAll ? '沒有找到相關資料' : '今天沒有已安排的活動 (或尚未輸入)'}
+                          </td></tr>
+                      )}
+                  </tbody>
                 </table>
               </div>
             </div>
@@ -608,130 +677,25 @@ const App = () => {
       </div>
   );
 
-  // V3.1: Enhanced Database Manager with Batch Ops & Filtering
   const renderDatabaseManager = () => (
       <div className="bg-white p-6 rounded-xl shadow-md min-h-[500px]">
-          <div className="flex justify-between items-center mb-6">
-              <button onClick={() => setAdminTab('import')} className="flex items-center text-slate-500 hover:text-blue-600">
-                  <ArrowLeft className="mr-2" size={20} /> 返回導入介面
-              </button>
-              <h2 className="text-2xl font-bold text-slate-800 flex items-center">
-                  <Database className="mr-2 text-blue-600" /> 數據庫管理
-              </h2>
-              <div className="w-24"></div>
-          </div>
-
-          {/* V3.1: Filter & Batch Actions */}
+          <div className="flex justify-between items-center mb-6"><button onClick={() => setAdminTab('import')} className="flex items-center text-slate-500 hover:text-blue-600"><ArrowLeft className="mr-2" size={20} /> 返回導入介面</button><h2 className="text-2xl font-bold text-slate-800 flex items-center"><Database className="mr-2 text-blue-600" /> 數據庫管理</h2><div className="w-24"></div></div>
+          {/* ... Batch UI reused from V3.1 ... */}
           <div className="mb-4 space-y-4">
               <div className="flex gap-4 items-center">
-                  <div className="flex-1 bg-slate-50 border rounded-lg flex items-center px-3 py-2">
-                      <Search size={18} className="text-slate-400 mr-2" />
-                      <input 
-                          type="text" 
-                          placeholder="搜尋學生、活動或日期..." 
-                          className="bg-transparent outline-none w-full text-sm"
-                          value={dbSearchTerm}
-                          onChange={(e) => setDbSearchTerm(e.target.value)}
-                      />
-                  </div>
-                  {dbSelectedIds.size > 0 && (
-                      <div className="flex items-center gap-2">
-                          <button onClick={() => setDbBatchMode(!dbBatchMode)} className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-bold flex items-center hover:bg-blue-700">
-                              <Edit2 size={16} className="mr-2" /> 批量修改 ({dbSelectedIds.size})
-                          </button>
-                          <button onClick={handleBatchDelete} className="bg-red-50 text-red-600 px-3 py-2 rounded-lg text-sm font-bold flex items-center hover:bg-red-100 border border-red-200">
-                              <Trash2 size={16} className="mr-2" /> 刪除
-                          </button>
-                      </div>
-                  )}
+                  <div className="flex-1 bg-slate-50 border rounded-lg flex items-center px-3 py-2"><Search size={18} className="text-slate-400 mr-2" /><input type="text" placeholder="搜尋學生、活動或日期..." className="bg-transparent outline-none w-full text-sm" value={dbSearchTerm} onChange={(e) => setDbSearchTerm(e.target.value)} /></div>
+                  {dbSelectedIds.size > 0 && (<div className="flex items-center gap-2"><button onClick={() => setDbBatchMode(!dbBatchMode)} className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-bold flex items-center hover:bg-blue-700"><Edit2 size={16} className="mr-2" /> 批量修改 ({dbSelectedIds.size})</button><button onClick={handleBatchDelete} className="bg-red-50 text-red-600 px-3 py-2 rounded-lg text-sm font-bold flex items-center hover:bg-red-100 border border-red-200"><Trash2 size={16} className="mr-2" /> 刪除</button></div>)}
               </div>
-
-              {/* Batch Edit Panel */}
-              {dbBatchMode && dbSelectedIds.size > 0 && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 animate-in slide-in-from-top-2">
-                      <h3 className="font-bold text-blue-800 text-sm mb-3">批量修改選取的 {dbSelectedIds.size} 筆資料 (留空則不修改)</h3>
-                      <div className="grid grid-cols-4 gap-2 mb-3">
-                          <input className="p-2 border rounded text-sm" placeholder="新活動名稱..." value={batchEditForm.activity} onChange={e => setBatchEditForm({...batchEditForm, activity: e.target.value})} />
-                          <input className="p-2 border rounded text-sm" placeholder="新時間..." value={batchEditForm.time} onChange={e => setBatchEditForm({...batchEditForm, time: e.target.value})} />
-                          <input className="p-2 border rounded text-sm" placeholder="新地點..." value={batchEditForm.location} onChange={e => setBatchEditForm({...batchEditForm, location: e.target.value})} />
-                          <input className="p-2 border rounded text-sm" placeholder="新備註/日期..." value={batchEditForm.dateText} onChange={e => setBatchEditForm({...batchEditForm, dateText: e.target.value})} />
-                      </div>
-                      <div className="flex justify-end gap-2">
-                          <button onClick={() => setDbBatchMode(false)} className="px-3 py-1 text-slate-500 hover:text-slate-800 text-sm">取消</button>
-                          <button onClick={handleBatchEdit} className="bg-blue-600 text-white px-4 py-1 rounded text-sm font-bold hover:bg-blue-700">確認修改</button>
-                      </div>
-                  </div>
-              )}
+              {dbBatchMode && dbSelectedIds.size > 0 && (<div className="bg-blue-50 border border-blue-200 rounded-lg p-4 animate-in slide-in-from-top-2"><h3 className="font-bold text-blue-800 text-sm mb-3">批量修改選取的 {dbSelectedIds.size} 筆資料 (留空則不修改)</h3><div className="grid grid-cols-4 gap-2 mb-3"><input className="p-2 border rounded text-sm" placeholder="新活動名稱..." value={batchEditForm.activity} onChange={e => setBatchEditForm({...batchEditForm, activity: e.target.value})} /><input className="p-2 border rounded text-sm" placeholder="新時間..." value={batchEditForm.time} onChange={e => setBatchEditForm({...batchEditForm, time: e.target.value})} /><input className="p-2 border rounded text-sm" placeholder="新地點..." value={batchEditForm.location} onChange={e => setBatchEditForm({...batchEditForm, location: e.target.value})} /><input className="p-2 border rounded text-sm" placeholder="新備註/日期..." value={batchEditForm.dateText} onChange={e => setBatchEditForm({...batchEditForm, dateText: e.target.value})} /></div><div className="flex justify-end gap-2"><button onClick={() => setDbBatchMode(false)} className="px-3 py-1 text-slate-500 hover:text-slate-800 text-sm">取消</button><button onClick={handleBatchEdit} className="bg-blue-600 text-white px-4 py-1 rounded text-sm font-bold hover:bg-blue-700">確認修改</button></div></div>)}
           </div>
-
-          <div className="overflow-x-auto border rounded-lg">
-              <table className="w-full text-left text-sm border-collapse">
-                  <thead className="bg-slate-100 text-slate-600 uppercase">
-                      <tr>
-                          <th className="p-3 w-10 text-center">
-                              <input 
-                                  type="checkbox" 
-                                  checked={filteredDbActivities.length > 0 && dbSelectedIds.size === filteredDbActivities.length}
-                                  onChange={toggleDbSelectAll}
-                                  className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
-                              />
-                          </th>
-                          <th className="p-3">學生</th>
-                          <th className="p-3">活動名稱</th>
-                          <th className="p-3">時間</th>
-                          <th className="p-3">地點</th>
-                          <th className="p-3">日期/備註</th>
-                          <th className="p-3 text-right">操作</th>
-                      </tr>
-                  </thead>
-                  <tbody>
-                      {filteredDbActivities.map(act => (
-                          <tr key={act.id} className={`border-b hover:bg-slate-50 ${dbSelectedIds.has(act.id) ? 'bg-blue-50/50' : ''}`}>
-                              <td className="p-3 text-center">
-                                  <input 
-                                      type="checkbox" 
-                                      checked={dbSelectedIds.has(act.id)}
-                                      onChange={() => toggleDbSelect(act.id)}
-                                      className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                  />
-                              </td>
-                              <td className="p-3">
-                                  <div className="font-bold text-slate-800">{act.verifiedClass} ({act.verifiedClassNo})</div>
-                                  <div className="text-slate-500">{act.verifiedName}</div>
-                              </td>
-                              {editingId === act.id ? (
-                                  <>
-                                      <td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.activity} onChange={e => setEditFormData({...editFormData, activity: e.target.value})} /></td>
-                                      <td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.time} onChange={e => setEditFormData({...editFormData, time: e.target.value})} /></td>
-                                      <td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.location} onChange={e => setEditFormData({...editFormData, location: e.target.value})} /></td>
-                                      <td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.dateText} onChange={e => setEditFormData({...editFormData, dateText: e.target.value})} /></td>
-                                      <td className="p-3 text-right">
-                                          <div className="flex justify-end gap-2">
-                                              <button onClick={() => saveEditActivity(act.id)} className="bg-green-100 text-green-700 p-1 rounded hover:bg-green-200"><CheckCircle size={18} /></button>
-                                              <button onClick={cancelEdit} className="bg-slate-100 text-slate-600 p-1 rounded hover:bg-slate-200"><X size={18} /></button>
-                                          </div>
-                                      </td>
-                                  </>
-                              ) : (
-                                  <>
-                                      <td className="p-3 font-bold text-blue-700">{act.activity}</td>
-                                      <td className="p-3">{act.time}</td>
-                                      <td className="p-3">{act.location}</td>
-                                      <td className="p-3 text-slate-500">{act.dateText}</td>
-                                      <td className="p-3 text-right">
-                                          <div className="flex justify-end gap-2">
-                                              <button onClick={() => startEditActivity(act)} className="text-blue-500 hover:text-blue-700 p-1"><Edit2 size={18} /></button>
-                                              <button onClick={() => handleDeleteActivity(act.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={18} /></button>
-                                          </div>
-                                      </td>
-                                  </>
-                              )}
-                          </tr>
-                      ))}
-                      {filteredDbActivities.length === 0 && <tr><td colSpan="7" className="p-8 text-center text-slate-400">沒有符合搜尋的資料。</td></tr>}
-                  </tbody>
-              </table>
-          </div>
+          <div className="overflow-x-auto"><table className="w-full text-left text-sm border-collapse"><thead className="bg-slate-100 text-slate-600 uppercase"><tr><th className="p-3 w-10 text-center"><input type="checkbox" checked={filteredDbActivities.length > 0 && dbSelectedIds.size === filteredDbActivities.length} onChange={toggleDbSelectAll} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"/></th><th className="p-3">學生</th><th className="p-3">活動名稱</th><th className="p-3">時間</th><th className="p-3">地點</th><th className="p-3">日期/備註</th><th className="p-3 text-right">操作</th></tr></thead><tbody>
+              {filteredDbActivities.map(act => (<tr key={act.id} className={`border-b hover:bg-slate-50 ${dbSelectedIds.has(act.id) ? 'bg-blue-50/50' : ''}`}>
+                  <td className="p-3 text-center"><input type="checkbox" checked={dbSelectedIds.has(act.id)} onChange={() => toggleDbSelect(act.id)} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer" /></td>
+                  <td className="p-3"><div className="font-bold text-slate-800">{act.verifiedClass} ({act.verifiedClassNo})</div><div className="text-slate-500">{act.verifiedName}</div></td>
+                  {editingId === act.id ? (<><td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.activity} onChange={e => setEditFormData({...editFormData, activity: e.target.value})} /></td><td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.time} onChange={e => setEditFormData({...editFormData, time: e.target.value})} /></td><td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.location} onChange={e => setEditFormData({...editFormData, location: e.target.value})} /></td><td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.dateText} onChange={e => setEditFormData({...editFormData, dateText: e.target.value})} /></td><td className="p-3 text-right"><div className="flex justify-end gap-2"><button onClick={() => saveEditActivity(act.id)} className="bg-green-100 text-green-700 p-1 rounded hover:bg-green-200"><CheckCircle size={18} /></button><button onClick={cancelEdit} className="bg-slate-100 text-slate-600 p-1 rounded hover:bg-slate-200"><X size={18} /></button></div></td></>) : (<><td className="p-3 font-bold text-blue-700">{act.activity}</td><td className="p-3">{act.time}</td><td className="p-3">{act.location}</td><td className="p-3 text-slate-500">{act.dateText}</td><td className="p-3 text-right"><div className="flex justify-end gap-2"><button onClick={() => startEditActivity(act)} className="text-blue-500 hover:text-blue-700 p-1"><Edit2 size={18} /></button><button onClick={() => handleDeleteActivity(act.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={18} /></button></div></td></>)}
+              </tr>))}
+              {filteredDbActivities.length === 0 && <tr><td colSpan="7" className="p-8 text-center text-slate-400">沒有符合搜尋的資料。</td></tr>}
+          </tbody></table></div>
       </div>
   );
 
@@ -754,37 +718,8 @@ const App = () => {
                   <div className="bg-white border rounded-xl flex-1 overflow-y-auto max-h-[400px]"><table className="w-full text-sm text-left"><thead className="bg-slate-100 text-slate-500 sticky top-0"><tr><th className="p-3">排名</th><th className="p-3">學生</th><th className="p-3 text-center">數量</th><th className="p-3">參與活動</th><th className="p-3 text-right">管理</th></tr></thead><tbody>{displayStats.map((s, i) => (
                       <tr key={s.key} className="border-b hover:bg-slate-50">
                           <td className="p-3 text-slate-400 font-mono">{i + 1}</td>
-                          {statsEditingKey === s.key ? (
-                              <>
-                                <td className="p-3" colSpan="2">
-                                    <div className="flex space-x-1 mb-1">
-                                        <input className="w-12 p-1 border rounded text-xs" value={statsEditForm.classCode} onChange={e => setStatsEditForm({...statsEditForm, classCode: e.target.value})} placeholder="班" />
-                                        <input className="w-12 p-1 border rounded text-xs" value={statsEditForm.classNo} onChange={e => setStatsEditForm({...statsEditForm, classNo: e.target.value})} placeholder="號" />
-                                    </div>
-                                    <div className="flex space-x-1">
-                                        <input className="w-20 p-1 border rounded text-xs" value={statsEditForm.chiName} onChange={e => setStatsEditForm({...statsEditForm, chiName: e.target.value})} placeholder="中文" />
-                                        <input className="w-24 p-1 border rounded text-xs" value={statsEditForm.engName} onChange={e => setStatsEditForm({...statsEditForm, engName: e.target.value})} placeholder="Eng" />
-                                    </div>
-                                </td>
-                                <td className="p-3 text-right">
-                                    <div className="flex justify-end space-x-1">
-                                        <button onClick={saveEditStudent} className="bg-green-100 text-green-700 p-1 rounded"><CheckCircle size={16}/></button>
-                                        <button onClick={cancelEditStudent} className="bg-slate-100 text-slate-500 p-1 rounded"><X size={16}/></button>
-                                    </div>
-                                </td>
-                              </>
-                          ) : (
-                              <>
-                                <td className="p-3"><div className="font-bold text-slate-700">{s.classCode} ({s.classNo})</div><div className="text-xs text-slate-500">{s.chiName}</div></td>
-                                <td className="p-3 text-center"><span className={`inline-block w-8 h-8 leading-8 rounded-full font-bold ${s.count > 0 ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'}`}>{s.count}</span></td>
-                                <td className="p-3 text-xs text-slate-500">{s.actList.join(', ')}</td>
-                                <td className="p-3 text-right">
-                                    <div className="flex justify-end space-x-1">
-                                        <button onClick={() => startEditStudent(s)} className="text-blue-400 hover:text-blue-600 hover:bg-blue-50 p-1 rounded transition" title="修改資料"><Edit2 size={16} /></button>
-                                        <button onClick={() => handleDeleteStudent(s)} className="text-red-300 hover:text-red-600 hover:bg-red-50 p-1 rounded transition" title="刪除學生 (離校)"><UserX size={16} /></button>
-                                    </div>
-                                </td>
-                              </>
+                          {statsEditingKey === s.key ? (<><td className="p-3" colSpan="2"><div className="flex space-x-1 mb-1"><input className="w-12 p-1 border rounded text-xs" value={statsEditForm.classCode} onChange={e => setStatsEditForm({...statsEditForm, classCode: e.target.value})} placeholder="班" /><input className="w-12 p-1 border rounded text-xs" value={statsEditForm.classNo} onChange={e => setStatsEditForm({...statsEditForm, classNo: e.target.value})} placeholder="號" /></div><div className="flex space-x-1"><input className="w-20 p-1 border rounded text-xs" value={statsEditForm.chiName} onChange={e => setStatsEditForm({...statsEditForm, chiName: e.target.value})} placeholder="中文" /><input className="w-24 p-1 border rounded text-xs" value={statsEditForm.engName} onChange={e => setStatsEditForm({...statsEditForm, engName: e.target.value})} placeholder="Eng" /></div></td><td className="p-3 text-right"><div className="flex justify-end space-x-1"><button onClick={saveEditStudent} className="bg-green-100 text-green-700 p-1 rounded"><CheckCircle size={16}/></button><button onClick={cancelEditStudent} className="bg-slate-100 text-slate-500 p-1 rounded"><X size={16}/></button></div></td></>) : (
+                              <><td className="p-3"><div className="font-bold text-slate-700">{s.classCode} ({s.classNo})</div><div className="text-xs text-slate-500">{s.chiName}</div></td><td className="p-3 text-center"><span className={`inline-block w-8 h-8 leading-8 rounded-full font-bold ${s.count > 0 ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'}`}>{s.count}</span></td><td className="p-3 text-xs text-slate-500">{s.actList.join(', ')}</td><td className="p-3 text-right"><div className="flex justify-end space-x-1"><button onClick={() => startEditStudent(s)} className="text-blue-400 hover:text-blue-600 hover:bg-blue-50 p-1 rounded transition" title="修改資料"><Edit2 size={16} /></button><button onClick={() => handleDeleteStudent(s)} className="text-red-300 hover:text-red-600 hover:bg-red-50 p-1 rounded transition" title="刪除學生 (離校)"><UserX size={16} /></button></div></td></>
                           )}
                       </tr>
                   ))}</tbody></table></div></div>
