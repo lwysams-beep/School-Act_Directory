@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-// V3.3.3 FIX: 修正 Hook 錯誤，確保組件架構正確
-import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, Phone, CheckSquare, Square, RefreshCcw, X, Plus, Edit2, FileSpreadsheet, BarChart, History, TrendingUp, Filter, Cloud, UserX, PieChart, Download, Activity, Save as SaveIcon } from 'lucide-react';
+// V3.4: Data Visualization Upgrade - Fix Pie Chart, Interactive Bar Chart, Export Features
+import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, Phone, CheckSquare, Square, RefreshCcw, X, Plus, Edit2, FileSpreadsheet, BarChart, History, TrendingUp, Filter, Cloud, UserX, PieChart, Download, Activity, Save as SaveIcon, Layers } from 'lucide-react';
 
 // =============================================================================
 //  FIREBASE IMPORTS & CONFIGURATION
@@ -68,7 +68,6 @@ const parseMasterCSV = (csvText) => {
 // 2. HELPER FUNCTIONS
 // -----------------------------------------------------------------------------
 
-// 計算時間差 (小時) - 安全版
 const calculateDuration = (timeStr) => {
   if (!timeStr || typeof timeStr !== 'string' || !timeStr.includes('-')) return 1; 
   try {
@@ -84,7 +83,6 @@ const calculateDuration = (timeStr) => {
   } catch (e) { return 1; }
 };
 
-// CSV 匯出功能
 const exportToCSV = (data, filename) => {
   if (!data || data.length === 0) return alert("沒有資料可匯出");
   const headers = Object.keys(data[0]);
@@ -105,24 +103,41 @@ const exportToCSV = (data, filename) => {
   document.body.removeChild(link);
 };
 
+// Color Palette for Charts
+const CHART_COLORS = [
+    '#3b82f6', // Blue
+    '#ef4444', // Red
+    '#10b981', // Emerald
+    '#f59e0b', // Amber
+    '#8b5cf6', // Violet
+    '#ec4899', // Pink
+    '#06b6d4', // Cyan
+    '#f97316', // Orange
+    '#6366f1', // Indigo
+    '#84cc16', // Lime
+];
+
 // -----------------------------------------------------------------------------
-// 3. SEPARATE COMPONENT: STATS VIEW (解決 Error #310 的關鍵)
+// 3. SEPARATE COMPONENT: STATS VIEW (V3.4 Improved)
 // -----------------------------------------------------------------------------
 const StatsView = ({ masterList, activities, onBack }) => {
     const [statsViewMode, setStatsViewMode] = useState('dashboard');
-    const [queryLogs, setQueryLogs] = useState([]); // Local state for logs in this view if needed, or pass from parent
+    const [selectedActivityFilter, setSelectedActivityFilter] = useState(null); // For Grade Chart interaction
 
-    // Move Hook inside this new component -> Safe!
-    const { activityStats, gradeStats, studentStats } = useMemo(() => {
+    // Core Data Calculation
+    const { activityStats, gradeDistribution, studentStats, totalHours } = useMemo(() => {
         if (!masterList || masterList.length === 0 || !activities) {
-            return { activityStats: [], gradeStats: [], studentStats: [] };
+            return { activityStats: [], gradeDistribution: [], studentStats: [], totalHours: 0 };
         }
 
-        const actStats = {};
-        const grStats = {};
-        const stuStats = {};
+        const actStats = {}; // { ActName: { hours: 0, count: 0 } }
+        const stuStats = {}; // { Key: { ...student, hours: 0 } }
         
-        // Init all students
+        // Structure: [ { grade: '1', totalHours: 0, activities: { 'Football': 5, 'Art': 2 } } ]
+        const gradeMap = { '1': {}, '2': {}, '3': {}, '4': {}, '5': {}, '6': {} };
+        Object.keys(gradeMap).forEach(g => gradeMap[g] = { totalHours: 0, byActivity: {} });
+
+        // Init students
         masterList.forEach(s => {
             if (s && s.key) {
                 stuStats[s.key] = { ...s, count: 0, hours: 0, acts: [] };
@@ -133,38 +148,72 @@ const StatsView = ({ masterList, activities, onBack }) => {
             const dur = calculateDuration(item.time);
             const actName = item.activity || "Unknown";
             
-            // Activity Stats
+            // 1. Activity Stats
             if(!actStats[actName]) actStats[actName] = { name: actName, count: 0, hours: 0 };
             actStats[actName].count += 1;
             actStats[actName].hours += dur;
 
-            // Student Stats
+            // 2. Student Stats
             const sKey = `${item.verifiedClass}-${item.verifiedName}`;
             if (stuStats[sKey]) {
                 stuStats[sKey].count += 1;
                 stuStats[sKey].hours += dur;
-                stuStats[sKey].acts.push(actName);
+                if(!stuStats[sKey].acts.includes(actName)) stuStats[sKey].acts.push(actName);
             }
             
-            // Grade Stats
-            const gradeStr = String(item.verifiedClass || 'Other');
-            const grade = gradeStr !== 'Other' ? gradeStr.charAt(0) : 'Other';
-
-            if(!grStats[grade]) grStats[grade] = { sessions: 0, students: new Set() };
-            grStats[grade].sessions += 1;
-            if (item.verifiedClass) {
-                grStats[grade].students.add(sKey);
+            // 3. Grade Stats (Detailed Breakdown)
+            const gradeStr = String(item.verifiedClass || '');
+            if(gradeStr.length >= 2) {
+                const grade = gradeStr.charAt(0);
+                if(gradeMap[grade]) {
+                    gradeMap[grade].totalHours += dur;
+                    if(!gradeMap[grade].byActivity[actName]) gradeMap[grade].byActivity[actName] = 0;
+                    gradeMap[grade].byActivity[actName] += dur;
+                }
             }
         });
 
+        // Convert Grade Map to Array
+        const gradeArr = Object.keys(gradeMap).map(g => ({
+            grade: `P.${g}`,
+            total: gradeMap[g].totalHours,
+            details: gradeMap[g].byActivity
+        }));
+
+        const finalActStats = Object.values(actStats).sort((a,b) => b.hours - a.hours);
+        const totalH = finalActStats.reduce((acc, cur) => acc + cur.hours, 0);
+
         return { 
-            activityStats: Object.values(actStats).sort((a,b) => b.hours - a.hours), 
-            gradeStats: Object.keys(grStats).sort().map(g => ({ grade: g, avg: (grStats[g].sessions / (grStats[g].students.size || 1)).toFixed(1), total: grStats[g].sessions })),
-            studentStats: Object.values(stuStats).sort((a,b) => a.hours - b.hours) 
+            activityStats: finalActStats, 
+            gradeDistribution: gradeArr,
+            studentStats: Object.values(stuStats).sort((a,b) => a.hours - b.hours),
+            totalHours: totalH
         };
     }, [masterList, activities]);
 
-    const totalHours = activityStats.reduce((sum, a) => sum + a.hours, 0);
+    // Pie Chart Logic (Fixed)
+    const pieGradient = useMemo(() => {
+        if (totalHours === 0) return '#e2e8f0 0deg 360deg';
+        let currentDeg = 0;
+        return activityStats.slice(0, 8).map((item, idx) => {
+            const deg = (item.hours / totalHours) * 360;
+            const color = CHART_COLORS[idx % CHART_COLORS.length];
+            const str = `${color} ${currentDeg}deg ${currentDeg + deg}deg`;
+            currentDeg += deg;
+            return str;
+        }).join(', ');
+    }, [activityStats, totalHours]);
+
+    // Helpers for Exports
+    const exportGradeStats = () => {
+        const rows = [];
+        gradeDistribution.forEach(g => {
+            Object.entries(g.details).forEach(([actName, hours]) => {
+                rows.push({ Grade: g.grade, Activity: actName, Hours: hours.toFixed(2) });
+            });
+        });
+        exportToCSV(rows, 'Grade_Activity_Distribution');
+    };
 
     return (
         <div className="bg-white p-6 rounded-xl shadow-md min-h-[600px] flex flex-col">
@@ -173,7 +222,7 @@ const StatsView = ({ masterList, activities, onBack }) => {
                     <ArrowLeft className="mr-2" size={20} /> 返回
                 </button>
                 <h2 className="text-2xl font-bold text-slate-800 flex items-center">
-                    <BarChart className="mr-2 text-blue-600" /> 校本數據分析中心 (V3.3.3 Stable)
+                    <BarChart className="mr-2 text-blue-600" /> 校本數據分析中心 (V3.4)
                 </h2>
                 <div className="w-24"></div>
             </div>
@@ -186,49 +235,103 @@ const StatsView = ({ masterList, activities, onBack }) => {
 
             <div className="flex-1 overflow-y-auto">
                 {statsViewMode === 'dashboard' && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col items-center">
-                            <h3 className="font-bold text-slate-700 mb-6 flex items-center"><Clock className="mr-2 text-orange-500"/> 活動總時數分佈</h3>
-                            <div className="relative w-64 h-64 rounded-full border-4 border-white shadow-xl mb-6"
-                                style={{
-                                    background: `conic-gradient(${
-                                        activityStats.length > 0 ? activityStats.slice(0, 6).reduce((acc, item, idx, arr) => {
-                                            const prevDeg = idx === 0 ? 0 : acc.prevDeg;
-                                            const deg = (item.hours / (totalHours || 1)) * 360;
-                                            const color = ['#3b82f6', '#8b5cf6', '#ec4899', '#f97316', '#eab308', '#22c55e'][idx];
-                                            acc.str += `${color} ${prevDeg}deg ${prevDeg + deg}deg, `;
-                                            acc.prevDeg += deg;
-                                            return idx === arr.length - 1 ? acc.str.slice(0, -2) : acc; 
-                                        }, { str: '', prevDeg: 0 }).str : '#e2e8f0 0deg 360deg'
-                                    })`
-                                }}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        {/* 1. PIE CHART */}
+                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col items-center relative">
+                            <button onClick={() => exportToCSV(activityStats, 'Total_Hours_Report')} className="absolute top-4 right-4 text-xs bg-white border px-2 py-1 rounded flex items-center hover:bg-slate-100 text-slate-600"><Download size={12} className="mr-1"/> 匯出數據</button>
+                            <h3 className="font-bold text-slate-700 mb-6 flex items-center self-start"><Clock className="mr-2 text-orange-500"/> 活動總時數分佈 (Top 8)</h3>
+                            
+                            <div className="relative w-64 h-64 rounded-full shadow-xl mb-8"
+                                style={{ background: `conic-gradient(${pieGradient})` }}
                             >
-                                <div className="absolute inset-0 m-auto w-32 h-32 bg-slate-50 rounded-full flex flex-col items-center justify-center">
+                                <div className="absolute inset-0 m-auto w-32 h-32 bg-slate-50 rounded-full flex flex-col items-center justify-center shadow-inner">
                                     <span className="text-3xl font-bold text-slate-800">{totalHours.toFixed(0)}</span>
-                                    <span className="text-xs text-slate-400">總小時</span>
+                                    <span className="text-xs text-slate-400">總時數</span>
                                 </div>
                             </div>
+                            
                             <div className="w-full grid grid-cols-2 gap-2 text-xs">
-                                {activityStats.slice(0, 6).map((a, i) => (
-                                    <div key={i} className="flex items-center"><span className="w-3 h-3 rounded-full mr-2" style={{backgroundColor: ['#3b82f6', '#8b5cf6', '#ec4899', '#f97316', '#eab308', '#22c55e'][i]}}></span>{a.name} ({((a.hours/(totalHours||1))*100).toFixed(0)}%)</div>
+                                {activityStats.slice(0, 8).map((a, i) => (
+                                    <div key={i} className="flex items-center p-1 rounded hover:bg-white transition">
+                                        <span className="w-3 h-3 rounded-full mr-2 shadow-sm" style={{backgroundColor: CHART_COLORS[i % CHART_COLORS.length]}}></span>
+                                        <div className="flex-1 truncate mr-2" title={a.name}>{a.name}</div>
+                                        <div className="font-bold text-slate-600">{((a.hours/(totalHours||1))*100).toFixed(1)}%</div>
+                                    </div>
                                 ))}
                             </div>
                         </div>
-                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
-                                <h3 className="font-bold text-slate-700 mb-6 flex items-center"><TrendingUp className="mr-2 text-green-500"/> 各級平均參與 (節數/人)</h3>
-                                <div className="space-y-4">
-                                {gradeStats.map(g => (
-                                    <div key={g.grade} className="flex items-center">
-                                        <div className="w-12 font-bold text-slate-500">P.{g.grade}</div>
-                                        <div className="flex-1 h-6 bg-slate-200 rounded-full overflow-hidden">
-                                            <div className="h-full bg-green-500 text-white text-xs flex items-center justify-end px-2" style={{width: `${Math.min(g.avg*10, 100)}%`}}>{g.avg}</div>
+
+                        {/* 2. STACKED BAR CHART (INTERACTIVE) */}
+                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 relative flex flex-col">
+                            <button onClick={exportGradeStats} className="absolute top-4 right-4 text-xs bg-white border px-2 py-1 rounded flex items-center hover:bg-slate-100 text-slate-600"><Download size={12} className="mr-1"/> 匯出數據</button>
+                            <h3 className="font-bold text-slate-700 mb-2 flex items-center"><TrendingUp className="mr-2 text-green-500"/> 各級總時數分佈</h3>
+                            <p className="text-xs text-slate-500 mb-6">點擊下方活動名稱可篩選特定活動</p>
+
+                            {/* Chart Area */}
+                            <div className="flex-1 flex items-end justify-between space-x-4 h-64 border-b border-slate-300 pb-1 px-2">
+                                {gradeDistribution.map((g) => {
+                                    // Calculate height ratio based on max hours (e.g. 500 hours max scale)
+                                    const maxScale = Math.max(...gradeDistribution.map(x => x.total)) || 1; 
+                                    const items = Object.entries(g.details).sort((a,b) => b[1] - a[1]); // Sort pieces by size
+                                    
+                                    return (
+                                        <div key={g.grade} className="flex flex-col items-center flex-1 h-full justify-end group">
+                                            <div className="w-full max-w-[40px] flex flex-col-reverse rounded-t-lg overflow-hidden shadow-sm relative transition-all duration-500" 
+                                                 style={{height: `${(g.total / maxScale) * 100}%`, minHeight: '2px'}}>
+                                                
+                                                {/* If filter active, show only that one */}
+                                                {selectedActivityFilter ? (
+                                                     <div 
+                                                        className="w-full bg-blue-500 transition-all duration-500"
+                                                        style={{
+                                                            height: `${((g.details[selectedActivityFilter] || 0) / (g.total || 1)) * 100}%`,
+                                                            backgroundColor: CHART_COLORS[activityStats.findIndex(a => a.name === selectedActivityFilter) % CHART_COLORS.length]
+                                                        }}
+                                                     />
+                                                ) : (
+                                                    // Stacked Mode
+                                                    items.map(([actName, hrs], idx) => {
+                                                        const colorIdx = activityStats.findIndex(a => a.name === actName);
+                                                        const color = colorIdx >= 0 ? CHART_COLORS[colorIdx % CHART_COLORS.length] : '#cbd5e1';
+                                                        const pct = (hrs / g.total) * 100;
+                                                        return (
+                                                            <div key={actName} className="w-full" style={{height: `${pct}%`, backgroundColor: color}} title={`${actName}: ${hrs.toFixed(1)}小時`}></div>
+                                                        );
+                                                    })
+                                                )}
+                                            </div>
+                                            <div className="mt-2 text-xs font-bold text-slate-600">{g.grade}</div>
+                                            <div className="text-[10px] text-slate-400">
+                                                {selectedActivityFilter 
+                                                    ? (g.details[selectedActivityFilter] || 0).toFixed(1) 
+                                                    : g.total.toFixed(0)}h
+                                            </div>
                                         </div>
-                                    </div>
+                                    )
+                                })}
+                            </div>
+
+                            {/* Legend / Filter Controller */}
+                            <div className="mt-4 flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+                                <button 
+                                    onClick={() => setSelectedActivityFilter(null)}
+                                    className={`text-[10px] px-2 py-1 rounded border transition ${!selectedActivityFilter ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 hover:bg-slate-100'}`}
+                                >
+                                    全部顯示
+                                </button>
+                                {activityStats.map((a, i) => (
+                                    <button 
+                                        key={i}
+                                        onClick={() => setSelectedActivityFilter(selectedActivityFilter === a.name ? null : a.name)}
+                                        className={`text-[10px] px-2 py-1 rounded border flex items-center transition
+                                            ${selectedActivityFilter === a.name ? 'ring-2 ring-offset-1 ring-blue-400 font-bold bg-white' : 'bg-white text-slate-600 hover:bg-slate-50'}
+                                        `}
+                                    >
+                                        <span className="w-2 h-2 rounded-full mr-1" style={{backgroundColor: CHART_COLORS[i % CHART_COLORS.length]}}></span>
+                                        {a.name}
+                                    </button>
                                 ))}
-                                </div>
-                                <div className="mt-8 p-3 bg-blue-100 text-blue-800 text-xs rounded-lg">
-                                    <strong>分析建議：</strong> 此圖表反映各級資源分配。若某級數值過低，建議在下一季增加該級別的適齡活動。
-                                </div>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -237,13 +340,13 @@ const StatsView = ({ masterList, activities, onBack }) => {
                     <div className="bg-white border rounded-xl overflow-hidden">
                         <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
                             <h3 className="font-bold text-slate-700">活動統計列表</h3>
-                            <button onClick={() => exportToCSV(activityStats, 'Activity_Report')} className="text-sm bg-white border px-3 py-1 rounded hover:bg-slate-50 flex items-center"><Download size={14} className="mr-1"/> 匯出 CSV</button>
+                            <button onClick={() => exportToCSV(activityStats, 'Activity_Report')} className="text-sm bg-white border px-3 py-1 rounded hover:bg-slate-50 flex items-center text-blue-600 border-blue-200"><Download size={14} className="mr-1"/> 匯出 CSV</button>
                         </div>
                         <table className="w-full text-sm text-left">
                             <thead className="bg-slate-100 text-slate-500 uppercase"><tr><th className="p-3">活動名稱</th><th className="p-3 text-right">總節數</th><th className="p-3 text-right">總時數</th></tr></thead>
                             <tbody className="divide-y">
                                 {activityStats.map((a, i) => (
-                                    <tr key={i} className="hover:bg-slate-50"><td className="p-3 font-medium">{a.name}</td><td className="p-3 text-right">{a.count}</td><td className="p-3 text-right font-bold text-blue-600">{a.hours.toFixed(1)}</td></tr>
+                                    <tr key={i} className="hover:bg-slate-50"><td className="p-3 font-medium flex items-center"><span className="w-2 h-2 rounded-full mr-2" style={{backgroundColor: CHART_COLORS[i % CHART_COLORS.length]}}></span>{a.name}</td><td className="p-3 text-right">{a.count}</td><td className="p-3 text-right font-bold text-blue-600">{a.hours.toFixed(1)}</td></tr>
                                 ))}
                             </tbody>
                         </table>
@@ -254,7 +357,7 @@ const StatsView = ({ masterList, activities, onBack }) => {
                     <div className="bg-white border rounded-xl overflow-hidden">
                             <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
                             <h3 className="font-bold text-slate-700 flex items-center"><AlertTriangle className="mr-2 text-orange-500" size={18}/> 學生參與度監測 (低至高)</h3>
-                            <button onClick={() => exportToCSV(studentStats, 'Student_Participation')} className="text-sm bg-white border px-3 py-1 rounded hover:bg-slate-50 flex items-center"><Download size={14} className="mr-1"/> 匯出 CSV</button>
+                            <button onClick={() => exportToCSV(studentStats, 'Student_Participation')} className="text-sm bg-white border px-3 py-1 rounded hover:bg-slate-50 flex items-center text-blue-600 border-blue-200"><Download size={14} className="mr-1"/> 匯出 CSV</button>
                         </div>
                         <div className="max-h-[500px] overflow-y-auto">
                         <table className="w-full text-sm text-left">
@@ -860,7 +963,7 @@ const App = () => {
             </div>
             <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleMasterFileChange} />
             {adminTab === 'manage_db' ? renderDatabaseManager() : adminTab === 'stats' ? (
-                // V3.3.3 FIX: 這裡改用 Component 調用，而不是函數調用
+                // StatsView Component (Independent)
                 <StatsView masterList={masterList} activities={activities} onBack={() => setAdminTab('import')} />
             ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -927,7 +1030,7 @@ const App = () => {
                 const dayActivities = studentResult ? studentResult.filter(act => { if (act.specificDates && act.specificDates.length > 0) { return act.specificDates.includes(dayItem.dateString); } return act.dayIds && act.dayIds.includes(dayItem.dayId); }) : [];
                 const isToday = dayItem.label === '今天';
                 return (<div key={dayItem.dateString} className={`rounded-3xl p-6 transition-all ${isToday ? 'bg-slate-700/80 ring-2 ring-green-500 shadow-[0_0_20px_rgba(34,197,94,0.3)]' : 'bg-slate-700/30'}`}><div className="flex items-center mb-4 border-b border-slate-600 pb-2"><div className={`text-2xl font-bold ${isToday ? 'text-green-400' : 'text-slate-200'}`}>{dayItem.fullLabel}</div>{isToday && <span className="ml-3 bg-green-600 text-white text-xs px-2 py-1 rounded-full animate-pulse">Today</span>}</div><div className="space-y-4">{dayActivities.length > 0 ? (dayActivities.map((item, idx) => (<div key={`${item.id}-${idx}`} className="bg-white text-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden"><div className="flex justify-between items-start mb-2"><h3 className="text-2xl font-bold text-slate-900">{item.activity}</h3></div><div className="grid grid-cols-2 gap-4 mt-3"><div className="flex items-center text-slate-600 bg-slate-100 p-2 rounded-lg"><Clock size={20} className="mr-2 text-orange-500" /><span className="font-bold">{item.time}</span></div><div className="flex items-center text-blue-800 bg-blue-50 p-2 rounded-lg"><MapPin size={20} className="mr-2 text-blue-500" /><span className="font-bold">{item.location}</span></div></div></div>))) : (<div className="text-slate-500 text-sm italic py-4 text-center border border-dashed border-slate-600 rounded-xl">沒有安排活動</div>)}</div></div>);
-            })}</div>{(!studentResult) && (<div className="flex flex-col items-center justify-center h-40 mt-8 text-slate-400 bg-slate-700/30 rounded-2xl border border-dashed border-slate-600"><Calendar size={48} className="mb-2 opacity-50" /><p className="text-lg">請輸入班別及學號查詢</p></div>)}</div></div>
+            })}</div>{(!studentResult) && (<div className="flex flex-col items-center justify-center h-40 mt-8 text-slate-400 bg-slate-700/30 rounded-2xl border border-dashed border-slate-600\"><Calendar size={48} className=\"mb-2 opacity-50\" /><p className=\"text-lg\">請輸入班別及學號查詢</p></div>)}</div></div>
      );
   }
 
