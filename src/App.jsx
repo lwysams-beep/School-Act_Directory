@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, Phone, CheckSquare, Square, RefreshCcw, X, Plus, Edit2, FileSpreadsheet, BarChart, History, TrendingUp, Filter, Cloud, UserX, Save as SaveIcon, LayoutDashboard, List, PieChart } from 'lucide-react';
+import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, Phone, CheckSquare, Square, RefreshCcw, X, Plus, Edit2, FileSpreadsheet, BarChart, History, TrendingUp, Filter, Cloud, UserX, LayoutDashboard, List, PieChart } from 'lucide-react';
 
 // =============================================================================
 //  FIREBASE IMPORTS & CONFIGURATION (LIVE)
@@ -27,7 +27,7 @@ import {
   writeBatch
 } from "firebase/firestore";
 
-// *** V3.4: 使用你提供的真實設定 ***
+// *** V3.5: 使用你提供的真實設定 ***
 const firebaseConfig = {
   apiKey: "AIzaSyDXZClMosztnJBd0CK6cpS6PPtJTTpgDkQ",
   authDomain: "school-act-directory.firebaseapp.com",
@@ -42,14 +42,14 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-// Initialize Analytics (Optional, but good to have)
+// Initialize Analytics (Safe check)
 let analytics;
 if (typeof window !== 'undefined') {
   analytics = getAnalytics(app);
 }
 
 // -----------------------------------------------------------------------------
-// 1. MASTER DATA UTILS
+// 1. UTILS
 // -----------------------------------------------------------------------------
 const parseMasterCSV = (csvText) => {
   const lines = csvText.trim().split('\n');
@@ -67,6 +67,7 @@ const parseMasterCSV = (csvText) => {
   }).filter(item => item !== null);
 };
 
+// Main Component
 const App = () => {
   const [currentView, setCurrentView] = useState('student'); 
   
@@ -128,10 +129,8 @@ const App = () => {
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
 
   // ---------------------------------------------------------------------------
-  // FIREBASE LISTENERS (Real-time Sync)
+  // FIREBASE LISTENERS
   // ---------------------------------------------------------------------------
-  
-  // 1. Auth Listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
@@ -140,9 +139,7 @@ const App = () => {
     return () => unsubscribe();
   }, []);
 
-  // 2. Activities Listener (Sync 'activities' collection)
   useEffect(() => {
-    // Only fetch if needed, but for this app we need it globally mostly
     const q = query(collection(db, "activities"), orderBy("time")); 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const acts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -151,7 +148,6 @@ const App = () => {
     return () => unsubscribe();
   }, []);
 
-  // 3. Master Data Fetcher (Single Doc Approach)
   useEffect(() => {
     const fetchMaster = async () => {
         setIsMasterLoading(true);
@@ -172,14 +168,13 @@ const App = () => {
     fetchMaster();
   }, []);
 
-  // Timer
   useEffect(() => {
       const timer = setInterval(() => setCurrentDateTime(new Date()), 1000);
       return () => clearInterval(timer);
   }, []);
 
   // ---------------------------------------------------------------------------
-  // AUTH ACTIONS
+  // ACTIONS
   // ---------------------------------------------------------------------------
   const handleLogin = async (e) => {
       e.preventDefault();
@@ -197,25 +192,19 @@ const App = () => {
       setCurrentView('student'); 
   };
 
-  // ---------------------------------------------------------------------------
-  // MASTER DATA ACTIONS (Cloud Sync)
-  // ---------------------------------------------------------------------------
   const handleMasterUploadTrigger = () => fileInputRef.current.click();
 
   const handleMasterFileChange = (e) => {
       const file = e.target.files[0];
       if (!file) return;
-
       const reader = new FileReader();
-      reader.readAsText(file, csvEncoding); // Use selected encoding
-
+      reader.readAsText(file, csvEncoding);
       reader.onload = async (event) => {
           const text = event.target.result;
           try {
               const newMaster = parseMasterCSV(text);
               if (newMaster.length > 0) {
-                  // --- FIREBASE SAVE LOGIC ---
-                  if (window.confirm(`解析成功！共 ${newMaster.length} 筆資料。\n確定要上傳至雲端資料庫嗎？(這將覆蓋舊有名單)`)) {
+                  if (window.confirm(`解析成功！共 ${newMaster.length} 筆資料。\n確定要上傳至雲端資料庫嗎？`)) {
                       setIsMasterLoading(true);
                       try {
                           await setDoc(doc(db, "settings", "master_list"), {
@@ -226,18 +215,10 @@ const App = () => {
                           });
                           setMasterList(newMaster);
                           alert("雲端數據庫更新成功！");
-                      } catch (error) {
-                          alert("上傳失敗: " + error.message);
-                      } finally {
-                          setIsMasterLoading(false);
-                      }
+                      } catch (error) { alert("上傳失敗: " + error.message); } finally { setIsMasterLoading(false); }
                   }
-              } else {
-                  alert("CSV 無法識別。請檢查格式或編碼。");
-              }
-          } catch (err) {
-              alert("解析 CSV 失敗: " + err.message);
-          }
+              } else { alert("CSV 無法識別。請檢查格式或編碼。"); }
+          } catch (err) { alert("解析 CSV 失敗: " + err.message); }
       };
   };
 
@@ -246,7 +227,6 @@ const App = () => {
       setSchoolYearStart(newYear);
       if (user) {
           try {
-              // Merge update to settings
               await setDoc(doc(db, "settings", "master_list"), {
                   students: masterList,
                   schoolYearStart: newYear,
@@ -257,22 +237,15 @@ const App = () => {
       }
   };
 
+  // Student Edit/Delete Actions
   const startEditStudent = (s) => { setStatsEditingKey(s.key); setStatsEditForm({ ...s }); };
   const cancelEditStudent = () => { setStatsEditingKey(null); setStatsEditForm({}); };
   const saveEditStudent = async () => {
       setIsMasterLoading(true);
       try {
-          const newMasterList = masterList.map(s => 
-              s.key === statsEditingKey ? { ...statsEditForm, key: `${statsEditForm.classCode}-${statsEditForm.chiName}` } : s 
-          );
-          await setDoc(doc(db, "settings", "master_list"), {
-              students: newMasterList,
-              schoolYearStart: schoolYearStart,
-              updatedAt: new Date().toISOString(),
-              updatedBy: user.email
-          });
-          setMasterList(newMasterList);
-          setStatsEditingKey(null);
+          const newMasterList = masterList.map(s => s.key === statsEditingKey ? { ...statsEditForm, key: `${statsEditForm.classCode}-${statsEditForm.chiName}` } : s);
+          await setDoc(doc(db, "settings", "master_list"), { students: newMasterList, schoolYearStart, updatedAt: new Date().toISOString(), updatedBy: user.email });
+          setMasterList(newMasterList); setStatsEditingKey(null);
       } catch (error) { alert("失敗: " + error.message); } finally { setIsMasterLoading(false); }
   };
   const handleDeleteStudent = async (s) => {
@@ -280,19 +253,12 @@ const App = () => {
       setIsMasterLoading(true);
       try {
           const n = masterList.filter(x => x.key !== s.key);
-          await setDoc(doc(db, "settings", "master_list"), {
-              students: n,
-              schoolYearStart: schoolYearStart,
-              updatedAt: new Date().toISOString(),
-              updatedBy: user.email
-          });
+          await setDoc(doc(db, "settings", "master_list"), { students: n, schoolYearStart, updatedAt: new Date().toISOString(), updatedBy: user.email });
           setMasterList(n);
       } catch (e) { alert("失敗: " + e.message); } finally { setIsMasterLoading(false); }
   };
 
-  // ---------------------------------------------------------------------------
-  // DATA LOGIC (Same as V3.3)
-  // ---------------------------------------------------------------------------
+  // Import Logic
   const handleAddDate = () => {
       if (!tempDateInput) return;
       let dStr = tempDateInput;
@@ -317,6 +283,7 @@ const App = () => {
   const handleRemoveDate = (d) => setImportDates(p => p.filter(x => x !== d));
   const handleClearDates = () => setImportDates([]);
   const formatDisplayDate = (d) => { const p = d.split('-'); return p.length === 3 ? `${p[2]}${p[1]}` : d; };
+  
   const handleBulkImport = () => {
       const l = bulkInput.trim().split('\n'); const n = []; const dm = {1:'逢星期一',2:'逢星期二',3:'逢星期三',4:'逢星期四',5:'逢星期五',6:'逢星期六',0:'逢星期日'};
       let dt = dm[importDayId]; if (importDates.length > 0) dt = `共${importDates.length}堂 (${importDates[0]}起)`;
@@ -393,9 +360,15 @@ const App = () => {
   // VIEWS
   // -------------------------------------------------------------------------
   const renderTopNavBar = () => (<div className="bg-slate-900 text-white p-3 flex justify-between items-center shadow-md sticky top-0 z-50"><div className="flex items-center space-x-2 cursor-pointer" onClick={() => setCurrentView('student')}><div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center font-bold text-sm">佛</div><span className="font-bold text-lg tracking-wide hidden sm:block">佛教正覺蓮社學校</span></div><div className="hidden md:flex flex-col items-center justify-center text-xs text-slate-400 font-mono"><div>{currentDateTime.toLocaleDateString('zh-HK', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div><div className="text-white font-bold text-lg">{currentDateTime.toLocaleTimeString('zh-HK')}</div></div><div className="flex space-x-1"><button onClick={() => setCurrentView('student')} className={`px-4 py-2 rounded-lg flex items-center text-sm transition-all ${currentView === 'student' || currentView === 'kiosk_result' ? 'bg-orange-600 text-white font-bold shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}><User size={16} className="mr-2" /> 學生</button><button onClick={() => setCurrentView('staff')} className={`px-4 py-2 rounded-lg flex items-center text-sm transition-all ${currentView === 'staff' ? 'bg-blue-600 text-white font-bold shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}><Users size={16} className="mr-2" /> 教職員</button><button onClick={() => setCurrentView('admin')} className={`px-4 py-2 rounded-lg flex items-center text-sm transition-all ${currentView === 'admin' ? 'bg-slate-700 text-white font-bold shadow-lg ring-1 ring-slate-500' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>{user ? <Shield size={16} className="mr-2 text-green-400" /> : <Lock size={16} className="mr-2" />} 管理員</button></div></div>);
-  const renderStudentView = () => { const allClasses = ['1A','1B','1C','1D','1E','2A','2B','2C','2D','2E','3A','3B','3C','3D','3E','4A','4B','4C','4D','4E','5A','5B','5C','5D','6A','6B','6C','6D']; return (<div className="flex-1 flex flex-col bg-gradient-to-b from-orange-50 to-white"><div className="flex-1 flex flex-col items-center justify-center p-4"><div className="w-full max-w-4xl bg-white p-8 rounded-3xl shadow-xl border border-orange-100"><div className="text-center mb-6"><h1 className="text-2xl font-bold text-slate-800">課外活動查詢</h1><p className="text-slate-500">請輸入你的班別及學號</p></div><div className="mb-6"><label className="block text-slate-400 text-sm mb-2 font-bold uppercase tracking-wider">班別 Class</label><div className="grid grid-cols-5 md:grid-cols-10 gap-2">{allClasses.map((cls) => (<button key={cls} onClick={() => setSelectedClass(cls)} className={`py-2 rounded-lg font-bold text-lg transition-colors ${selectedClass === cls ? 'bg-orange-500 text-white shadow-lg scale-105' : 'bg-slate-100 text-slate-600 hover:bg-orange-100'}`}>{cls}</button>))}</div></div><div className="flex flex-col md:flex-row gap-8"><div className="flex-1"><label className="block text-slate-400 text-sm mb-2 font-bold uppercase tracking-wider">學號 Class No.</label><div className="flex items-center justify-center mb-4"><div className="h-20 w-32 bg-slate-100 rounded-2xl flex items-center justify-center text-5xl font-bold tracking-widest text-slate-800 border-2 border-orange-200 shadow-inner">{selectedClassNo || <span className="text-slate-300 text-3xl">--</span>}</div></div><div className="grid grid-cols-3 gap-3">{[1,2,3,4,5,6,7,8,9].map((num) => (<button key={num} onClick={() => { if (selectedClassNo.length < 2) setSelectedClassNo(prev => prev + num); }} className="h-14 bg-white border border-slate-200 rounded-xl text-2xl font-bold text-slate-700 active:bg-orange-100 active:border-orange-500 shadow-sm transition-all">{num}</button>))}<button onClick={() => setSelectedClassNo('')} className="h-14 bg-red-50 text-red-500 rounded-xl font-bold border border-red-100">清除</button><button onClick={() => { if (selectedClassNo.length < 2) setSelectedClassNo(prev => prev + 0); }} className="h-14 bg-white border border-slate-200 rounded-xl text-2xl font-bold text-slate-700 active:bg-orange-100 shadow-sm">0</button><button onClick={() => setSelectedClassNo(prev => prev.slice(0, -1))} className="h-14 bg-slate-100 text-slate-500 rounded-xl font-bold">←</button></div></div><div className="flex items-center justify-center md:w-1/3"><button onClick={handleStudentSearch} disabled={selectedClassNo.length === 0} className={`w-full py-8 rounded-2xl text-3xl font-bold text-white shadow-xl transition-all flex items-center justify-center ${selectedClassNo.length > 0 ? 'bg-orange-600 hover:bg-orange-700 transform hover:scale-[1.02]' : 'bg-slate-300 cursor-not-allowed'}`}><Search className="mr-3" size={32} strokeWidth={3} /> 查詢</button></div></div></div></div></div>); };
+  
+  const renderStudentView = () => { 
+      const allClasses = ['1A','1B','1C','1D','1E','2A','2B','2C','2D','2E','3A','3B','3C','3D','3E','4A','4B','4C','4D','4E','5A','5B','5C','5D','6A','6B','6C','6D']; 
+      return (<div className="flex-1 flex flex-col bg-gradient-to-b from-orange-50 to-white"><div className="flex-1 flex flex-col items-center justify-center p-4"><div className="w-full max-w-4xl bg-white p-8 rounded-3xl shadow-xl border border-orange-100"><div className="text-center mb-6"><h1 className="text-2xl font-bold text-slate-800">課外活動查詢</h1><p className="text-slate-500">請輸入你的班別及學號</p></div><div className="mb-6"><label className="block text-slate-400 text-sm mb-2 font-bold uppercase tracking-wider">班別 Class</label><div className="grid grid-cols-5 md:grid-cols-10 gap-2">{allClasses.map((cls) => (<button key={cls} onClick={() => setSelectedClass(cls)} className={`py-2 rounded-lg font-bold text-lg transition-colors ${selectedClass === cls ? 'bg-orange-500 text-white shadow-lg scale-105' : 'bg-slate-100 text-slate-600 hover:bg-orange-100'}`}>{cls}</button>))}</div></div><div className="flex flex-col md:flex-row gap-8"><div className="flex-1"><label className="block text-slate-400 text-sm mb-2 font-bold uppercase tracking-wider">學號 Class No.</label><div className="flex items-center justify-center mb-4"><div className="h-20 w-32 bg-slate-100 rounded-2xl flex items-center justify-center text-5xl font-bold tracking-widest text-slate-800 border-2 border-orange-200 shadow-inner">{selectedClassNo || <span className="text-slate-300 text-3xl">--</span>}</div></div><div className="grid grid-cols-3 gap-3">{[1,2,3,4,5,6,7,8,9].map((num) => (<button key={num} onClick={() => { if (selectedClassNo.length < 2) setSelectedClassNo(prev => prev + num); }} className="h-14 bg-white border border-slate-200 rounded-xl text-2xl font-bold text-slate-700 active:bg-orange-100 active:border-orange-500 shadow-sm transition-all">{num}</button>))}<button onClick={() => setSelectedClassNo('')} className="h-14 bg-red-50 text-red-500 rounded-xl font-bold border border-red-100">清除</button><button onClick={() => { if (selectedClassNo.length < 2) setSelectedClassNo(prev => prev + 0); }} className="h-14 bg-white border border-slate-200 rounded-xl text-2xl font-bold text-slate-700 active:bg-orange-100 shadow-sm">0</button><button onClick={() => setSelectedClassNo(prev => prev.slice(0, -1))} className="h-14 bg-slate-100 text-slate-500 rounded-xl font-bold">←</button></div></div><div className="flex items-center justify-center md:w-1/3"><button onClick={handleStudentSearch} disabled={selectedClassNo.length === 0} className={`w-full py-8 rounded-2xl text-3xl font-bold text-white shadow-xl transition-all flex items-center justify-center ${selectedClassNo.length > 0 ? 'bg-orange-600 hover:bg-orange-700 transform hover:scale-[1.02]' : 'bg-slate-300 cursor-not-allowed'}`}><Search className="mr-3" size={32} strokeWidth={3} /> 查詢</button></div></div></div></div></div>); 
+  };
+  
   const renderStaffView = () => (<div className="min-h-screen bg-slate-50 p-6 flex-1"><div className="max-w-6xl mx-auto"><div className="mb-6 flex justify-between items-end"><div><h2 className="text-2xl font-bold text-blue-900 flex items-center"><Users className="mr-2" /> 教職員查詢通道</h2><p className="text-slate-500 text-sm">{staffShowAll ? '顯示所有活動紀錄' : '僅顯示今天 (Today) 的活動，如需查看其他日期請切換。'}</p></div><div className="flex bg-white rounded-lg border border-slate-200 p-1"><button onClick={() => setStaffShowAll(false)} className={`px-4 py-1 text-sm rounded-md font-bold transition ${!staffShowAll ? 'bg-blue-100 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}>今天</button><button onClick={() => setStaffShowAll(true)} className={`px-4 py-1 text-sm rounded-md font-bold transition ${staffShowAll ? 'bg-blue-100 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}>全部</button></div></div><div className="bg-white p-6 rounded-xl shadow-md border-t-4 border-blue-500"><div className="flex items-center space-x-2 mb-4 bg-slate-100 p-3 rounded-lg"><Search className="text-slate-400" /><input type="text" placeholder="輸入搜尋 (姓名/班別/活動)..." className="bg-transparent w-full outline-none text-lg" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div><div className="overflow-x-auto max-h-[600px] overflow-y-auto"><table className="w-full text-left border-collapse"><thead className="bg-slate-50 sticky top-0 z-10"><tr className="text-slate-600 text-sm uppercase tracking-wider border-b"><th className="p-3">姓名</th><th className="p-3">班別 (學號)</th><th className="p-3">活動名稱</th><th className="p-3">時間</th><th className="p-3">地點</th><th className="p-3 text-blue-600">聯絡電話</th></tr></thead><tbody className="text-slate-700">{filteredActivities.length > 0 ? filteredActivities.map((act) => (<tr key={act.id} className="border-b hover:bg-blue-50 transition-colors"><td className="p-3 font-medium">{act.verifiedName}</td><td className="p-3"><span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-bold">{act.verifiedClass} ({act.verifiedClassNo})</span></td><td className="p-3 font-bold text-slate-800">{act.activity}</td><td className="p-3 text-sm">{act.time}</td><td className="p-3 text-sm flex items-center"><MapPin size={14} className="mr-1 text-red-400"/> {act.location}</td><td className="p-3 text-sm font-mono text-blue-600">{act.rawPhone || '-'}</td></tr>)) : (<tr><td colSpan="6" className="p-12 text-center text-slate-400">{staffShowAll ? '沒有找到相關資料' : '今天沒有已安排的活動'}</td></tr>)}</tbody></table></div></div></div></div>);
   const renderLoginView = () => (<div className="flex-1 flex flex-col items-center justify-center bg-slate-100 p-6"><div className="bg-white p-8 rounded-2xl shadow-lg w-full max-w-md border border-slate-200"><div className="text-center mb-8"><div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4 text-white"><Lock size={32} /></div><h2 className="text-2xl font-bold text-slate-800">管理員登入</h2><p className="text-slate-500 text-sm">請使用 Firebase 帳戶登入</p></div><form onSubmit={handleLogin} className="space-y-4"><div><label className="block text-slate-600 text-sm font-bold mb-2">Email</label><input type="email" required className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="admin@school.edu.hk" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} /></div><div><label className="block text-slate-600 text-sm font-bold mb-2">Password</label><input type="password" required className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="••••••••" value={loginPwd} onChange={(e) => setLoginPwd(e.target.value)} /></div><button type="submit" disabled={authLoading} className="w-full py-3 bg-slate-800 text-white font-bold rounded-lg hover:bg-slate-900 transition flex items-center justify-center">{authLoading ? '登入中...' : '登入系統'}</button></form></div></div>);
+  
   const renderStatsView = () => {
       const { studentStats, activityStats, classStats } = analyticsData;
       const sortedStudents = [...studentStats].sort((a, b) => { if (statsSort === 'most') return b.count - a.count; if (statsSort === 'least') return a.count - b.count; return 0; });
