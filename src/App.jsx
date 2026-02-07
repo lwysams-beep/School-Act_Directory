@@ -47,7 +47,6 @@ const db = getFirestore(app);
 // -----------------------------------------------------------------------------
 // 1. MASTER DATA UTILS
 // -----------------------------------------------------------------------------
-// A=Class(0), B=No(1), C=EngName(2), D=ChiName(3), E=Sex(4)
 const parseMasterCSV = (csvText) => {
   const lines = csvText.trim().split('\n');
   return lines.map(line => {
@@ -65,17 +64,19 @@ const parseMasterCSV = (csvText) => {
 };
 
 // -----------------------------------------------------------------------------
-// 2. V3.3 NEW HELPER FUNCTIONS (Statistics & Export)
+// 2. HELPER FUNCTIONS
 // -----------------------------------------------------------------------------
 
-// 計算時間差 (小時) - 支援 "15:30-16:30" 格式
+// 計算時間差 (小時) - 安全版
 const calculateDuration = (timeStr) => {
-  if (!timeStr || !timeStr.includes('-')) return 1; // 預設 1 小時
+  if (!timeStr || typeof timeStr !== 'string' || !timeStr.includes('-')) return 1; 
   try {
     const [start, end] = timeStr.split('-').map(t => t.trim());
     const parseMinutes = (t) => {
-      const [h, m] = t.split(':').map(Number);
-      return h * 60 + m;
+      if (!t) return 0;
+      const parts = t.split(':');
+      if (parts.length < 2) return 0;
+      return parseInt(parts[0]) * 60 + parseInt(parts[1]);
     };
     const diff = parseMinutes(end) - parseMinutes(start);
     return diff > 0 ? diff / 60 : 1; 
@@ -126,7 +127,7 @@ const App = () => {
   const [isMasterLoading, setIsMasterLoading] = useState(false);
 
   // V2.9: School Year State
-  const [schoolYearStart, setSchoolYearStart] = useState(2025); // Default start year
+  const [schoolYearStart, setSchoolYearStart] = useState(2025); 
 
   // Import Form State
   const [bulkInput, setBulkInput] = useState('');
@@ -144,8 +145,8 @@ const App = () => {
   const [csvEncoding, setCsvEncoding] = useState('Big5'); 
   const fileInputRef = useRef(null); 
 
-  // Stats UI State (V3.3 Enhanced)
-  const [statsViewMode, setStatsViewMode] = useState('dashboard'); // dashboard, activities, students, logs
+  // Stats UI State (V3.3)
+  const [statsViewMode, setStatsViewMode] = useState('dashboard'); 
   const [statsEditingKey, setStatsEditingKey] = useState(null); 
   const [statsEditForm, setStatsEditForm] = useState({});
 
@@ -155,20 +156,19 @@ const App = () => {
   const [dbBatchMode, setDbBatchMode] = useState(false);
   const [batchEditForm, setBatchEditForm] = useState({ activity: '', time: '', location: '', dateText: '' });
 
-  // DB Editing State (Single Row)
+  // DB Editing State
   const [editingId, setEditingId] = useState(null);
   const [editFormData, setEditFormData] = useState({});
 
-  // Staff View State (V3.2)
-  const [staffShowAll, setStaffShowAll] = useState(false); // Default false = Show Today Only
+  // Staff View State
+  const [staffShowAll, setStaffShowAll] = useState(false); 
 
   // Search UI
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedClass, setSelectedClass] = useState('1A');
   const [selectedClassNo, setSelectedClassNo] = useState('');
   const [studentResult, setStudentResult] = useState(null);
-  const [todayDay, setTodayDay] = useState(new Date().getDay());
-  const [currentDateTime, setCurrentDateTime] = useState(new Date()); // V3.2 Clock
+  const [currentDateTime, setCurrentDateTime] = useState(new Date()); 
 
   // ---------------------------------------------------------------------------
   // FIREBASE LISTENERS
@@ -210,7 +210,6 @@ const App = () => {
     fetchMaster();
   }, []);
 
-  // V3.2: Clock Timer
   useEffect(() => {
       const timer = setInterval(() => setCurrentDateTime(new Date()), 1000);
       return () => clearInterval(timer);
@@ -288,56 +287,6 @@ const App = () => {
                   updatedBy: user.email
               });
           } catch (err) { console.error("Failed to sync year", err); }
-      }
-  };
-
-  const startEditStudent = (student) => {
-      setStatsEditingKey(student.key);
-      setStatsEditForm({ ...student });
-  };
-
-  const cancelEditStudent = () => {
-      setStatsEditingKey(null);
-      setStatsEditForm({});
-  };
-
-  const saveEditStudent = async () => {
-      setIsMasterLoading(true);
-      try {
-          const newMasterList = masterList.map(s => 
-              s.key === statsEditingKey ? { ...statsEditForm, key: `${statsEditForm.classCode}-${statsEditForm.chiName}` } : s 
-          );
-          await setDoc(doc(db, "settings", "master_list"), {
-              students: newMasterList,
-              schoolYearStart: schoolYearStart,
-              updatedAt: new Date().toISOString(),
-              updatedBy: user.email
-          });
-          setMasterList(newMasterList);
-          setStatsEditingKey(null);
-      } catch (error) {
-          alert("更新失敗: " + error.message);
-      } finally {
-          setIsMasterLoading(false);
-      }
-  };
-
-  const handleDeleteStudent = async (studentToDelete) => {
-      if (!window.confirm(`確定要將學生移除嗎？\n\n${studentToDelete.classCode} (${studentToDelete.classNo}) ${studentToDelete.chiName}\n\n注意：這將會從「真理數據庫」中永久刪除此學生。`)) return;
-      setIsMasterLoading(true);
-      try {
-          const newMasterList = masterList.filter(s => s.key !== studentToDelete.key);
-          await setDoc(doc(db, "settings", "master_list"), {
-              students: newMasterList,
-              schoolYearStart: schoolYearStart,
-              updatedAt: new Date().toISOString(),
-              updatedBy: user.email
-          });
-          setMasterList(newMasterList);
-      } catch (error) {
-          alert("刪除失敗: " + error.message);
-      } finally {
-          setIsMasterLoading(false);
       }
   };
 
@@ -562,10 +511,9 @@ const App = () => {
     setCurrentView('kiosk_result');
   };
 
-  // V3.2: Staff View Logic (Filter by Today)
+  // Staff View Logic
   const filteredActivities = useMemo(() => {
       let result = activities;
-      // If NOT show all, filter for Today only
       if (!staffShowAll) {
           const d = new Date();
           const todayString = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -577,7 +525,6 @@ const App = () => {
               return act.dayIds && act.dayIds.includes(currentDayId);
           });
       }
-      // Apply Search Filter
       if (searchTerm) {
           const lower = searchTerm.toLowerCase();
           result = result.filter(item => 
@@ -599,7 +546,6 @@ const App = () => {
             <span className="font-bold text-lg tracking-wide hidden sm:block">佛教正覺蓮社學校</span>
         </div>
         
-        {/* V3.2: System Clock */}
         <div className="hidden md:flex flex-col items-center justify-center text-xs text-slate-400 font-mono">
             <div>{currentDateTime.toLocaleDateString('zh-HK', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
             <div className="text-white font-bold text-lg">{currentDateTime.toLocaleTimeString('zh-HK')}</div>
@@ -616,7 +562,6 @@ const App = () => {
   );
 
   const renderStudentView = () => {
-    // V3.2: Full 28 Classes List (HK Standard P1-P6)
     const allClasses = [
         '1A', '1B', '1C', '1D', '1E',
         '2A', '2B', '2C', '2D', '2E',
@@ -719,7 +664,6 @@ const App = () => {
   const renderDatabaseManager = () => (
       <div className="bg-white p-6 rounded-xl shadow-md min-h-[500px]">
           <div className="flex justify-between items-center mb-6"><button onClick={() => setAdminTab('import')} className="flex items-center text-slate-500 hover:text-blue-600"><ArrowLeft className="mr-2" size={20} /> 返回導入介面</button><h2 className="text-2xl font-bold text-slate-800 flex items-center"><Database className="mr-2 text-blue-600" /> 數據庫管理</h2><div className="w-24"></div></div>
-          {/* ... Batch UI reused from V3.1 ... */}
           <div className="mb-4 space-y-4">
               <div className="flex gap-4 items-center">
                   <div className="flex-1 bg-slate-50 border rounded-lg flex items-center px-3 py-2"><Search size={18} className="text-slate-400 mr-2" /><input type="text" placeholder="搜尋學生、活動或日期..." className="bg-transparent outline-none w-full text-sm" value={dbSearchTerm} onChange={(e) => setDbSearchTerm(e.target.value)} /></div>
@@ -738,15 +682,20 @@ const App = () => {
       </div>
   );
 
-  // V3.3 Enhanced Statistics View
+  // V3.3.1 HOTFIX: Statistics View (Safe Render)
   const renderStatsView = () => {
     // 1. Prepare Data
     const { activityStats, gradeStats, studentStats } = useMemo(() => {
+        // [HOTFIX] Ensure data is ready
+        if (!masterList || masterList.length === 0 || !activities) {
+            return { activityStats: [], gradeStats: [], studentStats: [] };
+        }
+
         const actStats = {};
         const grStats = {};
         const stuStats = {};
         
-        // Init all students with 0
+        // Init all students
         masterList.forEach(s => {
              stuStats[s.key] = { ...s, count: 0, hours: 0, acts: [] };
         });
@@ -755,32 +704,35 @@ const App = () => {
             const dur = calculateDuration(item.time);
             
             // Activity Stats
-            if(!actStats[item.activity]) actStats[item.activity] = { name: item.activity, count: 0, hours: 0 };
-            actStats[item.activity].count += 1;
-            actStats[item.activity].hours += dur;
+            const actName = item.activity || "Unknown";
+            if(!actStats[actName]) actStats[actName] = { name: actName, count: 0, hours: 0 };
+            actStats[actName].count += 1;
+            actStats[actName].hours += dur;
 
             // Student Stats
             const sKey = `${item.verifiedClass}-${item.verifiedName}`;
-            // Try to match with master list key first if possible, or fallback
-            // In V2 logic, masterList keys are "Class-ChiName". verifiedClass/Name matches this.
-            if(stuStats[sKey]) {
+            
+            // [HOTFIX] Check if student exists in master list before accessing
+            if (stuStats[sKey]) {
                 stuStats[sKey].count += 1;
                 stuStats[sKey].hours += dur;
-                stuStats[sKey].acts.push(item.activity);
+                stuStats[sKey].acts.push(actName);
             }
             
             // Grade Stats
             const grade = item.verifiedClass ? item.verifiedClass.charAt(0) : 'Other';
             if(!grStats[grade]) grStats[grade] = { sessions: 0, students: new Set() };
             grStats[grade].sessions += 1;
-            // We use student key to count unique students
-            grStats[grade].students.add(sKey);
+            // Only add valid students to grade stats to prevent crashes
+            if (item.verifiedClass) {
+                 grStats[grade].students.add(sKey);
+            }
         });
 
         return { 
             activityStats: Object.values(actStats).sort((a,b) => b.hours - a.hours), 
             gradeStats: Object.keys(grStats).sort().map(g => ({ grade: g, avg: (grStats[g].sessions / (grStats[g].students.size || 1)).toFixed(1), total: grStats[g].sessions })),
-            studentStats: Object.values(stuStats).sort((a,b) => a.hours - b.hours) // Low participation first
+            studentStats: Object.values(stuStats).sort((a,b) => a.hours - b.hours) 
         };
     }, [masterList, activities]);
 
@@ -788,18 +740,16 @@ const App = () => {
 
     return (
         <div className="bg-white p-6 rounded-xl shadow-md min-h-[600px] flex flex-col">
-            {/* Header */}
             <div className="flex justify-between items-center mb-6 border-b pb-4">
                 <button onClick={() => setAdminTab('import')} className="flex items-center text-slate-500 hover:text-blue-600">
                     <ArrowLeft className="mr-2" size={20} /> 返回
                 </button>
                 <h2 className="text-2xl font-bold text-slate-800 flex items-center">
-                    <BarChart className="mr-2 text-blue-600" /> 校本數據分析中心 (V3.3)
+                    <BarChart className="mr-2 text-blue-600" /> 校本數據分析中心 (V3.3.1)
                 </h2>
                 <div className="w-24"></div>
             </div>
 
-            {/* Navigation Tabs */}
             <div className="flex space-x-2 mb-6 overflow-x-auto pb-2">
                 <button onClick={() => setStatsViewMode('dashboard')} className={`px-4 py-2 rounded-lg flex items-center transition ${statsViewMode === 'dashboard' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}><PieChart size={18} className="mr-2"/> 數據概覽</button>
                 <button onClick={() => setStatsViewMode('activities')} className={`px-4 py-2 rounded-lg flex items-center transition ${statsViewMode === 'activities' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}><Activity size={18} className="mr-2"/> 活動列表</button>
@@ -807,26 +757,22 @@ const App = () => {
                 <button onClick={() => setStatsViewMode('logs')} className={`px-4 py-2 rounded-lg flex items-center transition ${statsViewMode === 'logs' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}><History size={18} className="mr-2"/> 系統紀錄</button>
             </div>
 
-            {/* Content Area */}
             <div className="flex-1 overflow-y-auto">
-                
-                {/* 1. Dashboard: Charts */}
                 {statsViewMode === 'dashboard' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        {/* Pie Chart */}
                         <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col items-center">
                             <h3 className="font-bold text-slate-700 mb-6 flex items-center"><Clock className="mr-2 text-orange-500"/> 活動總時數分佈</h3>
                             <div className="relative w-64 h-64 rounded-full border-4 border-white shadow-xl mb-6"
                                  style={{
                                     background: `conic-gradient(${
-                                        activityStats.slice(0, 6).reduce((acc, item, idx, arr) => {
+                                        activityStats.length > 0 ? activityStats.slice(0, 6).reduce((acc, item, idx, arr) => {
                                             const prevDeg = idx === 0 ? 0 : acc.prevDeg;
-                                            const deg = (item.hours / totalHours) * 360;
+                                            const deg = (item.hours / (totalHours || 1)) * 360;
                                             const color = ['#3b82f6', '#8b5cf6', '#ec4899', '#f97316', '#eab308', '#22c55e'][idx];
                                             acc.str += `${color} ${prevDeg}deg ${prevDeg + deg}deg, `;
                                             acc.prevDeg += deg;
                                             return idx === arr.length - 1 ? acc.str.slice(0, -2) : acc; 
-                                        }, { str: '', prevDeg: 0 }).str || '#e2e8f0 0deg 360deg'
+                                        }, { str: '', prevDeg: 0 }).str : '#e2e8f0 0deg 360deg'
                                     })`
                                  }}
                             >
@@ -837,11 +783,10 @@ const App = () => {
                             </div>
                             <div className="w-full grid grid-cols-2 gap-2 text-xs">
                                 {activityStats.slice(0, 6).map((a, i) => (
-                                    <div key={i} className="flex items-center"><span className="w-3 h-3 rounded-full mr-2" style={{backgroundColor: ['#3b82f6', '#8b5cf6', '#ec4899', '#f97316', '#eab308', '#22c55e'][i]}}></span>{a.name} ({((a.hours/totalHours)*100).toFixed(0)}%)</div>
+                                    <div key={i} className="flex items-center"><span className="w-3 h-3 rounded-full mr-2" style={{backgroundColor: ['#3b82f6', '#8b5cf6', '#ec4899', '#f97316', '#eab308', '#22c55e'][i]}}></span>{a.name} ({((a.hours/(totalHours||1))*100).toFixed(0)}%)</div>
                                 ))}
                             </div>
                         </div>
-                        {/* Grade Bar Chart */}
                         <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
                              <h3 className="font-bold text-slate-700 mb-6 flex items-center"><TrendingUp className="mr-2 text-green-500"/> 各級平均參與 (節數/人)</h3>
                              <div className="space-y-4">
@@ -861,7 +806,6 @@ const App = () => {
                     </div>
                 )}
 
-                {/* 2. Activity List */}
                 {statsViewMode === 'activities' && (
                     <div className="bg-white border rounded-xl overflow-hidden">
                         <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
@@ -879,7 +823,6 @@ const App = () => {
                     </div>
                 )}
 
-                {/* 3. Student Monitor */}
                 {statsViewMode === 'students' && (
                     <div className="bg-white border rounded-xl overflow-hidden">
                          <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
@@ -904,7 +847,6 @@ const App = () => {
                     </div>
                 )}
 
-                {/* 4. Logs (Legacy Feature Preserved) */}
                 {statsViewMode === 'logs' && (
                     <div className="bg-white border rounded-xl overflow-hidden">
                         <div className="p-4 bg-slate-50 border-b"><h3 className="font-bold text-slate-700">最近查詢紀錄 (暫存)</h3></div>
