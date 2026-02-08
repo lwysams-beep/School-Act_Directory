@@ -1011,16 +1011,26 @@ const App = () => {
                   </button>
                   
                   {/* 按鈕: 活動點名 (V3.9.0) */}
-                  <button onClick={() => setCurrentView('attendance')} className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-xl border border-slate-100 hover:border-green-200 transition-all duration-300 group text-left relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition"><CheckSquare size={64} className="text-green-600 transform rotate-12"/></div>
-                    <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition"><CheckSquare className="text-green-600" size={24} /></div>
-                    <h3 className="text-lg font-bold text-slate-800 mb-1">活動點名系統</h3><p className="text-slate-500 text-xs">處理出席紀錄</p>
+                  <button 
+                    onClick={() => setCurrentView('attendance')}
+                    className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-xl border border-slate-100 hover:border-green-200 transition-all duration-300 group text-left relative overflow-hidden"
+                  >
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition">
+                      <CheckSquare size={64} className="text-green-600 transform rotate-12"/>
+                    </div>
+                    <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition">
+                      <CheckSquare className="text-green-600" size={24} />
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-800 mb-1">活動點名系統</h3>
+                    <p className="text-slate-500 text-xs">處理出席紀錄</p>
                   </button>
                 </div>
             )}
         </div>
     );
 };
+// ▲▲▲ 上面是 App 結束，下面是 StatsView 開始 ▼▼▼
+
 // -----------------------------------------------------------------------------
 // 3. STATS VIEW COMPONENT (V3.9.3 - Emergency Fix: Anti-Crash)
 // -----------------------------------------------------------------------------
