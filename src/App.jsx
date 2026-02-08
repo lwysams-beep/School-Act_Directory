@@ -982,6 +982,7 @@ const App = () => {
 
             {/* 2. 管理員介面邏輯 (重建版) */}
 {/* 2. 管理員介面邏輯 (完整重建版 V3.9.4) */}
+{/* 2. 管理員介面邏輯 (V3.9.5 完整修復版) */}
 {adminTab === 'manage_db' ? (
                 renderDatabaseManager()
             ) : adminTab === 'stats' ? (
@@ -1011,25 +1012,74 @@ const App = () => {
                     <h3 className="text-lg font-bold text-slate-800 mb-1">資料庫管理</h3><p className="text-slate-500 text-xs">進階數據操作</p>
                   </button>
                   
-                  {/* 按鈕 4: 活動點名 (修復版) */}
+                  {/* 按鈕 4: 活動點名 (V3.9.0) */}
                   <button onClick={() => setCurrentView('attendance')} className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-xl border border-slate-100 hover:border-green-200 transition-all duration-300 group text-left relative overflow-hidden">
                     <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition"><CheckSquare size={64} className="text-green-600 transform rotate-12"/></div>
                     <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition"><CheckSquare className="text-green-600" size={24} /></div>
                     <h3 className="text-lg font-bold text-slate-800 mb-1">活動點名系統</h3><p className="text-slate-500 text-xs">處理出席紀錄</p>
                   </button>
-                  </div>
+                </div>
             )}
-            
-            {/* 3. 補回原本的學生視圖介面 (Student View Fallback) */}
-            {/* 這樣可以確保原本的 view === 'admin' 判斷式有正確的結尾 */}
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center h-64 mt-8 text-slate-400 bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-200">
-               <div className="bg-slate-100 p-4 rounded-full mb-4">
-                 <Calendar size={32} className="opacity-40" />
-               </div>
-               <p className="text-lg font-medium">請輸入班別及學號查詢</p>
-               <p className="text-sm text-slate-400 mt-1">如需管理員權限請點選左上角鎖頭</p>
+            // 3. 學生/家長視圖邏輯 (V3.9.5 重建與修復)
+            <div className="space-y-6">
+              {/* 搜尋結果顯示 */}
+              {studentResult && (
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 animate-in fade-in slide-in-from-bottom-4">
+                  <div className="flex items-center space-x-4 mb-6 pb-4 border-b border-slate-100">
+                    <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-2xl font-bold text-blue-600">
+                      {studentResult.classCode}{studentResult.classNo}
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-bold text-slate-800">{studentResult.chiName}</h2>
+                      <p className="text-slate-500">{studentResult.engName}</p>
+                    </div>
+                  </div>
+
+                  <h3 className="text-lg font-bold text-slate-700 mb-4 flex items-center">
+                    <Activity className="mr-2 text-orange-500"/> 已報名活動 ({studentResult.activities?.length || 0})
+                  </h3>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {studentResult.activities && studentResult.activities.length > 0 ? (
+                      studentResult.activities.map((item, idx) => (
+                        <div key={idx} className="bg-slate-50 hover:bg-white border border-slate-200 hover:border-blue-300 rounded-xl p-5 shadow-sm hover:shadow-md transition-all duration-300 relative overflow-hidden group">
+                           <div className="absolute top-0 right-0 p-3 opacity-5 group-hover:opacity-10 transition transform group-hover:scale-110">
+                              <Star size={64} className="text-blue-600" />
+                           </div>
+                           <h4 className="font-bold text-slate-800 text-lg mb-3 line-clamp-2">{item.activity}</h4>
+                           <div className="space-y-2 text-sm">
+                             <div className="flex items-center text-slate-600">
+                               <Clock size={16} className="mr-2 text-orange-500 flex-shrink-0" />
+                               <span>{item.time || '時間待定'}</span>
+                             </div>
+                             <div className="flex items-center text-slate-600">
+                               <MapPin size={16} className="mr-2 text-blue-500 flex-shrink-0" />
+                               <span>{item.location || '地點待定'}</span>
+                             </div>
+                           </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="col-span-full py-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-300 text-slate-400">
+                        沒有找到任何活動紀錄
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* 預設畫面 (無搜尋結果時) */}
+              {!studentResult && (
+                <div className="flex flex-col items-center justify-center h-64 mt-8 text-slate-400 bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-200">
+                   <div className="bg-slate-100 p-4 rounded-full mb-4 animate-bounce">
+                     <Search size={32} className="opacity-40" />
+                   </div>
+                   <p className="text-lg font-medium">請輸入班別及學號查詢活動</p>
+                   <p className="text-sm text-slate-400 mt-1">如需管理員權限請點選左上角鎖頭</p>
+                </div>
+              )}
             </div>
           )}
         </div>
