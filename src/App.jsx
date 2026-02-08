@@ -980,7 +980,68 @@ const App = () => {
             <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleMasterFileChange} />
             {adminTab === 'manage_db' ? renderDatabaseManager() : adminTab === 'stats' ? (
         </div>
-    </div>
+        {adminTab === 'manage_db' ? renderDatabaseManager() : adminTab === 'stats' ? (
+            <StatsView 
+              masterList={masterList} 
+              activities={activities} 
+              onBack={() => setAdminTab('dashboard')} 
+            />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              {/* 按鈕 1: 匯入資料 */}
+              <button 
+                onClick={() => document.getElementById('file-upload-input').click()}
+                className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-xl border border-slate-100 hover:border-blue-200 transition-all duration-300 group text-left"
+              >
+                <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition">
+                   <Upload className="text-blue-600" size={24} />
+                </div>
+                <h3 className="text-lg font-bold text-slate-800 mb-1">匯入學生資料</h3>
+                <p className="text-slate-500 text-xs">上載 CSV 更新名單</p>
+                <input id="file-upload-input" type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleMasterFileChange} />
+              </button>
+
+              {/* 按鈕 2: 檢視統計 */}
+              <button 
+                onClick={() => setAdminTab('stats')}
+                className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-xl border border-slate-100 hover:border-orange-200 transition-all duration-300 group text-left"
+              >
+                <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition">
+                   <BarChart className="text-orange-600" size={24} />
+                </div>
+                <h3 className="text-lg font-bold text-slate-800 mb-1">學校數據中心</h3>
+                <p className="text-slate-500 text-xs">查看分佈及參與率</p>
+              </button>
+
+              {/* 按鈕 3: 資料庫管理 (選用) */}
+              <button 
+                onClick={() => setAdminTab('manage_db')}
+                className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-xl border border-slate-100 hover:border-purple-200 transition-all duration-300 group text-left"
+              >
+                <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition">
+                   <Database className="text-purple-600" size={24} />
+                </div>
+                <h3 className="text-lg font-bold text-slate-800 mb-1">資料庫管理</h3>
+                <p className="text-slate-500 text-xs">進階數據操作</p>
+              </button>
+
+              {/* 按鈕 4: 點名系統 (V3.9.0 新增) */}
+              <button 
+                onClick={() => setCurrentView('attendance')}
+                className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-xl border border-slate-100 hover:border-green-200 transition-all duration-300 group text-left relative overflow-hidden"
+              >
+                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition">
+                  <CheckSquare size={64} className="text-green-600 transform rotate-12"/>
+                </div>
+                <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition">
+                  <CheckSquare className="text-green-600" size={24} />
+                </div>
+                <h3 className="text-lg font-bold text-slate-800 mb-1">活動點名系統</h3>
+                <p className="text-slate-500 text-xs">處理出席紀錄</p>
+              </button>
+            </div>
+          )}
+        </div>
     );
 };
 // -----------------------------------------------------------------------------
