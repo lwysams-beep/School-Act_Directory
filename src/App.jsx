@@ -979,12 +979,14 @@ const App = () => {
             </div>
             <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleMasterFileChange} />
             {adminTab === 'manage_db' ? renderDatabaseManager() : adminTab === 'stats' ? (
-
+        </div>
+    </div>
+    );
+};
 // -----------------------------------------------------------------------------
 // 3. STATS VIEW COMPONENT (V3.9.3 - Emergency Fix: Anti-Crash)
 // -----------------------------------------------------------------------------
 const StatsView = ({ masterList, activities, onBack }) => {
-};
     // 安全數據處理 (Data Sanitization)
     const safeList = useMemo(() => {
       if (!Array.isArray(masterList)) return [];
