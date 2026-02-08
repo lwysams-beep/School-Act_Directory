@@ -598,14 +598,15 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
 };
 
 // -----------------------------------------------------------------------------
-// 4. ATTENDANCE VIEW COMPONENT (V3.9.0 - New Feature)
+// 4. ATTENDANCE VIEW COMPONENT (V3.9.1 - Updated: Auto-Filter & Export)
 // -----------------------------------------------------------------------------
 const AttendanceView = ({ masterList, activities, onBack, db }) => {
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [selectedActivity, setSelectedActivity] = useState('');
-    const [filterGrade, setFilterGrade] = useState('ALL');
     const [attendanceMap, setAttendanceMap] = useState({});
     const [isSubmitting, setIsSubmitting] = useState(false);
+    // V3.9.1: 新增顯示模式 'AUTO' (自動) 或手動年級
+    const [filterMode, setFilterMode] = useState('AUTO'); 
 
     const uniqueActivityNames = useMemo(() => {
         if (!activities) return [];
@@ -613,119 +614,151 @@ const AttendanceView = ({ masterList, activities, onBack, db }) => {
         return Array.from(names).sort();
     }, [activities]);
 
+    // V3.9.1: 智能篩選邏輯
     const displayedStudents = useMemo(() => {
         if (!masterList) return [];
-        return masterList.filter(s => {
-            if (filterGrade === 'ALL') return true;
-            return s.classCode && s.classCode.startsWith(filterGrade);
-        }).sort((a, b) => {
+        
+        let filtered = masterList;
+
+        // 如果選擇了活動，且模式為自動，嘗試從學生資料中匹配活動名稱
+        if (selectedActivity && filterMode === 'AUTO') {
+             const activityKey = selectedActivity.trim().toLowerCase();
+             const autoList = masterList.filter(s => {
+                 // 假設學生資料中有 activities, remarks 或類似欄位，否則搜尋所有欄位
+                 const rawData = JSON.stringify(s).toLowerCase();
+                 return rawData.includes(activityKey);
+             });
+             
+             // 如果自動匹配有結果，就只顯示這些人；否則(可能資料沒綁定)顯示全部並提示手動
+             if (autoList.length > 0) {
+                 filtered = autoList;
+             }
+        } else if (filterMode !== 'AUTO' && filterMode !== 'ALL') {
+            // 手動年級篩選
+            filtered = masterList.filter(s => s.classCode && s.classCode.startsWith(filterMode));
+        }
+
+        return filtered.sort((a, b) => {
             if (a.classCode !== b.classCode) return a.classCode.localeCompare(b.classCode);
             return parseInt(a.classNo || 0) - parseInt(b.classNo || 0);
         });
-    }, [masterList, filterGrade]);
+    }, [masterList, filterMode, selectedActivity]);
+
+    // V3.9.1: 匯出 CSV 功能
+    const exportCSV = () => {
+        if (displayedStudents.length === 0) return alert("名單為空，無法匯出");
+        
+        // 加入 BOM (\uFEFF) 讓 Excel 能正確讀取中文
+        let csvContent = "\uFEFF日期,活動名稱,班別,學號,中文姓名,英文姓名,出席狀態\n";
+        
+        displayedStudents.forEach(s => {
+            const status = attendanceMap[s.key] || '未記錄';
+            let statusTc = '未記錄';
+            if (status === 'present') statusTc = '出席';
+            if (status === 'absent') statusTc = '缺席';
+            if (status === 'late') statusTc = '遲到';
+            
+            csvContent += `${selectedDate},${selectedActivity},${s.classCode},${s.classNo},${s.chiName},${s.engName},${statusTc}\n`;
+        });
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", `點名表_${selectedActivity}_${selectedDate}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
     const markAll = (status) => {
         const newMap = { ...attendanceMap };
-        displayedStudents.forEach(s => {
-            newMap[s.key] = status;
-        });
+        displayedStudents.forEach(s => { newMap[s.key] = status; });
         setAttendanceMap(newMap);
     };
 
-    const handleStatusChange = (key, status) => {
-        setAttendanceMap(prev => ({ ...prev, [key]: status }));
-    };
+    const handleStatusChange = (key, status) => setAttendanceMap(prev => ({ ...prev, [key]: status }));
 
     const saveAttendance = async () => {
-        if (!selectedActivity) return alert("請選擇或輸入活動名稱");
-        if (Object.keys(attendanceMap).length === 0) return alert("未有任何點名記錄");
-        if (!window.confirm(`確認提交 ${Object.keys(attendanceMap).length} 筆點名紀錄？`)) return;
+        if (!selectedActivity) return alert("請選擇活動");
+        if (Object.keys(attendanceMap).length === 0) return alert("未有任何記錄");
+        if (!window.confirm(`確認提交 ${Object.keys(attendanceMap).length} 筆紀錄？`)) return;
 
         setIsSubmitting(true);
         try {
             const batch = writeBatch(db);
             const timestamp = new Date().toISOString();
             Object.entries(attendanceMap).forEach(([key, status]) => {
-                const student = masterList.find(s => s.key === key);
+                const s = masterList.find(i => i.key === key);
                 const docId = `${selectedDate}_${selectedActivity}_${key}`.replace(/[\s\/]/g, '_'); 
                 const docRef = doc(db, "attendance_records", docId);
                 batch.set(docRef, {
-                    date: selectedDate,
-                    activity: selectedActivity,
-                    studentKey: key,
-                    studentName: student?.chiName || '',
-                    classCode: student?.classCode || '',
-                    classNo: student?.classNo || '',
-                    status: status,
-                    updatedAt: timestamp
+                    date: selectedDate, activity: selectedActivity, studentKey: key,
+                    studentName: s?.chiName||'', classCode: s?.classCode||'', classNo: s?.classNo||'',
+                    status: status, updatedAt: timestamp
                 });
             });
             await batch.commit();
-            alert("點名紀錄已成功上傳雲端！");
+            alert("成功儲存！");
             setAttendanceMap({});
-        } catch (error) {
-            console.error(error);
-            alert("上傳失敗: " + error.message);
-        } finally {
-            setIsSubmitting(false);
-        }
+        } catch (e) { console.error(e); alert("錯誤: " + e.message); } finally { setIsSubmitting(false); }
     };
 
     return (
-        <div className="bg-white p-6 rounded-xl shadow-md min-h-[600px] flex flex-col animate-pulse-once">
-            <div className="flex justify-between items-center mb-6 border-b pb-4">
-                <button onClick={onBack} className="flex items-center text-slate-500 hover:text-blue-600 transition">
-                    <ArrowLeft className="mr-2" size={20} /> 返回
-                </button>
-                <h2 className="text-2xl font-bold text-slate-800 flex items-center">
-                    <CheckSquare className="mr-2 text-green-600" /> 電子點名系統 (V3.9.0)
-                </h2>
-                <div className="w-20"></div>
+        <div className="bg-white p-6 rounded-xl shadow-md min-h-[600px] flex flex-col animate-in slide-in-from-bottom-4 duration-300">
+            <div className="flex justify-between items-center mb-4 border-b pb-4">
+                <button onClick={onBack} className="flex items-center text-slate-500 hover:text-blue-600"><ArrowLeft size={20} className="mr-1"/> 返回</button>
+                <h2 className="text-2xl font-bold text-slate-800 flex items-center"><CheckSquare className="mr-2 text-green-600"/> 點名系統 V3.9.1</h2>
+                <button onClick={exportCSV} className="flex items-center text-blue-600 hover:bg-blue-50 px-3 py-1 rounded transition"><Download size={18} className="mr-1"/> 匯出報表</button>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">日期</label>
-                    <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full p-2 border rounded shadow-sm outline-none focus:ring-2 focus:ring-green-500"/>
+
+            <div className="bg-slate-50 p-4 rounded-xl border mb-4 grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                <div className="md:col-span-3">
+                    <label className="text-xs font-bold text-slate-500 uppercase">日期</label>
+                    <input type="date" value={selectedDate} onChange={e=>setSelectedDate(e.target.value)} className="w-full p-2 border rounded"/>
                 </div>
-                <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">活動名稱</label>
-                    <input list="act-list" type="text" value={selectedActivity} onChange={e => setSelectedActivity(e.target.value)} placeholder="選擇或輸入..." className="w-full p-2 border rounded shadow-sm outline-none focus:ring-2 focus:ring-green-500"/>
-                    <datalist id="act-list">{uniqueActivityNames.map(n => <option key={n} value={n}/>)}</datalist>
+                <div className="md:col-span-4">
+                    <label className="text-xs font-bold text-slate-500 uppercase">活動名稱 (自動篩選)</label>
+                    <input list="act-list" type="text" value={selectedActivity} 
+                        onChange={e => { setSelectedActivity(e.target.value); setFilterMode('AUTO'); }} 
+                        placeholder="選擇活動..." className="w-full p-2 border rounded focus:ring-2 focus:ring-green-500"/>
+                    <datalist id="act-list">{uniqueActivityNames.map(n=><option key={n} value={n}/>)}</datalist>
                 </div>
-                <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">班級篩選</label>
-                    <div className="flex gap-1">
-                        {['ALL','1','2','3','4','5','6'].map(g => (
-                            <button key={g} onClick={() => setFilterGrade(g)} className={`flex-1 py-2 text-xs rounded transition ${filterGrade === g ? 'bg-green-600 text-white shadow' : 'bg-white border hover:bg-slate-100'}`}>{g==='ALL'?'全':'P'+g}</button>
-                        ))}
-                    </div>
-                </div>
-            </div>
-            <div className="flex justify-between items-center mb-2">
-                <span className="text-sm text-slate-500">顯示: <b>{displayedStudents.length}</b> 人 | 已點: <b className="text-green-600">{Object.keys(attendanceMap).length}</b></span>
-                <div className="flex gap-2">
-                    <button onClick={() => markAll('present')} className="px-3 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 font-bold">全選出席</button>
-                    <button onClick={() => setAttendanceMap({})} className="px-3 py-1 text-xs bg-slate-100 text-slate-600 rounded hover:bg-slate-200">重置</button>
-                    <button onClick={saveAttendance} disabled={isSubmitting} className={`ml-2 px-4 py-1 rounded text-white text-sm font-bold flex items-center ${isSubmitting ? 'bg-slate-400':'bg-green-600 hover:bg-green-700 shadow-md'}`}><Save size={16} className="mr-1"/> {isSubmitting ? '...' : '儲存'}</button>
+                <div className="md:col-span-5 flex gap-1">
+                    {['ALL','1','2','3','4','5','6'].map(g => (
+                        <button key={g} onClick={()=>setFilterMode(g)} 
+                            className={`flex-1 py-2 text-xs rounded border transition ${filterMode===g?'bg-green-600 text-white':'bg-white text-slate-500'}`}>
+                            {g==='ALL'?'全校':`P${g}`}
+                        </button>
+                    ))}
                 </div>
             </div>
-            <div className="flex-1 overflow-auto border rounded-xl bg-slate-50">
+
+            <div className="flex justify-between items-center mb-2 text-sm">
+                <span>名單: <b>{displayedStudents.length}</b> 人 {filterMode==='AUTO' && selectedActivity && <span className="text-xs text-green-600 bg-green-100 px-2 rounded-full">智能篩選中</span>}</span>
+                <div className="space-x-2">
+                    <button onClick={()=>markAll('present')} className="px-3 py-1 bg-green-100 text-green-700 rounded text-xs font-bold hover:bg-green-200">全選出席</button>
+                    <button onClick={saveAttendance} disabled={isSubmitting} className="px-5 py-1 bg-green-600 text-white rounded text-xs font-bold hover:bg-green-700 shadow">{isSubmitting?'儲存中...':'提交紀錄'}</button>
+                </div>
+            </div>
+
+            <div className="flex-1 overflow-auto border rounded-xl bg-white">
                 <table className="w-full text-sm text-left">
-                    <thead className="bg-slate-200 text-slate-600 sticky top-0 z-10 font-bold">
-                        <tr><th className="p-3">班別</th><th className="p-3">姓名</th><th className="p-3 text-center w-20">出席</th><th className="p-3 text-center w-20">缺席</th><th className="p-3 text-center w-20">遲到</th></tr>
+                    <thead className="bg-slate-100 text-slate-600 sticky top-0 font-bold">
+                        <tr><th className="p-3">班別</th><th className="p-3">姓名</th><th className="p-3 text-center">出席</th><th className="p-3 text-center">缺席</th><th className="p-3 text-center">遲到</th></tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-200 bg-white">
+                    <tbody className="divide-y divide-slate-100">
                         {displayedStudents.map(s => {
                             const st = attendanceMap[s.key];
                             return (
-                                <tr key={s.key} className={`hover:bg-blue-50 ${st ? 'bg-blue-50/40':''}`}>
-                                    <td className="p-3 font-mono">{s.classCode} ({s.classNo})</td>
+                                <tr key={s.key} className={`hover:bg-slate-50 ${st?'bg-blue-50/50':''}`}>
+                                    <td className="p-3 font-mono text-slate-500">{s.classCode} ({s.classNo})</td>
                                     <td className="p-3 font-bold">{s.chiName}</td>
-                                    <td className="p-3 text-center"><button onClick={()=>handleStatusChange(s.key,'present')} className={`p-1 rounded-full ${st==='present'?'bg-green-100 text-green-600 ring-2 ring-green-500':'text-slate-300 hover:bg-slate-100'}`}><CheckCircle size={20}/></button></td>
-                                    <td className="p-3 text-center"><button onClick={()=>handleStatusChange(s.key,'absent')} className={`p-1 rounded-full ${st==='absent'?'bg-red-100 text-red-600 ring-2 ring-red-500':'text-slate-300 hover:bg-slate-100'}`}><X size={20}/></button></td>
-                                    <td className="p-3 text-center"><button onClick={()=>handleStatusChange(s.key,'late')} className={`p-1 rounded-full ${st==='late'?'bg-orange-100 text-orange-600 ring-2 ring-orange-500':'text-slate-300 hover:bg-slate-100'}`}><Clock size={20}/></button></td>
+                                    <td className="p-3 text-center"><button onClick={()=>handleStatusChange(s.key,'present')} className={`p-1 rounded-full transition ${st==='present'?'bg-green-500 text-white shadow-md':'text-slate-300 hover:text-green-500'}`}><CheckCircle size={20}/></button></td>
+                                    <td className="p-3 text-center"><button onClick={()=>handleStatusChange(s.key,'absent')} className={`p-1 rounded-full transition ${st==='absent'?'bg-red-500 text-white shadow-md':'text-slate-300 hover:text-red-500'}`}><X size={20}/></button></td>
+                                    <td className="p-3 text-center"><button onClick={()=>handleStatusChange(s.key,'late')} className={`p-1 rounded-full transition ${st==='late'?'bg-orange-500 text-white shadow-md':'text-slate-300 hover:text-orange-500'}`}><Clock size={20}/></button></td>
                                 </tr>
-                            );
+                            )
                         })}
                     </tbody>
                 </table>
@@ -1179,13 +1212,22 @@ const App = () => {
     <div className="bg-slate-900 text-white p-3 flex justify-between items-center shadow-md sticky top-0 z-50">
         <div className="flex items-center space-x-2 cursor-pointer" onClick={() => setCurrentView('student')}>
             <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center font-bold text-sm">佛</div>
-            <span className="font-bold text-lg tracking-wide hidden sm:block">佛教正覺蓮社學校</span>
+            <span className="font-bold text-lg tracking-wide hidden sm:block">香海正覺蓮社佛教正覺蓮社學校</span>
         </div>
         
         <div className="hidden md:flex flex-col items-center justify-center text-xs text-slate-400 font-mono">
             <div>{currentDateTime.toLocaleDateString('zh-HK', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
             <div className="text-white font-bold text-lg">{currentDateTime.toLocaleTimeString('zh-HK')}</div>
         </div>
+
+        {/* V3.9.1: 首頁點名入口 */}
+<button 
+    onClick={() => setCurrentView('attendance')}
+    className="flex items-center px-4 py-2 bg-white/90 backdrop-blur-sm text-green-800 rounded-lg shadow-sm hover:bg-green-50 transition border border-green-100 font-bold"
+>
+    <CheckSquare size={18} className="mr-2 text-green-600"/>
+    活動點名
+</button>
 
         <div className="flex space-x-1">
             <button onClick={() => setCurrentView('student')} className={`px-4 py-2 rounded-lg flex items-center text-sm transition-all ${currentView === 'student' || currentView === 'kiosk_result' ? 'bg-orange-600 text-white font-bold shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}><User size={16} className="mr-2" /> 學生</button>
@@ -1366,20 +1408,6 @@ const App = () => {
                         </div>
                         <div className="mb-4"><label className="text-xs text-slate-500 font-bold uppercase flex justify-between"><span>貼上名單 (PDF Copy/Paste)</span><span className="text-blue-500 cursor-pointer flex items-center" title="格式: 4A 蔡舒朗 (可含電話)"><FileText size={12} className="mr-1"/> 說明</span></label><textarea className="w-full h-32 p-2 border rounded bg-slate-50 text-sm font-mono" placeholder={`4A 蔡舒朗 91234567\n2A1 陳嘉瑩`} value={bulkInput} onChange={e => setBulkInput(e.target.value)}></textarea></div>
                         <button onClick={handleBulkImport} className="w-full py-2 bg-blue-600 text-white font-bold rounded hover:bg-blue-700 transition">識別並載入</button>
-                        {/* V3.9.0: 點名功能入口 */}
-              <button 
-                onClick={() => setCurrentView('attendance')}
-                className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-xl border border-slate-100 hover:border-green-200 transition-all duration-300 group text-left relative overflow-hidden"
-              >
-                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition">
-                  <CheckSquare size={64} className="text-green-600 transform rotate-12"/>
-                </div>
-                <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition">
-                  <CheckSquare className="text-green-600" size={24} />
-                </div>
-                <h3 className="text-lg font-bold text-slate-800 mb-1">活動點名系統</h3>
-                <p className="text-slate-500 text-xs">處理出席、缺席及遲到紀錄</p>
-              </button>
                     </div>
                 </div>
                 </div>
@@ -1420,17 +1448,6 @@ const App = () => {
       {currentView === 'staff' && renderStaffView()}
       {currentView === 'admin' && (user ? renderAdminView() : renderLoginView())}
       {currentView === 'kiosk_result' && renderKioskResultView()}
-      {/* V3.9.0: Render Attendance View */}
-      {currentView === 'attendance' && (
-        <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in zoom-in duration-300">
-           <AttendanceView 
-              masterList={masterList} 
-              activities={activities} 
-              db={db}
-              onBack={() => setCurrentView('admin')} 
-           />
-        </div>
-      )}
     </div>
   );
 };
