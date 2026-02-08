@@ -978,8 +978,7 @@ const App = () => {
                 <div className="flex items-center space-x-4"><div className="bg-white px-4 py-2 rounded-lg shadow text-sm font-mono text-slate-600 border border-slate-200">Admin: <span className="font-bold text-blue-600">{user.email}</span></div><button onClick={handleLogout} className="bg-red-50 text-red-500 px-4 py-2 rounded-lg hover:bg-red-100 border border-red-200 flex items-center text-sm font-bold"><LogOut size={16} className="mr-2"/> 登出</button></div>
             </div>
             <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleMasterFileChange} />
-            {adminTab === 'manage_db' ? renderDatabaseManager() : adminTab === 'stats' ? (
-                
+
         {adminTab === 'manage_db' ? renderDatabaseManager() : adminTab === 'stats' ? (
             <StatsView 
               masterList={masterList} 
