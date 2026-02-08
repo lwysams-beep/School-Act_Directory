@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-// V3.8.1: Import Download, ClipboardList for Attendance
+// V3.8.1: 加入 Download, ClipboardList, Activity, ChevronDown 等圖標
 import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, Phone, CheckSquare, Square, RefreshCcw, X, Plus, Edit2, FileSpreadsheet, BarChart, History, TrendingUp, Filter, Cloud, UserX, PieChart, Download, ClipboardList, Activity, ChevronDown } from 'lucide-react';
 
 // =============================================================================
@@ -29,7 +29,7 @@ import {
   where
 } from "firebase/firestore";
 
-// *** 請在此填入你的真實 Firebase Config ***
+// *** 使用你提供的真實 Firebase Config ***
 const firebaseConfig = {
   apiKey: "AIzaSyDXZClMosztnJBd0CK6cpS6PPtJTTpgDkQ",
   authDomain: "school-act-directory.firebaseapp.com",
@@ -68,6 +68,7 @@ const parseMasterCSV = (csvText) => {
   }).filter(item => item !== null);
 };
 
+// V3.8.1: 取得今日日期字串 YYYY-MM-DD
 const getTodayDateString = () => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -85,7 +86,7 @@ const App = () => {
   // Data State
   const [masterList, setMasterList] = useState([]); 
   const [activities, setActivities] = useState([]); 
-  const [attendanceRecords, setAttendanceRecords] = useState([]); // V3.8.1: Attendance Data
+  const [attendanceRecords, setAttendanceRecords] = useState([]); // V3.8.1: 點名紀錄
   const [pendingImports, setPendingImports] = useState([]);
   const [queryLogs, setQueryLogs] = useState([]);
   const [isMasterLoading, setIsMasterLoading] = useState(false);
@@ -139,6 +140,7 @@ const App = () => {
   const [selectedClass, setSelectedClass] = useState('1A');
   const [selectedClassNo, setSelectedClassNo] = useState('');
   const [studentResult, setStudentResult] = useState(null);
+  const [todayDay, setTodayDay] = useState(new Date().getDay());
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
 
   // ---------------------------------------------------------------------------
@@ -161,10 +163,8 @@ const App = () => {
     return () => unsubscribe();
   }, []);
 
-  // V3.8.1: Attendance Listener
+  // V3.8.1: Attendance Listener (監聽點名資料)
   useEffect(() => {
-    // Only listen for today's attendance to keep it light, or all if analytics needed
-    // For now, listen to all for stats, in production limit this
     const q = collection(db, "attendance");
     const unsubscribe = onSnapshot(q, (snapshot) => {
         const att = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -329,7 +329,7 @@ const App = () => {
       if (!s) { const p = masterList.filter(x => x.chiName === i.rawName); if (p.length === 1) s = p[0]; }
       if (s) m.push({ ...i, verifiedName: s.chiName, verifiedClass: s.classCode, verifiedClassNo: s.classNo, status: 'verified' }); else c.push({ ...i, status: 'conflict' });
     });
-    return { matched, conflicts };
+    return { matched: m, conflicts: c };
   }, [pendingImports, masterList]);
 
   useEffect(() => setSelectedMatchIds(new Set(matched.map(m => m.id))), [matched.length]);
@@ -673,31 +673,6 @@ const App = () => {
         </div>
       </div>
   );
-
-  const renderKioskResultView = () => {
-     const upcomingDays = [];
-     const today = new Date();
-     const weekDayNames = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
-     const weekDayEnNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-     for (let i = 0; i < 8; i++) { 
-         const d = new Date(today); d.setDate(today.getDate() + i);
-         const year = d.getFullYear(); const month = String(d.getMonth() + 1).padStart(2, '0'); const day = String(d.getDate()).padStart(2, '0');
-         const localDateString = `${year}-${month}-${day}`; const displayDate = `(${day}/${month}/${year})`;
-         upcomingDays.push({ dayId: d.getDay(), dateString: localDateString, label: i === 0 ? '今天' : weekDayNames[d.getDay()], fullLabel: `${weekDayNames[d.getDay()]} ${weekDayEnNames[d.getDay()]} ${displayDate}` });
-     }
-     const currentStudent = masterList.find(s => s.classCode === selectedClass && s.classNo === selectedClassNo.padStart(2, '0'));
-
-     return (
-        <div className="flex-1 bg-slate-800 flex flex-col font-sans text-white h-screen overflow-hidden">
-            <div className="p-4 flex items-center justify-between bg-slate-900 shadow-md shrink-0"><h2 className="text-xl font-bold text-slate-300">活動日程表</h2><button onClick={() => { setCurrentView('student'); setStudentResult(null); setSelectedClassNo(''); }} className="bg-white/10 px-4 py-2 rounded-full flex items-center text-sm backdrop-blur-md hover:bg-white/20 transition"><ArrowLeft size={20} className="mr-1" /> 返回</button></div>
-            <div className="px-8 pt-6 pb-2 shrink-0"><h1 className="text-4xl font-bold">{selectedClass}班 ({selectedClassNo})號 <span className="text-orange-400">{currentStudent ? currentStudent.chiName : ''}</span></h1><p className="text-slate-400 mt-1">未來一週活動概覽</p></div>
-            <div className="flex-1 px-8 pb-8 overflow-y-auto"><div className="space-y-6 mt-4">{upcomingDays.map((dayItem) => {
-                const dayActivities = studentResult ? studentResult.filter(act => { if (act.specificDates && act.specificDates.length > 0) { return act.specificDates.includes(dayItem.dateString); } return act.dayIds && act.dayIds.includes(dayItem.dayId); }) : [];
-                const isToday = dayItem.label === '今天';
-                return (<div key={dayItem.dateString} className={`rounded-3xl p-6 transition-all ${isToday ? 'bg-slate-700/80 ring-2 ring-green-500 shadow-[0_0_20px_rgba(34,197,94,0.3)]' : 'bg-slate-700/30'}`}><div className="flex items-center mb-4 border-b border-slate-600 pb-2"><div className={`text-2xl font-bold ${isToday ? 'text-green-400' : 'text-slate-200'}`}>{dayItem.fullLabel}</div>{isToday && <span className="ml-3 bg-green-600 text-white text-xs px-2 py-1 rounded-full animate-pulse">Today</span>}</div><div className="space-y-4">{dayActivities.length > 0 ? (dayActivities.map((item, idx) => (<div key={`${item.id}-${idx}`} className="bg-white text-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden"><div className="flex justify-between items-start mb-2"><h3 className="text-2xl font-bold text-slate-900">{item.activity}</h3></div><div className="grid grid-cols-2 gap-4 mt-3"><div className="flex items-center text-slate-600 bg-slate-100 p-2 rounded-lg"><Clock size={20} className="mr-2 text-orange-500" /><span className="font-bold">{item.time}</span></div><div className="flex items-center text-blue-800 bg-blue-50 p-2 rounded-lg"><MapPin size={20} className="mr-2 text-blue-500" /><span className="font-bold">{item.location}</span></div></div></div>))) : (<div className="text-slate-500 text-sm italic py-4 text-center border border-dashed border-slate-600 rounded-xl">沒有安排活動</div>)}</div></div>);
-            })}</div>{(!studentResult) && (<div className="flex flex-col items-center justify-center h-40 mt-8 text-slate-400 bg-slate-700/30 rounded-2xl border border-dashed border-slate-600"><Calendar size={48} className="mb-2 opacity-50" /><p className="text-lg">請輸入班別及學號查詢</p></div>)}</div></div>
-     );
-  }
 
   return (
     <div className="min-h-screen flex flex-col font-sans">
