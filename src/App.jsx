@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-// V3.7: Alignment Fix, Smart Tooltips, Category Analytics, Auto-Labeling
-import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, Phone, CheckSquare, Square, RefreshCcw, X, Plus, Edit2, FileSpreadsheet, BarChart, History, TrendingUp, Filter, Cloud, UserX, PieChart, Download, Activity, Save as SaveIcon, Layers, MousePointerClick, Maximize, Palette } from 'lucide-react';
+// V3.8: Category Management - Manual Override System, Batch Updates, Reactive Charts
+import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, Phone, CheckSquare, Square, RefreshCcw, X, Plus, Edit2, FileSpreadsheet, BarChart, History, TrendingUp, Filter, Cloud, UserX, PieChart, Download, Activity, Save as SaveIcon, Layers, MousePointerClick, Maximize, Palette, ChevronDown } from 'lucide-react';
 
 // =============================================================================
 //  FIREBASE IMPORTS & CONFIGURATION
@@ -65,7 +65,7 @@ const parseMasterCSV = (csvText) => {
 };
 
 // -----------------------------------------------------------------------------
-// 2. HELPER FUNCTIONS (Including New Auto-Categorizer)
+// 2. HELPER FUNCTIONS
 // -----------------------------------------------------------------------------
 
 const calculateDuration = (timeStr) => {
@@ -103,7 +103,17 @@ const exportToCSV = (data, filename) => {
   document.body.removeChild(link);
 };
 
-// V3.7: Smart Category Detector
+// Standard Categories
+const CATEGORY_OPTIONS = [
+    '體育 (Sports)',
+    '音樂 (Music)',
+    '視藝 (Visual Arts)',
+    '學術/STEM',
+    '服務/制服 (Service)',
+    '其他 (Others)'
+];
+
+// Smart Category Detector (Fallback)
 const detectCategory = (name) => {
     const n = name.toLowerCase();
     if (/足球|籃球|排球|羽毛球|乒乓|田徑|游泳|體育|跆拳|跳繩|sport|ball/.test(n)) return '體育 (Sports)';
@@ -129,11 +139,12 @@ const CATEGORY_COLORS = {
 };
 
 // -----------------------------------------------------------------------------
-// 3. STATS VIEW COMPONENT (V3.7 - Alignment Fix & Category)
+// 3. STATS VIEW COMPONENT (V3.8 - Category Manager)
 // -----------------------------------------------------------------------------
 const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
     const [statsViewMode, setStatsViewMode] = useState('dashboard');
-    const [selectedActs, setSelectedActs] = useState(new Set()); 
+    const [selectedActs, setSelectedActs] = useState(new Set());
+    const [updatingCategory, setUpdatingCategory] = useState(false);
 
     const toggleSelection = (actName) => {
         const newSet = new Set(selectedActs);
@@ -144,6 +155,30 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
 
     const clearSelection = () => setSelectedActs(new Set());
 
+    // V3.8: Handle Category Change (Batch Update)
+    const handleCategoryChange = async (activityName, newCategory) => {
+        if (!window.confirm(`確定要將「${activityName}」的所有記錄分類更改為「${newCategory}」嗎？`)) return;
+        setUpdatingCategory(true);
+        try {
+            // Find all docs with this activity name
+            const batch = writeBatch(db);
+            const targetDocs = activities.filter(a => a.activity === activityName);
+            
+            targetDocs.forEach(item => {
+                const docRef = doc(db, "activities", item.id);
+                batch.update(docRef, { manualCategory: newCategory });
+            });
+
+            await batch.commit();
+            alert("分類更新成功！");
+        } catch (error) {
+            console.error(error);
+            alert("更新失敗，請檢查網絡");
+        } finally {
+            setUpdatingCategory(false);
+        }
+    };
+
     // Core Data Calculation
     const { activityStats, gradeDistribution, categoryStats, studentStats, totalHours } = useMemo(() => {
         if (!masterList || masterList.length === 0 || !activities) {
@@ -152,7 +187,7 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
 
         const actStats = {}; 
         const stuStats = {};
-        const catStats = {}; // { 'Sports': 100, 'Music': 50 }
+        const catStats = {}; 
         const gradeMap = { '1': {}, '2': {}, '3': {}, '4': {}, '5': {}, '6': {} };
         Object.keys(gradeMap).forEach(g => gradeMap[g] = { totalHours: 0, byActivity: {} });
 
@@ -165,12 +200,16 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
             const sessionCount = (item.specificDates && item.specificDates.length > 0) ? item.specificDates.length : 1;
             const totalItemHours = dur * sessionCount;
             const actName = item.activity || "Unknown";
-            const category = detectCategory(actName);
+            
+            // V3.8 Logic: Check manualCategory first, then fallback to detect
+            const category = item.manualCategory || detectCategory(actName);
 
             // 1. Activity Stats
             if(!actStats[actName]) actStats[actName] = { name: actName, count: 0, hours: 0, category };
             actStats[actName].count += sessionCount;
             actStats[actName].hours += totalItemHours;
+            // Ensure category is consistent (last one wins, or mostly consistent)
+            actStats[actName].category = category;
 
             // 2. Category Stats
             if(!catStats[category]) catStats[category] = 0;
@@ -205,7 +244,6 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
         const finalActStats = Object.values(actStats).sort((a,b) => b.hours - a.hours);
         const totalH = finalActStats.reduce((acc, cur) => acc + cur.hours, 0);
         
-        // Format Category Stats for Chart
         const finalCatStats = Object.entries(catStats)
             .map(([name, hours]) => ({ name, hours }))
             .sort((a,b) => b.hours - a.hours);
@@ -219,7 +257,6 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
         };
     }, [masterList, activities]);
 
-    // Data for Visuals
     const filteredActivityList = useMemo(() => {
         if (selectedActs.size === 0) return activityStats;
         return activityStats.filter(a => selectedActs.has(a.name));
@@ -260,7 +297,6 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
         return studentStats.filter(s => s.acts.some(act => selectedActs.has(act)));
     }, [studentStats, selectedActs]);
 
-    // Exports
     const exportGradeStats = () => {
         const rows = [];
         gradeDistribution.forEach(g => {
@@ -288,7 +324,7 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                     <ArrowLeft className="mr-2" size={20} /> 返回
                 </button>
                 <h2 className="text-2xl font-bold text-slate-800 flex items-center">
-                    <BarChart className="mr-2 text-blue-600" /> 校本數據分析中心 (V3.7)
+                    <BarChart className="mr-2 text-blue-600" /> 校本數據分析中心 (V3.8)
                 </h2>
                 <div className="w-24"></div>
             </div>
@@ -314,28 +350,54 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                 {statsViewMode === 'dashboard' && (
                     <div className="flex flex-col space-y-12 pb-12">
                         
-                        {/* 1. ACTIVITY PIE CHART */}
+                        {/* 1. PIE CHART */}
                         <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col md:flex-row items-center md:items-start relative min-h-[400px]">
                             <div className="absolute top-4 left-4 z-20">
                                  <button onClick={() => exportToCSV(filteredActivityList, 'Activity_Hours_Report')} className="text-xs bg-indigo-600 text-white border px-3 py-1.5 rounded flex items-center hover:bg-indigo-700 shadow-md transition"><Download size={14} className="mr-1"/> 匯出 CSV</button>
                             </div>
+                            
                             <div className="flex-1 flex flex-col items-center justify-center p-4 pt-10">
-                                <h3 className="font-bold text-slate-700 mb-6 flex items-center text-lg"><Clock className="mr-2 text-orange-500"/> 活動總時數 (課程分佈)</h3>
-                                <div className="relative w-72 h-72 rounded-full shadow-2xl border-4 border-white transition-all duration-500" style={{ background: `conic-gradient(${ghostPieGradient})` }}>
+                                <h3 className="font-bold text-slate-700 mb-6 flex items-center text-lg"><Clock className="mr-2 text-orange-500"/> 活動總時數分佈 (真實比例)</h3>
+                                <div className="relative w-72 h-72 rounded-full shadow-2xl border-4 border-white transition-all duration-500"
+                                    style={{ background: `conic-gradient(${ghostPieGradient})` }}
+                                >
                                     <div className="absolute inset-0 m-auto w-36 h-36 bg-slate-50 rounded-full flex flex-col items-center justify-center shadow-inner">
-                                        <span className="text-4xl font-bold text-slate-800">{filteredTotalHours.toFixed(0)}</span>
+                                        <div className="text-xs text-slate-400 mb-1">
+                                            {selectedActs.size > 0 ? "已選 / 總計" : "總學時"}
+                                        </div>
+                                        <div className="flex items-baseline">
+                                            {selectedActs.size > 0 && <span className="text-2xl font-bold text-blue-600 mr-1">{currentSelectedHours.toFixed(0)}</span>}
+                                            {selectedActs.size > 0 && <span className="text-slate-400">/</span>}
+                                            <span className={`font-bold text-slate-800 ${selectedActs.size > 0 ? 'text-lg ml-1' : 'text-4xl'}`}>{totalHours.toFixed(0)}</span>
+                                        </div>
                                         <span className="text-xs text-slate-400">Hours</span>
                                     </div>
                                 </div>
+                                <p className="text-xs text-slate-400 mt-4"><MousePointerClick size={12} className="inline mr-1"/>點擊右側圖例進行多項對比</p>
                             </div>
+
                             <div className="w-full md:w-80 h-96 border-l border-slate-200 pl-0 md:pl-6 overflow-y-auto">
-                                <h4 className="text-xs font-bold text-slate-400 uppercase mb-3 sticky top-0 bg-slate-50 py-2 z-10">圖例 (點擊多選)</h4>
+                                <h4 className="text-xs font-bold text-slate-400 uppercase mb-3 sticky top-0 bg-slate-50 py-2 z-10 flex justify-between">
+                                    <span>圖例 (點選切換)</span>
+                                    {selectedActs.size > 0 && <span className="text-blue-500">已選 {selectedActs.size} 項</span>}
+                                </h4>
                                 <div className="space-y-1">
                                     {activityStats.map((a, i) => {
-                                        const isSelected = selectedActs.size === 0 || selectedActs.has(a.name);
+                                        const isSelected = selectedActs.has(a.name);
+                                        const isDimmed = selectedActs.size > 0 && !isSelected;
                                         return (
-                                            <button key={i} onClick={() => toggleSelection(a.name)} className={`w-full flex items-center justify-between p-2 rounded text-xs transition-all duration-200 ${selectedActs.has(a.name) ? 'bg-white ring-2 ring-blue-500 scale-[1.02] z-10' : 'hover:bg-white'} ${!isSelected ? 'opacity-40 grayscale' : 'opacity-100'}`}>
-                                                <div className="flex items-center truncate"><span className="w-3 h-3 rounded-full mr-2 flex-shrink-0" style={{backgroundColor: CHART_COLORS[i % CHART_COLORS.length]}}></span><span className="truncate max-w-[120px]" title={a.name}>{a.name}</span></div>
+                                            <button 
+                                                key={i} 
+                                                onClick={() => toggleSelection(a.name)}
+                                                className={`w-full flex items-center justify-between p-2 rounded text-xs transition-all duration-200 
+                                                    ${isSelected ? 'bg-white shadow ring-2 ring-blue-500 scale-[1.02] z-10' : 'hover:bg-white hover:shadow-sm'}
+                                                    ${isDimmed ? 'opacity-40 grayscale' : 'opacity-100'}
+                                                `}
+                                            >
+                                                <div className="flex items-center truncate">
+                                                    <span className="w-3 h-3 rounded-full mr-2 flex-shrink-0" style={{backgroundColor: CHART_COLORS[i % CHART_COLORS.length]}}></span>
+                                                    <span className="truncate max-w-[120px]" title={a.name}>{a.name}</span>
+                                                </div>
                                                 <div className="font-bold text-slate-600">{((a.hours/(totalHours||1))*100).toFixed(1)}%</div>
                                             </button>
                                         )
@@ -344,18 +406,19 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                             </div>
                         </div>
 
-                        {/* 2. NEW CATEGORY CHART (V3.7) */}
+                        {/* 2. CATEGORY CHART (V3.8) */}
                         <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col md:flex-row items-center md:items-start relative min-h-[300px]">
                             <div className="absolute top-4 left-4 z-20">
                                  <button onClick={exportCategoryStats} className="text-xs bg-indigo-600 text-white border px-3 py-1.5 rounded flex items-center hover:bg-indigo-700 shadow-md transition"><Download size={14} className="mr-1"/> 匯出 CSV</button>
                             </div>
                             <div className="flex-1 flex flex-col items-center justify-center p-4 pt-10">
-                                <h3 className="font-bold text-slate-700 mb-6 flex items-center text-lg"><Palette className="mr-2 text-purple-500"/> 課程範疇分佈 (類別分析)</h3>
+                                <h3 className="font-bold text-slate-700 mb-6 flex items-center text-lg"><Palette className="mr-2 text-purple-500"/> 課程範疇分佈 (可手動修正)</h3>
                                 <div className="relative w-64 h-64 rounded-full shadow-xl border-4 border-white" style={{ background: `conic-gradient(${categoryPieGradient})` }}>
                                     <div className="absolute inset-0 m-auto w-32 h-32 bg-slate-50 rounded-full flex flex-col items-center justify-center shadow-inner">
-                                        <span className="text-lg font-bold text-slate-600">學時分類</span>
+                                        <span className="text-lg font-bold text-slate-600">分類統計</span>
                                     </div>
                                 </div>
+                                <p className="text-xs text-slate-400 mt-4">前往「活動列表」即可手動更改分類</p>
                             </div>
                             <div className="w-full md:w-64 p-4">
                                 <h4 className="text-xs font-bold text-slate-400 uppercase mb-3">類別圖例</h4>
@@ -370,22 +433,22 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                             </div>
                         </div>
 
-                        {/* 3. STACKED BAR CHART (Fixed Alignment V3.7) */}
+                        {/* 3. STACKED BAR CHART */}
                         <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 relative flex flex-col h-[600px]">
-                            <div className="flex flex-col md:flex-row justify-between items-start mb-6 pl-12">
+                            <div className="flex flex-col md:flex-row justify-between items-start mb-6">
                                 <div className="flex items-center space-x-4 mb-2 md:mb-0">
                                     <button onClick={exportGradeStats} className="text-xs bg-indigo-600 text-white border px-3 py-1.5 rounded flex items-center hover:bg-indigo-700 shadow-md transition"><Download size={14} className="mr-1"/> 匯出 CSV</button>
                                 </div>
                                 <div className="text-right">
-                                    <h3 className="font-bold text-slate-700 text-lg flex items-center justify-end"><TrendingUp className="mr-2 text-green-500"/> 各級總時數分佈 (P1 - P6)</h3>
-                                    <p className="text-xs text-slate-500 mt-1">灰色: 全級總數 | 彩色: 選定活動 | 滑鼠移入可查看詳情</p>
+                                    <h3 className="font-bold text-slate-700 text-lg flex items-center justify-end"><TrendingUp className="mr-2 text-green-500"/> 各級總時數分佈 (固定比例)</h3>
+                                    <p className="text-xs text-slate-500 mt-1">
+                                        {selectedActs.size > 0 ? '灰色: 該級總時數 | 彩色: 所選活動佔比 (顯示真實比例)' : '顯示全校所有活動堆疊'}
+                                    </p>
                                 </div>
                             </div>
 
                             <div className="flex-1 flex items-end justify-between space-x-8 border-b-2 border-slate-300 pb-0 px-4 mx-4 relative">
-                                {/* V3.7 Alignment Fix: All bars use absolute bottom-0 to ensure perfect baseline */}
                                 {gradeDistribution.map((g) => {
-                                    // Calculate Heights
                                     const maxScale = maxGradeHours; 
                                     const ghostHeightPct = (g.total / maxScale) * 100;
 
@@ -395,13 +458,11 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                                     const selectedTotalHours = activeItems.reduce((acc, cur) => acc + cur[1], 0);
                                     const activeHeightPct = (selectedTotalHours / maxScale) * 100;
 
-                                    // Generate Label string
                                     const selectedNames = selectedActs.size === 1 ? Array.from(selectedActs)[0] : (selectedActs.size > 1 ? '多項選取' : '所有活動');
 
                                     return (
                                         <div key={g.grade} className="flex flex-col items-center flex-1 h-full relative group">
                                             
-                                            {/* 1. Ghost Bar (Background Total) - Absolute Bottom */}
                                             {selectedActs.size > 0 && (
                                                 <div 
                                                     className="w-full absolute bottom-0 bg-slate-200 rounded-t-sm transition-all duration-700 pointer-events-none" 
@@ -409,12 +470,11 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                                                 />
                                             )}
 
-                                            {/* 2. Active Bar (Foreground Selected) - Absolute Bottom */}
                                             <div 
                                                 className={`w-full absolute bottom-0 flex flex-col-reverse rounded-t-sm overflow-hidden transition-all duration-700 ${selectedActs.size > 0 ? 'w-4/5 z-10 shadow-lg left-1/2 -translate-x-1/2' : 'bg-slate-200'}`}
                                                 style={{height: `${activeHeightPct}%`}}
                                             >
-                                                {activeItems.map(([actName, hrs]) => {
+                                                {activeItems.map(([actName, hrs], idx) => {
                                                     const colorIdx = activityStats.findIndex(a => a.name === actName);
                                                     const color = colorIdx >= 0 ? CHART_COLORS[colorIdx % CHART_COLORS.length] : '#cbd5e1';
                                                     const pctOfStack = (hrs / selectedTotalHours) * 100;
@@ -424,14 +484,12 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                                                 })}
                                             </div>
 
-                                            {/* 3. Top Label (Hours) - Absolute positioned based on max bar */}
                                             <div className="absolute w-full text-center -top-6 transition-all duration-500" style={{bottom: `${Math.max(ghostHeightPct, activeHeightPct) + 2}%`}}>
                                                 <span className="text-xs font-bold text-slate-600 bg-white/80 px-1 rounded">
                                                     {selectedActs.size > 0 ? selectedTotalHours.toFixed(0) : g.total.toFixed(0)}h
                                                 </span>
                                             </div>
 
-                                            {/* 4. Hover Tooltip (V3.7 Feature) */}
                                             <div className="hidden group-hover:block absolute bottom-1/2 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-xs p-3 rounded-lg shadow-xl z-50 w-48 pointer-events-none">
                                                 <div className="font-bold border-b border-slate-600 pb-1 mb-1">{g.grade} 統計詳情</div>
                                                 <div className="flex justify-between mb-1"><span>全級總時數:</span> <span className="font-mono">{g.total.toFixed(1)}h</span></div>
@@ -443,14 +501,12 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                                                 )}
                                             </div>
 
-                                            {/* X-Axis Label */}
                                             <div className="absolute -bottom-8 w-full text-center">
                                                 <div className="text-sm font-bold text-slate-700">{g.grade}</div>
                                             </div>
                                         </div>
                                     )
                                 })}
-                                {/* Y-Axis */}
                                 <div className="absolute left-0 top-0 h-full border-l border-dashed border-slate-300 pointer-events-none">
                                     <span className="absolute top-0 left-1 text-[10px] text-slate-400 bg-slate-50 px-1">Max: {maxGradeHours.toFixed(0)}h</span>
                                 </div>
@@ -459,15 +515,15 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                     </div>
                 )}
 
-                {/* (Keep existing List Views & Logs View code same as V3.6.2) */}
+                {/* V3.8: ACTIVITY LIST WITH CATEGORY SELECTOR */}
                 {statsViewMode === 'activities' && (
                     <div className="bg-white border rounded-xl overflow-hidden">
                         <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
-                            <h3 className="font-bold text-slate-700">活動統計列表</h3>
+                            <h3 className="font-bold text-slate-700">活動統計列表 (新算法: 單節 x 節數)</h3>
                             <button onClick={() => exportToCSV(filteredActivityList, 'Activity_Report')} className="text-sm bg-white border px-3 py-1 rounded hover:bg-slate-50 flex items-center text-blue-600 border-blue-200"><Download size={14} className="mr-1"/> 匯出 CSV</button>
                         </div>
                         <table className="w-full text-sm text-left">
-                            <thead className="bg-slate-100 text-slate-500 uppercase"><tr><th className="p-3">活動名稱</th><th className="p-3">類別</th><th className="p-3 text-right">總人次</th><th className="p-3 text-right">總學時</th></tr></thead>
+                            <thead className="bg-slate-100 text-slate-500 uppercase"><tr><th className="p-3">活動名稱</th><th className="p-3 w-48">類別 (可手動更改)</th><th className="p-3 text-right">總人次</th><th className="p-3 text-right">總學時</th></tr></thead>
                             <tbody className="divide-y">
                                 {filteredActivityList.map((a, i) => (
                                     <tr key={i} className="hover:bg-slate-50">
@@ -475,7 +531,20 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                                             <span className="w-2 h-2 rounded-full mr-2" style={{backgroundColor: CHART_COLORS[activityStats.findIndex(x=>x.name===a.name) % CHART_COLORS.length]}}></span>
                                             {a.name}
                                         </td>
-                                        <td className="p-3 text-xs text-slate-500">{a.category}</td>
+                                        <td className="p-3">
+                                            {/* V3.8: Category Dropdown */}
+                                            <div className="relative group/cat">
+                                                <select 
+                                                    className="w-full text-xs p-1 border rounded bg-slate-50 hover:bg-white focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
+                                                    value={a.category}
+                                                    disabled={updatingCategory}
+                                                    onChange={(e) => handleCategoryChange(a.name, e.target.value)}
+                                                >
+                                                    {CATEGORY_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                                </select>
+                                                {updatingCategory && <span className="absolute right-0 top-0 text-[8px] text-blue-500">更新中...</span>}
+                                            </div>
+                                        </td>
                                         <td className="p-3 text-right">{a.count}</td>
                                         <td className="p-3 text-right font-bold text-blue-600">{a.hours.toFixed(1)}</td>
                                     </tr>
