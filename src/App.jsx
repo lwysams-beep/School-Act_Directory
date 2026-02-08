@@ -1,6 +1,13 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-// V3.8.1: Stability Fix - Safe Math, Color Guards, Error Boundary, Remove risky icons
-import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, Phone, CheckSquare, Square, RefreshCcw, X, Plus, Edit2, FileSpreadsheet, BarChart, History, TrendingUp, Filter, Cloud, UserX, PieChart, Download, Activity, Save as SaveIcon, Layers, Maximize, Palette, ChevronDown } from 'lucide-react';
+// V3.9.3: Import All Required Icons to prevent Crash
+import { 
+    Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, 
+    ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, 
+    Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, 
+    Phone, CheckSquare, Square, RefreshCcw, X, Plus, Edit2, FileSpreadsheet, 
+    BarChart, History, TrendingUp, Filter, Cloud, UserX, PieChart, Download, 
+    Activity, Layers, Maximize, Palette, ChevronDown 
+  } from 'lucide-react';
 
 // =============================================================================
 //  FIREBASE IMPORTS & CONFIGURATION
@@ -972,49 +979,159 @@ const App = () => {
             </div>
             <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleMasterFileChange} />
             {adminTab === 'manage_db' ? renderDatabaseManager() : adminTab === 'stats' ? (
-                // StatsView Component (Independent)
-                // V3.6.2: Pass queryLogs prop to StatsView
-                <StatsView masterList={masterList} activities={activities} queryLogs={queryLogs} onBack={() => setAdminTab('import')} />
-            ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 space-y-6">
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                        <div className="flex justify-between items-center mb-4"><div className="flex items-center space-x-3"><h3 className="font-bold text-lg text-green-700 flex items-center"><CheckCircle className="mr-2" size={20} /> 等待發布 ({matched.length})</h3><button onClick={toggleSelectAll} className="text-sm text-slate-500 flex items-center hover:text-slate-800">{selectedMatchIds.size === matched.length ? <CheckSquare size={16} className="mr-1"/> : <Square size={16} className="mr-1"/>}全選/取消</button></div>{matched.length > 0 && (<button onClick={handlePublish} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center shadow-md active:scale-95 transition"><Save size={18} className="mr-2" /> 發布選取項目 ({selectedMatchIds.size})</button>)}</div>
-                        <div className="bg-green-50 rounded-lg border border-green-100 max-h-96 overflow-y-auto"><table className="w-full text-sm"><thead className="bg-green-100/50 text-green-800 sticky top-0 border-b border-green-200"><tr><th className="py-2 px-2 w-8"></th><th className="py-2 px-4 text-left w-1/3">原始 PDF 資料</th><th className="py-2 px-4 text-center w-10"></th><th className="py-2 px-4 text-left w-1/3">Master Data (真理)</th><th className="py-2 px-4 text-right">操作</th></tr></thead><tbody>
-                            {matched.map(m => (<tr key={m.id} className={`border-b border-green-100 last:border-0 hover:bg-green-100/40 transition-colors ${selectedMatchIds.has(m.id) ? 'bg-green-100/20' : 'opacity-50'}`}><td className="py-3 px-2 text-center"><input type="checkbox" checked={selectedMatchIds.has(m.id)} onChange={() => toggleSelectMatch(m.id)} className="w-4 h-4 rounded text-green-600 focus:ring-green-500" /></td><td className="py-3 px-4"><div className="text-slate-500 text-xs uppercase mb-0.5">PDF Source</div><div className="font-medium text-slate-700">{m.rawClass} {m.rawName}</div><div className="text-xs text-red-400 font-mono">{m.rawClassNo === '00' ? '缺學號' : m.rawClassNo}</div>{m.rawPhone && <div className="text-xs text-blue-500 font-mono flex items-center mt-1"><Phone size={10} className="mr-1"/>{m.rawPhone}</div>}</td><td className="py-3 px-2 text-center text-slate-300"><ArrowRight size={16} /></td><td className="py-3 px-4 bg-green-100/30"><div className="text-green-600 text-xs uppercase font-bold flex items-center mb-0.5"><Database size={10} className="mr-1" /> Master Data</div><div className="font-bold text-green-700 text-lg flex items-center"><span className="mr-2">{m.verifiedClass}</span><span className="bg-white text-green-800 border border-green-200 px-1.5 rounded text-sm min-w-[24px] text-center mr-2">{m.verifiedClassNo}</span><span>{m.verifiedName}</span></div></td><td className="py-3 px-4 text-right"><button onClick={() => handleManualConflict(m.id)} className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded hover:bg-red-200 flex items-center ml-auto"><AlertTriangle size={12} className="mr-1" /> 轉為異常</button><div className="text-xs text-slate-400 mt-1">{m.activity}</div>{m.specificDates && m.specificDates.length > 0 && <div className="text-xs bg-blue-100 text-blue-600 px-1 rounded inline-block mt-1">共 {m.specificDates.length} 堂</div>}</td></tr>))}
-                        </tbody></table></div>
+            // -----------------------------------------------------------------------------
+// 3. STATS VIEW COMPONENT (V3.9.3 - Emergency Fix: Anti-Crash)
+// -----------------------------------------------------------------------------
+const StatsView = ({ masterList, activities, onBack }) => {
+    // 安全數據處理 (Data Sanitization)
+    const safeList = useMemo(() => {
+      if (!Array.isArray(masterList)) return [];
+      return masterList.filter(s => s && typeof s === 'object'); // 濾除 undefined/null
+    }, [masterList]);
+  
+    const stats = useMemo(() => {
+      const data = {
+        totalStudents: safeList.length,
+        byGrade: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0 },
+        byHouse: { 'R': 0, 'Y': 0, 'B': 0, 'G': 0, 'Unknown': 0 }, // Red, Yellow, Blue, Green
+        totalActivities: Array.isArray(activities) ? activities.length : 0,
+        activeStudents: 0 // 參與至少 1 個活動的學生
+      };
+  
+      try {
+        safeList.forEach(student => {
+          // 1. Grade Stats (安全讀取)
+          const grade = student.classCode ? student.classCode.charAt(0) : 'Other';
+          if (data.byGrade[grade] !== undefined) {
+            data.byGrade[grade]++;
+          }
+  
+          // 2. House Stats (安全讀取 + 大小寫容錯)
+          const houseMap = { '紅': 'R', 'Red': 'R', 'R': 'R', '黃': 'Y', 'Yellow': 'Y', 'Y': 'Y', '藍': 'B', 'Blue': 'B', 'B': 'B', '綠': 'G', 'Green': 'G', 'G': 'G' };
+          // 假設 house 欄位可能叫 house, houseColor, 或 hidden 屬性
+          const h = student.house || student.houseColor || 'Unknown';
+          const cleanHouse = houseMap[h] || houseMap[h.toString().trim()] || 'Unknown';
+          if (data.byHouse[cleanHouse] !== undefined) {
+            data.byHouse[cleanHouse]++;
+          } else {
+            data.byHouse['Unknown']++;
+          }
+  
+          // 3. Activity Stats (假設有 activities 陣列)
+          if (Array.isArray(student.activities) && student.activities.length > 0) {
+            data.activeStudents++;
+          }
+        });
+      } catch (err) {
+        console.error("Stats Calculation Error:", err);
+        // 發生錯誤時保持 data 現狀，避免白畫面
+      }
+  
+      return data;
+    }, [safeList, activities]);
+  
+    // 安全計算百分比 helper
+    const getPercent = (val, total) => {
+      if (!total || total === 0) return 0;
+      return Math.round((val / total) * 100);
+    };
+  
+    return (
+      <div className="bg-white p-6 rounded-xl shadow-lg animate-in fade-in duration-300 min-h-[500px]">
+        <div className="flex justify-between items-center mb-6 border-b pb-4">
+          <button onClick={onBack} className="flex items-center text-slate-500 hover:text-blue-600 transition">
+            <ArrowLeft className="mr-2" size={20} /> 返回主控台
+          </button>
+          <h2 className="text-2xl font-bold text-slate-800 flex items-center">
+            <BarChart className="mr-2 text-blue-600" /> 學校數據中心 (V3.9.3)
+          </h2>
+          <div className="w-24"></div> 
+        </div>
+  
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          {/* Card 1: 總人數 */}
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-2xl shadow-sm border border-blue-200">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-blue-600 font-bold uppercase text-xs tracking-wider">總學生人數</span>
+              <Users size={20} className="text-blue-400"/>
+            </div>
+            <div className="text-4xl font-black text-slate-800">{stats.totalStudents}</div>
+            <div className="text-xs text-slate-500 mt-2">全校在籍學生</div>
+          </div>
+  
+          {/* Card 2: 活動總數 */}
+          <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-6 rounded-2xl shadow-sm border border-orange-200">
+            <div className="flex items-center justify-between mb-2">
+               <span className="text-orange-600 font-bold uppercase text-xs tracking-wider">活動項目</span>
+               <Activity size={20} className="text-orange-400"/>
+            </div>
+            <div className="text-4xl font-black text-slate-800">{stats.totalActivities}</div>
+            <div className="text-xs text-slate-500 mt-2">本學年開設項目</div>
+          </div>
+  
+          {/* Card 3: 參與率 */}
+          <div className="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-2xl shadow-sm border border-green-200">
+             <div className="flex items-center justify-between mb-2">
+               <span className="text-green-600 font-bold uppercase text-xs tracking-wider">參與率 (活躍)</span>
+               <TrendingUp size={20} className="text-green-400"/>
+            </div>
+            <div className="text-4xl font-black text-slate-800">{getPercent(stats.activeStudents, stats.totalStudents)}<span className="text-lg">%</span></div>
+            <div className="text-xs text-slate-500 mt-2">{stats.activeStudents} 名學生參與中</div>
+          </div>
+        </div>
+  
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* 年級分佈 */}
+          <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+            <h3 className="text-lg font-bold text-slate-700 mb-4 flex items-center"><Layers size={18} className="mr-2"/> 年級分佈</h3>
+            <div className="space-y-3">
+              {['1', '2', '3', '4', '5', '6'].map(g => {
+                const count = stats.byGrade[g] || 0;
+                const pct = getPercent(count, stats.totalStudents);
+                return (
+                  <div key={g} className="flex items-center text-sm">
+                    <div className="w-12 font-bold text-slate-600">P.{g}</div>
+                    <div className="flex-1 bg-white rounded-full h-3 overflow-hidden shadow-inner mx-2">
+                      <div className="bg-blue-500 h-full rounded-full transition-all duration-1000" style={{width: `${pct}%`}}></div>
                     </div>
-                    {conflicts.length > 0 && (<div className="bg-white p-6 rounded-xl shadow-md border-l-4 border-red-500 animate-pulse-border"><h3 className="font-bold text-lg text-red-700 flex items-center mb-4"><AlertTriangle className="mr-2" /> 異常資料需修正 ({conflicts.length})</h3><div className="space-y-3">{conflicts.map(item => (<div key={item.id} className="border border-red-100 rounded-lg p-4 bg-red-50/50 flex flex-col md:flex-row items-center justify-between gap-4"><div className="flex-1"><div className="font-bold text-slate-800">{item.rawClass} {item.rawName}</div><div className="text-xs text-slate-500">{item.activity} {item.rawPhone && `| ${item.rawPhone}`}</div>{item.status === 'manual_conflict' && <div className="text-xs text-red-600 font-bold mt-1">* 人手標記異常</div>}</div><ArrowRight className="text-slate-300 md:rotate-0 rotate-90" /><div className="flex-1 w-full"><select className="w-full p-2 border border-slate-300 rounded-lg bg-white text-sm" onChange={(e) => { if(e.target.value) { const student = masterList.find(s => s.key === e.target.value); if(student) handleResolveConflict(item, student); }}} defaultValue=""><option value="" disabled>-- 選擇正確學生 --</option><optgroup label="智能推薦">{masterList.filter(s => s.classCode === item.rawClass || s.chiName.includes(item.rawName[0])).map(s => (<option key={s.key} value={s.key}>{s.classCode} ({s.classNo}) {s.chiName}</option>))}</optgroup><optgroup label="全部名單"><option value="search">...</option></optgroup></select></div><button onClick={() => handleDeleteImport(item.id)} className="p-2 text-red-400 hover:bg-red-100 rounded"><Trash2 size={18} /></button></div>))}</div></div>)}
-                </div>
-                <div className="space-y-6">
-                    <div className="bg-slate-800 text-slate-300 p-6 rounded-xl shadow-md border border-slate-700">
-                        <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-white flex items-center"><Database className="mr-2" size={16}/> 數據庫狀態</h3></div>
-                        <div className="space-y-3"><button onClick={() => setAdminTab('manage_db')} className="w-full bg-slate-700 hover:bg-slate-600 text-white p-3 rounded-lg text-sm font-bold flex items-center justify-between transition"><span>管理活動資料庫</span><span className="bg-blue-600 text-xs px-2 py-1 rounded">{activities.length}</span></button><button onClick={() => setAdminTab('stats')} className="w-full bg-purple-700 hover:bg-purple-600 text-white p-3 rounded-lg text-sm font-bold flex items-center justify-center transition shadow-lg"><BarChart className="mr-2" size={16} /> 查看統計報表</button></div>
-                        <div className="mt-4 pt-4 border-t border-slate-700 text-xs text-slate-500 text-center flex items-center justify-center">
-                            {isMasterLoading ? <RefreshCcw className="animate-spin mr-2"/> : null} 學生總數: {masterList.length}
-                        </div>
-                    </div>
-                    <div className="flex justify-end mb-1"><select className="text-xs p-1 border border-slate-300 rounded bg-white text-slate-600 outline-none focus:ring-1 focus:ring-emerald-500" value={csvEncoding} onChange={(e) => setCsvEncoding(e.target.value)}><option value="Big5">CSV 編碼: Big5 (解決 Excel 亂碼)</option><option value="UTF-8">CSV 編碼: UTF-8 (通用格式)</option></select></div>
-                    <button onClick={handleMasterUploadTrigger} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white p-4 rounded-xl flex items-center justify-center font-bold shadow-md transition"><Cloud className="mr-2" /> 上載真理 Data (雲端版)</button>
-                    <div className="bg-white p-6 rounded-xl shadow-md border-t-4 border-blue-500">
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="font-bold text-lg text-slate-800 flex items-center"><PlusCircle className="mr-2 text-blue-500" /> 新增活動資料</h3>
-                            <div className="text-xs bg-slate-100 px-2 py-1 rounded text-slate-500">
-                                年度: <select className="bg-transparent font-bold outline-none" value={schoolYearStart} onChange={handleSchoolYearChange}><option value={2024}>24-25</option><option value={2025}>25-26</option><option value={2026}>26-27</option></select>
-                            </div>
-                        </div>
-                        <div className="space-y-3 mb-4">
-                            <div><label className="text-xs text-slate-500 font-bold uppercase">活動名稱</label><input type="text" className="w-full p-2 border rounded" value={importActivity} onChange={e => setImportActivity(e.target.value)} /></div>
-                            <div className="grid grid-cols-2 gap-2"><div><label className="text-xs text-slate-500 font-bold uppercase">時間</label><input type="text" className="w-full p-2 border rounded" value={importTime} onChange={e => setImportTime(e.target.value)} /></div><div><label className="text-xs text-slate-500 font-bold uppercase">地點</label><input type="text" className="w-full p-2 border rounded" value={importLocation} onChange={e => setImportLocation(e.target.value)} /></div></div>
-                            <div className="border border-slate-200 rounded p-3 bg-slate-50"><label className="text-xs text-slate-500 font-bold uppercase mb-2 block">選擇日期 (輸入 0209 代表 9月2日)</label><div className="flex gap-2 mb-2"><input type="text" ref={dateInputRef} placeholder="DDMM (如 0209)" className="flex-1 p-2 border rounded text-sm" value={tempDateInput} onChange={(e) => setTempDateInput(e.target.value)} onKeyDown={handleDateInputKeyDown} /><button onClick={handleAddDate} className="bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 flex items-center"><Plus size={16} /></button></div><div className="flex flex-wrap gap-2 mb-2">{importDates.map(date => (<span key={date} className="bg-white border border-blue-200 text-blue-800 text-xs px-2 py-1 rounded-full flex items-center shadow-sm">{formatDisplayDate(date)}<button onClick={() => handleRemoveDate(date)} className="ml-1 text-blue-400 hover:text-red-500"><X size={12} /></button></span>))}</div><div className="flex justify-between items-center text-xs"><span className="font-bold text-slate-600">已選: {importDates.length} 天 (共{importDates.length}堂)</span>{importDates.length > 0 && <button onClick={handleClearDates} className="text-red-400 hover:underline">清空</button>}</div></div>
-                            <div><label className="text-xs text-slate-500 font-bold uppercase">星期 (自動/預設)</label><select className="w-full p-2 border rounded" value={importDayId} onChange={e => setImportDayId(e.target.value)}><option value="1">逢星期一</option><option value="2">逢星期二</option><option value="3">逢星期三</option><option value="4">逢星期四</option><option value="5">逢星期五</option><option value="6">逢星期六</option><option value="0">逢星期日</option></select></div>
-                        </div>
-                        <div className="mb-4"><label className="text-xs text-slate-500 font-bold uppercase flex justify-between"><span>貼上名單 (PDF Copy/Paste)</span><span className="text-blue-500 cursor-pointer flex items-center" title="格式: 4A 蔡舒朗 (可含電話)"><FileText size={12} className="mr-1"/> 說明</span></label><textarea className="w-full h-32 p-2 border rounded bg-slate-50 text-sm font-mono" placeholder={`4A 蔡舒朗 91234567\n2A1 陳嘉瑩`} value={bulkInput} onChange={e => setBulkInput(e.target.value)}></textarea></div>
-                        <button onClick={handleBulkImport} className="w-full py-2 bg-blue-600 text-white font-bold rounded hover:bg-blue-700 transition">識別並載入</button>
-                    </div>
-                </div>
-                </div>
+                    <div className="w-16 text-right text-slate-500">{count} 人</div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+  
+          {/* 社別分佈 */}
+          <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+            <h3 className="text-lg font-bold text-slate-700 mb-4 flex items-center"><Shield size={18} className="mr-2"/> 社別分佈</h3>
+            <div className="grid grid-cols-2 gap-4">
+               <div className="p-4 bg-white rounded-xl border-l-4 border-red-500 shadow-sm">
+                  <div className="text-red-500 font-bold text-xs uppercase">Red House</div>
+                  <div className="text-2xl font-bold text-slate-800">{stats.byHouse['R']}</div>
+               </div>
+               <div className="p-4 bg-white rounded-xl border-l-4 border-yellow-400 shadow-sm">
+                  <div className="text-yellow-600 font-bold text-xs uppercase">Yellow House</div>
+                  <div className="text-2xl font-bold text-slate-800">{stats.byHouse['Y']}</div>
+               </div>
+               <div className="p-4 bg-white rounded-xl border-l-4 border-blue-500 shadow-sm">
+                  <div className="text-blue-500 font-bold text-xs uppercase">Blue House</div>
+                  <div className="text-2xl font-bold text-slate-800">{stats.byHouse['B']}</div>
+               </div>
+               <div className="p-4 bg-white rounded-xl border-l-4 border-green-500 shadow-sm">
+                  <div className="text-green-500 font-bold text-xs uppercase">Green House</div>
+                  <div className="text-2xl font-bold text-slate-800">{stats.byHouse['G']}</div>
+               </div>
+            </div>
+            {stats.byHouse['Unknown'] > 0 && (
+              <div className="mt-4 text-xs text-slate-400 text-center">
+                * 有 {stats.byHouse['Unknown']} 名學生未分配社別或資料不詳
+              </div>
             )}
+          </div>
+        </div>
+      </div>
+    );
+  };
         </div>
       </div>
   );
