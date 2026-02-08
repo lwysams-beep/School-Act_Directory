@@ -979,7 +979,7 @@ const App = () => {
             </div>
             <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleMasterFileChange} />
             {adminTab === 'manage_db' ? renderDatabaseManager() : adminTab === 'stats' ? (
-        </div>
+                
         {adminTab === 'manage_db' ? renderDatabaseManager() : adminTab === 'stats' ? (
             <StatsView 
               masterList={masterList} 
