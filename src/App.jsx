@@ -1427,8 +1427,6 @@ const StatsView = ({ masterList, activities, onBack }) => {
              )}
           </div>
         )}
-      </div>
-    </div>
   );
 }; // App 結束
 
