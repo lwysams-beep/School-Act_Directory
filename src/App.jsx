@@ -1268,10 +1268,10 @@ const StatsView = ({ masterList, activities, onBack }) => {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 font-sans text-slate-900">
-      {/* 頂部導航欄 */}
+      {/* 頂部導航欄 Header */}
       <header className="bg-white/80 backdrop-blur-md sticky top-0 z-50 border-b border-slate-200 shadow-sm">
         <div className="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center">
-          <div className="flex items-center space-x-3" onClick={() => setCurrentView('student')}>
+          <div className="flex items-center space-x-3 cursor-pointer" onClick={() => setCurrentView('student')}>
              <div className="w-10 h-10 bg-gradient-to-tr from-blue-600 to-blue-400 rounded-xl flex items-center justify-center shadow-lg shadow-blue-200">
                <Monitor className="text-white" size={20} />
              </div>
@@ -1297,10 +1297,10 @@ const StatsView = ({ masterList, activities, onBack }) => {
         </div>
       </header>
 
-      {/* 主要內容區 */}
+      {/* 主要內容區 Main Content */}
       <div className="flex-1 max-w-4xl mx-auto w-full p-4 md:p-6">
         
-        {/* 1. 教職員登入畫面 */}
+        {/* 1. 教職員登入畫面 Staff Login */}
         {currentView === 'staff' && !user && (
           <div className="max-w-md mx-auto mt-10 p-6 bg-white rounded-2xl shadow-lg border border-slate-100 animate-in fade-in slide-in-from-bottom-4">
              <div className="text-center mb-6">
@@ -1320,36 +1320,30 @@ const StatsView = ({ masterList, activities, onBack }) => {
           </div>
         )}
 
-        {/* 2. 管理員主控台 (已登入) */}
+        {/* 2. 管理員主控台 Admin Dashboard (已登入) */}
         {(currentView === 'staff' || currentView === 'admin') && user && (
            <div className="animate-in fade-in zoom-in duration-300">
-             {/* 檔案上傳隱藏欄位 */}
              <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleMasterFileChange} />
              
-             {/* 子功能切換 */}
              {adminTab === 'manage_db' ? (
-                 renderDatabaseManager() // 呼叫原本的資料庫管理函數
+                 renderDatabaseManager()
              ) : adminTab === 'stats' ? (
                  <StatsView masterList={masterList} activities={activities} onBack={() => setAdminTab('dashboard')} />
              ) : (
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                    {/* 按鈕: 匯入資料 */}
                     <button onClick={() => document.getElementById('file-upload-input').click()} className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-xl border border-slate-100 hover:border-blue-200 transition-all duration-300 group text-left">
                       <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition"><Upload className="text-blue-600" size={24} /></div>
                       <h3 className="text-lg font-bold text-slate-800 mb-1">匯入學生資料</h3><p className="text-slate-500 text-xs">上載 CSV 更新名單</p>
                       <input id="file-upload-input" type="file" className="hidden" accept=".csv" onChange={handleMasterFileChange} />
                     </button>
-                    {/* 按鈕: 學校數據 */}
                     <button onClick={() => setAdminTab('stats')} className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-xl border border-slate-100 hover:border-orange-200 transition-all duration-300 group text-left">
                       <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition"><BarChart className="text-orange-600" size={24} /></div>
                       <h3 className="text-lg font-bold text-slate-800 mb-1">學校數據中心</h3><p className="text-slate-500 text-xs">查看分佈及參與率</p>
                     </button>
-                    {/* 按鈕: 資料庫管理 */}
                     <button onClick={() => setAdminTab('manage_db')} className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-xl border border-slate-100 hover:border-purple-200 transition-all duration-300 group text-left">
                       <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition"><Database className="text-purple-600" size={24} /></div>
                       <h3 className="text-lg font-bold text-slate-800 mb-1">資料庫管理</h3><p className="text-slate-500 text-xs">進階數據操作</p>
                     </button>
-                    {/* 按鈕: 活動點名 (V3.9.0) */}
                     <button onClick={() => setCurrentView('attendance')} className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-xl border border-slate-100 hover:border-green-200 transition-all duration-300 group text-left relative overflow-hidden">
                       <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition"><CheckSquare size={64} className="text-green-600 transform rotate-12"/></div>
                       <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition"><CheckSquare className="text-green-600" size={24} /></div>
@@ -1360,12 +1354,12 @@ const StatsView = ({ masterList, activities, onBack }) => {
            </div>
         )}
 
-        {/* 3. 活動點名系統介面 (獨立視圖) */}
+        {/* 3. 活動點名系統介面 Attendance View */}
         {currentView === 'attendance' && user && (
             <AttendanceView masterList={masterList} activities={activities} db={db} onBack={() => setCurrentView('staff')} />
         )}
 
-        {/* 4. 學生/家長查詢介面 (預設視圖) */}
+        {/* 4. 學生/家長查詢介面 Student View */}
         {currentView === 'student' && (
           <div className="space-y-6">
              {/* 搜尋區塊 */}
@@ -1380,7 +1374,6 @@ const StatsView = ({ masterList, activities, onBack }) => {
                   <span className="text-slate-400 mr-2">#</span>
                   <input type="number" value={selectedClassNo} onChange={(e) => setSelectedClassNo(e.target.value)} placeholder="學號" className="w-full p-2 bg-transparent outline-none font-bold text-slate-700"/>
                 </div>
-                {/* 搜尋按鈕邏輯 (這裡簡化，直接使用 Effect 監聽) */}
              </div>
 
              {/* 搜尋結果顯示 */}
@@ -1427,8 +1420,10 @@ const StatsView = ({ masterList, activities, onBack }) => {
              )}
           </div>
         )}
+      </div>
+    </div>
   );
-}; // App 結束
+};
 
 // -----------------------------------------------------------------------------
 // 3. STATS VIEW COMPONENT (V3.9.3 - Anti-Crash)
