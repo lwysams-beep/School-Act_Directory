@@ -977,69 +977,47 @@ const App = () => {
                 <div><h2 className="text-2xl font-bold text-slate-800 flex items-center"><Shield className="mr-2" /> 管理員控制台</h2><p className="text-slate-500 text-sm">數據校對與發布。</p></div>
                 <div className="flex items-center space-x-4"><div className="bg-white px-4 py-2 rounded-lg shadow text-sm font-mono text-slate-600 border border-slate-200">Admin: <span className="font-bold text-blue-600">{user.email}</span></div><button onClick={handleLogout} className="bg-red-50 text-red-500 px-4 py-2 rounded-lg hover:bg-red-100 border border-red-200 flex items-center text-sm font-bold"><LogOut size={16} className="mr-2"/> 登出</button></div>
             </div>
+            {/* 1. 隱藏的檔案上傳輸入框 (重建版) */}
             <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleMasterFileChange} />
 
-        {adminTab === 'manage_db' ? renderDatabaseManager() : adminTab === 'stats' ? (
-            <StatsView 
-              masterList={masterList} 
-              activities={activities} 
-              onBack={() => setAdminTab('dashboard')} 
-            />
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              {/* 按鈕 1: 匯入資料 */}
-              <button 
-                onClick={() => document.getElementById('file-upload-input').click()}
-                className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-xl border border-slate-100 hover:border-blue-200 transition-all duration-300 group text-left"
-              >
-                <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition">
-                   <Upload className="text-blue-600" size={24} />
+            {/* 2. 管理員介面邏輯 (重建版) */}
+            {adminTab === 'manage_db' ? (
+                renderDatabaseManager()
+            ) : adminTab === 'stats' ? (
+                <StatsView 
+                  masterList={masterList} 
+                  activities={activities} 
+                  onBack={() => setAdminTab('dashboard')} 
+                />
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                  {/* 按鈕: 匯入資料 */}
+                  <button onClick={() => document.getElementById('file-upload-input').click()} className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-xl border border-slate-100 hover:border-blue-200 transition-all duration-300 group text-left">
+                    <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition"><Upload className="text-blue-600" size={24} /></div>
+                    <h3 className="text-lg font-bold text-slate-800 mb-1">匯入學生資料</h3><p className="text-slate-500 text-xs">上載 CSV 更新名單</p>
+                    <input id="file-upload-input" type="file" className="hidden" accept=".csv" onChange={handleMasterFileChange} />
+                  </button>
+                  
+                  {/* 按鈕: 學校數據 */}
+                  <button onClick={() => setAdminTab('stats')} className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-xl border border-slate-100 hover:border-orange-200 transition-all duration-300 group text-left">
+                    <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition"><BarChart className="text-orange-600" size={24} /></div>
+                    <h3 className="text-lg font-bold text-slate-800 mb-1">學校數據中心</h3><p className="text-slate-500 text-xs">查看分佈及參與率</p>
+                  </button>
+                  
+                  {/* 按鈕: 資料庫管理 */}
+                  <button onClick={() => setAdminTab('manage_db')} className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-xl border border-slate-100 hover:border-purple-200 transition-all duration-300 group text-left">
+                    <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition"><Database className="text-purple-600" size={24} /></div>
+                    <h3 className="text-lg font-bold text-slate-800 mb-1">資料庫管理</h3><p className="text-slate-500 text-xs">進階數據操作</p>
+                  </button>
+                  
+                  {/* 按鈕: 活動點名 (V3.9.0) */}
+                  <button onClick={() => setCurrentView('attendance')} className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-xl border border-slate-100 hover:border-green-200 transition-all duration-300 group text-left relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition"><CheckSquare size={64} className="text-green-600 transform rotate-12"/></div>
+                    <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition"><CheckSquare className="text-green-600" size={24} /></div>
+                    <h3 className="text-lg font-bold text-slate-800 mb-1">活動點名系統</h3><p className="text-slate-500 text-xs">處理出席紀錄</p>
+                  </button>
                 </div>
-                <h3 className="text-lg font-bold text-slate-800 mb-1">匯入學生資料</h3>
-                <p className="text-slate-500 text-xs">上載 CSV 更新名單</p>
-                <input id="file-upload-input" type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleMasterFileChange} />
-              </button>
-
-              {/* 按鈕 2: 檢視統計 */}
-              <button 
-                onClick={() => setAdminTab('stats')}
-                className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-xl border border-slate-100 hover:border-orange-200 transition-all duration-300 group text-left"
-              >
-                <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition">
-                   <BarChart className="text-orange-600" size={24} />
-                </div>
-                <h3 className="text-lg font-bold text-slate-800 mb-1">學校數據中心</h3>
-                <p className="text-slate-500 text-xs">查看分佈及參與率</p>
-              </button>
-
-              {/* 按鈕 3: 資料庫管理 (選用) */}
-              <button 
-                onClick={() => setAdminTab('manage_db')}
-                className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-xl border border-slate-100 hover:border-purple-200 transition-all duration-300 group text-left"
-              >
-                <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition">
-                   <Database className="text-purple-600" size={24} />
-                </div>
-                <h3 className="text-lg font-bold text-slate-800 mb-1">資料庫管理</h3>
-                <p className="text-slate-500 text-xs">進階數據操作</p>
-              </button>
-
-              {/* 按鈕 4: 點名系統 (V3.9.0 新增) */}
-              <button 
-                onClick={() => setCurrentView('attendance')}
-                className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-xl border border-slate-100 hover:border-green-200 transition-all duration-300 group text-left relative overflow-hidden"
-              >
-                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition">
-                  <CheckSquare size={64} className="text-green-600 transform rotate-12"/>
-                </div>
-                <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition">
-                  <CheckSquare className="text-green-600" size={24} />
-                </div>
-                <h3 className="text-lg font-bold text-slate-800 mb-1">活動點名系統</h3>
-                <p className="text-slate-500 text-xs">處理出席紀錄</p>
-              </button>
-            </div>
-          )}
+            )}
         </div>
     );
 };
