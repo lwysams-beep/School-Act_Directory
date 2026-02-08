@@ -1267,12 +1267,260 @@ const StatsView = ({ masterList, activities, onBack }) => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col font-sans">
-      {renderTopNavBar()}
-      {currentView === 'student' && renderStudentView()}
-      {currentView === 'staff' && renderStaffView()}
-      {currentView === 'admin' && (user ? renderAdminView() : renderLoginView())}
-      {currentView === 'kiosk_result' && renderKioskResultView()}
+    <div className="min-h-screen flex flex-col bg-slate-50 font-sans text-slate-900">
+      {/* 頂部導航欄 */}
+      <header className="bg-white/80 backdrop-blur-md sticky top-0 z-50 border-b border-slate-200 shadow-sm">
+        <div className="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center">
+          <div className="flex items-center space-x-3" onClick={() => setCurrentView('student')}>
+             <div className="w-10 h-10 bg-gradient-to-tr from-blue-600 to-blue-400 rounded-xl flex items-center justify-center shadow-lg shadow-blue-200">
+               <Monitor className="text-white" size={20} />
+             </div>
+             <div>
+               <h1 className="text-lg font-black text-slate-800 tracking-tight leading-none">香海正覺蓮社</h1>
+               <p className="text-xs text-slate-500 font-bold tracking-widest">佛教正覺蓮社學校</p>
+             </div>
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            {user ? (
+               <div className="flex items-center bg-slate-100 rounded-full px-4 py-1.5 border border-slate-200">
+                 <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
+                 <span className="text-xs font-bold text-slate-600 mr-3 hidden md:block">{user.email}</span>
+                 <button onClick={handleLogout} className="text-slate-400 hover:text-red-500 transition"><LogOut size={16}/></button>
+               </div>
+            ) : (
+               <button onClick={() => setCurrentView(currentView === 'staff' ? 'student' : 'staff')} className={`p-2 rounded-xl transition-all duration-300 ${currentView === 'staff' ? 'bg-blue-100 text-blue-600 rotate-90' : 'hover:bg-slate-100 text-slate-400'}`}>
+                 {currentView === 'staff' ? <X size={20}/> : <Lock size={20}/>}
+               </button>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* 主要內容區 */}
+      <div className="flex-1 max-w-4xl mx-auto w-full p-4 md:p-6">
+        
+        {/* 1. 教職員登入畫面 */}
+        {currentView === 'staff' && !user && (
+          <div className="max-w-md mx-auto mt-10 p-6 bg-white rounded-2xl shadow-lg border border-slate-100 animate-in fade-in slide-in-from-bottom-4">
+             <div className="text-center mb-6">
+               <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                 <Lock className="text-blue-600" size={32} />
+               </div>
+               <h2 className="text-2xl font-bold text-slate-800">教職員 / 管理員登入</h2>
+               <p className="text-slate-500 text-sm mt-2">請輸入通行密碼以繼續</p>
+             </div>
+             <form onSubmit={handleLogin}>
+                <input type="password" value={loginPwd} onChange={(e) => setLoginPwd(e.target.value)} placeholder="請輸入密碼" className="w-full p-3 border border-slate-300 rounded-xl mb-4 focus:ring-2 focus:ring-blue-500 outline-none text-center text-lg tracking-widest"/>
+                <div className="flex gap-3">
+                  <button type="submit" className="flex-1 bg-blue-600 text-white p-3 rounded-xl font-bold hover:bg-blue-700 transition">登入</button>
+                  <button type="button" onClick={() => setCurrentView('student')} className="px-4 py-3 text-slate-500 hover:bg-slate-100 rounded-xl font-bold transition">取消</button>
+                </div>
+             </form>
+          </div>
+        )}
+
+        {/* 2. 管理員主控台 (已登入) */}
+        {(currentView === 'staff' || currentView === 'admin') && user && (
+           <div className="animate-in fade-in zoom-in duration-300">
+             {/* 檔案上傳隱藏欄位 */}
+             <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleMasterFileChange} />
+             
+             {/* 子功能切換 */}
+             {adminTab === 'manage_db' ? (
+                 renderDatabaseManager() // 呼叫原本的資料庫管理函數
+             ) : adminTab === 'stats' ? (
+                 <StatsView masterList={masterList} activities={activities} onBack={() => setAdminTab('dashboard')} />
+             ) : (
+                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    {/* 按鈕: 匯入資料 */}
+                    <button onClick={() => document.getElementById('file-upload-input').click()} className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-xl border border-slate-100 hover:border-blue-200 transition-all duration-300 group text-left">
+                      <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition"><Upload className="text-blue-600" size={24} /></div>
+                      <h3 className="text-lg font-bold text-slate-800 mb-1">匯入學生資料</h3><p className="text-slate-500 text-xs">上載 CSV 更新名單</p>
+                      <input id="file-upload-input" type="file" className="hidden" accept=".csv" onChange={handleMasterFileChange} />
+                    </button>
+                    {/* 按鈕: 學校數據 */}
+                    <button onClick={() => setAdminTab('stats')} className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-xl border border-slate-100 hover:border-orange-200 transition-all duration-300 group text-left">
+                      <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition"><BarChart className="text-orange-600" size={24} /></div>
+                      <h3 className="text-lg font-bold text-slate-800 mb-1">學校數據中心</h3><p className="text-slate-500 text-xs">查看分佈及參與率</p>
+                    </button>
+                    {/* 按鈕: 資料庫管理 */}
+                    <button onClick={() => setAdminTab('manage_db')} className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-xl border border-slate-100 hover:border-purple-200 transition-all duration-300 group text-left">
+                      <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition"><Database className="text-purple-600" size={24} /></div>
+                      <h3 className="text-lg font-bold text-slate-800 mb-1">資料庫管理</h3><p className="text-slate-500 text-xs">進階數據操作</p>
+                    </button>
+                    {/* 按鈕: 活動點名 (V3.9.0) */}
+                    <button onClick={() => setCurrentView('attendance')} className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-xl border border-slate-100 hover:border-green-200 transition-all duration-300 group text-left relative overflow-hidden">
+                      <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition"><CheckSquare size={64} className="text-green-600 transform rotate-12"/></div>
+                      <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition"><CheckSquare className="text-green-600" size={24} /></div>
+                      <h3 className="text-lg font-bold text-slate-800 mb-1">活動點名系統</h3><p className="text-slate-500 text-xs">處理出席紀錄</p>
+                    </button>
+                 </div>
+             )}
+           </div>
+        )}
+
+        {/* 3. 活動點名系統介面 (獨立視圖) */}
+        {currentView === 'attendance' && user && (
+            <AttendanceView masterList={masterList} activities={activities} db={db} onBack={() => setCurrentView('staff')} />
+        )}
+
+        {/* 4. 學生/家長查詢介面 (預設視圖) */}
+        {currentView === 'student' && (
+          <div className="space-y-6">
+             {/* 搜尋區塊 */}
+             <div className="bg-white p-2 rounded-2xl shadow-sm border border-slate-200 flex items-center">
+                <div className="flex-1 flex items-center px-4 border-r border-slate-100">
+                  <User className="text-slate-400 mr-2" size={20}/>
+                  <select value={selectedClass} onChange={(e) => setSelectedClass(e.target.value)} className="w-full p-2 bg-transparent outline-none font-bold text-slate-700">
+                    {['1','2','3','4','5','6'].map(grade => ['A','B','C','D','E'].map(c => <option key={`${grade}${c}`} value={`${grade}${c}`}>{`${grade}${c}班`}</option>)).flat()}
+                  </select>
+                </div>
+                <div className="w-24 px-4 flex items-center">
+                  <span className="text-slate-400 mr-2">#</span>
+                  <input type="number" value={selectedClassNo} onChange={(e) => setSelectedClassNo(e.target.value)} placeholder="學號" className="w-full p-2 bg-transparent outline-none font-bold text-slate-700"/>
+                </div>
+                {/* 搜尋按鈕邏輯 (這裡簡化，直接使用 Effect 監聽) */}
+             </div>
+
+             {/* 搜尋結果顯示 */}
+             {studentResult && (
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 animate-in fade-in slide-in-from-bottom-4">
+                  <div className="flex items-center space-x-4 mb-6 pb-4 border-b border-slate-100">
+                    <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-2xl font-bold text-blue-600">
+                      {studentResult.classCode}{studentResult.classNo}
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-bold text-slate-800">{studentResult.chiName}</h2>
+                      <p className="text-slate-500">{studentResult.engName}</p>
+                    </div>
+                  </div>
+                  <h3 className="text-lg font-bold text-slate-700 mb-4 flex items-center">
+                    <Activity className="mr-2 text-orange-500"/> 已報名活動 ({studentResult.activities?.length || 0})
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {studentResult.activities && studentResult.activities.length > 0 ? (
+                      studentResult.activities.map((item, idx) => (
+                        <div key={idx} className="bg-slate-50 hover:bg-white border border-slate-200 hover:border-blue-300 rounded-xl p-5 shadow-sm hover:shadow-md transition-all duration-300 relative overflow-hidden group">
+                           <div className="absolute top-0 right-0 p-3 opacity-5 group-hover:opacity-10 transition transform group-hover:scale-110"><CheckSquare size={64} className="text-blue-600" /></div>
+                           <h4 className="font-bold text-slate-800 text-lg mb-3 line-clamp-2">{item.activity}</h4>
+                           <div className="space-y-2 text-sm">
+                             <div className="flex items-center text-slate-600"><Clock size={16} className="mr-2 text-orange-500 flex-shrink-0" /><span>{item.time || '時間待定'}</span></div>
+                             <div className="flex items-center text-slate-600"><MapPin size={16} className="mr-2 text-blue-500 flex-shrink-0" /><span>{item.location || '地點待定'}</span></div>
+                           </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="col-span-full py-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-300 text-slate-400">沒有找到任何活動紀錄</div>
+                    )}
+                  </div>
+                </div>
+             )}
+
+             {/* 初始歡迎畫面 */}
+             {!studentResult && (
+                <div className="flex flex-col items-center justify-center h-64 mt-8 text-slate-400 bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-200">
+                   <div className="bg-slate-100 p-4 rounded-full mb-4 animate-bounce"><Search size={32} className="opacity-40" /></div>
+                   <p className="text-lg font-medium">請輸入班別及學號查詢活動</p>
+                   <p className="text-sm text-slate-400 mt-1">如需管理員權限請點選左上角鎖頭</p>
+                </div>
+             )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}; // App 結束
+
+// -----------------------------------------------------------------------------
+// 3. STATS VIEW COMPONENT (V3.9.3 - Anti-Crash)
+// -----------------------------------------------------------------------------
+const StatsView = ({ masterList, activities, onBack }) => {
+  // 安全數據處理
+  const safeList = useMemo(() => {
+    if (!Array.isArray(masterList)) return [];
+    return masterList.filter(s => s && typeof s === 'object');
+  }, [masterList]);
+
+  const stats = useMemo(() => {
+    const data = {
+      totalStudents: safeList.length,
+      byGrade: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0 },
+      byHouse: { 'R': 0, 'Y': 0, 'B': 0, 'G': 0, 'Unknown': 0 },
+      totalActivities: Array.isArray(activities) ? activities.length : 0,
+      activeStudents: 0
+    };
+
+    try {
+      safeList.forEach(student => {
+        const grade = student.classCode ? student.classCode.charAt(0) : 'Other';
+        if (data.byGrade[grade] !== undefined) data.byGrade[grade]++;
+        
+        // House Logic
+        const houseMap = { '紅': 'R', 'Red': 'R', 'R': 'R', '黃': 'Y', 'Yellow': 'Y', 'Y': 'Y', '藍': 'B', 'Blue': 'B', 'B': 'B', '綠': 'G', 'Green': 'G', 'G': 'G' };
+        const h = student.house || student.houseColor || 'Unknown';
+        const cleanHouse = houseMap[h] || houseMap[h.toString().trim()] || 'Unknown';
+        if (data.byHouse[cleanHouse] !== undefined) data.byHouse[cleanHouse]++;
+        else data.byHouse['Unknown']++;
+
+        if (Array.isArray(student.activities) && student.activities.length > 0) data.activeStudents++;
+      });
+    } catch (err) { console.error(err); }
+    return data;
+  }, [safeList, activities]);
+
+  const getPercent = (val, total) => (!total || total === 0) ? 0 : Math.round((val / total) * 100);
+
+  return (
+    <div className="bg-white p-6 rounded-xl shadow-lg animate-in fade-in duration-300 min-h-[500px]">
+      <div className="flex justify-between items-center mb-6 border-b pb-4">
+        <button onClick={onBack} className="flex items-center text-slate-500 hover:text-blue-600 transition">
+          <ArrowLeft className="mr-2" size={20} /> 返回主控台
+        </button>
+        <h2 className="text-2xl font-bold text-slate-800 flex items-center">
+          <BarChart className="mr-2 text-blue-600" /> 學校數據中心
+        </h2>
+        <div className="w-24"></div> 
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-2xl shadow-sm border border-blue-200">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-blue-600 font-bold uppercase text-xs tracking-wider">總學生人數</span>
+            <Users size={20} className="text-blue-400"/>
+          </div>
+          <div className="text-4xl font-black text-slate-800">{stats.totalStudents}</div>
+        </div>
+        <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-6 rounded-2xl shadow-sm border border-orange-200">
+          <div className="flex items-center justify-between mb-2">
+             <span className="text-orange-600 font-bold uppercase text-xs tracking-wider">活動項目</span>
+             <Activity size={20} className="text-orange-400"/>
+          </div>
+          <div className="text-4xl font-black text-slate-800">{stats.totalActivities}</div>
+        </div>
+        <div className="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-2xl shadow-sm border border-green-200">
+           <div className="flex items-center justify-between mb-2">
+             <span className="text-green-600 font-bold uppercase text-xs tracking-wider">參與率 (活躍)</span>
+             <TrendingUp size={20} className="text-green-400"/>
+          </div>
+          <div className="text-4xl font-black text-slate-800">{getPercent(stats.activeStudents, stats.totalStudents)}<span className="text-lg">%</span></div>
+        </div>
+      </div>
+      {/* 年級與社別分佈 (簡化版) */}
+      <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+          <h3 className="text-lg font-bold text-slate-700 mb-4">年級分佈</h3>
+          <div className="space-y-3">
+            {['1', '2', '3', '4', '5', '6'].map(g => (
+                <div key={g} className="flex items-center text-sm">
+                  <div className="w-12 font-bold text-slate-600">P.{g}</div>
+                  <div className="flex-1 bg-white rounded-full h-3 overflow-hidden shadow-inner mx-2">
+                    <div className="bg-blue-500 h-full" style={{width: `${getPercent(stats.byGrade[g], stats.totalStudents)}%`}}></div>
+                  </div>
+                  <div className="w-16 text-right text-slate-500">{stats.byGrade[g]} 人</div>
+                </div>
+            ))}
+          </div>
+      </div>
     </div>
   );
 };
