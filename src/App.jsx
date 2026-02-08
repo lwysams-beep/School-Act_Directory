@@ -1017,14 +1017,26 @@ const App = () => {
                     <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition"><CheckSquare className="text-green-600" size={24} /></div>
                     <h3 className="text-lg font-bold text-slate-800 mb-1">活動點名系統</h3><p className="text-slate-500 text-xs">處理出席紀錄</p>
                   </button>
-                </div>
+                  </div>
             )}
+            
+            {/* 3. 補回原本的學生視圖介面 (Student View Fallback) */}
+            {/* 這樣可以確保原本的 view === 'admin' 判斷式有正確的結尾 */}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-64 mt-8 text-slate-400 bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-200">
+               <div className="bg-slate-100 p-4 rounded-full mb-4">
+                 <Calendar size={32} className="opacity-40" />
+               </div>
+               <p className="text-lg font-medium">請輸入班別及學號查詢</p>
+               <p className="text-sm text-slate-400 mt-1">如需管理員權限請點選左上角鎖頭</p>
+            </div>
+          )}
         </div>
-    );
+      </div>
+    </div>
+  );
 };
-// ▲▲▲ App 在此正確結束 ▲▲▲
-
-// ▼▼▼ StatsView 在此正確開始 ▼▼▼
 const StatsView = ({ masterList, activities, onBack }) => {
     // 安全數據處理 (Data Sanitization)
     const safeList = useMemo(() => {
