@@ -1,7 +1,6 @@
-// [Part 1/2]
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-// V3.9: Added Roll Call, Staff Query Enhancements, Real-time Attendance Dot
-import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, Phone, CheckSquare, Square, RefreshCcw, X, Plus, Edit2, FileSpreadsheet, BarChart, History, TrendingUp, Filter, Cloud, UserX, PieChart, Download, Activity, Save as SaveIcon, Layers, Maximize, Palette, ChevronDown, List, Check, ClipboardCheck, Circle } from 'lucide-react';
+// V3.8.1: Stability Fix - Safe Math, Color Guards, Error Boundary, Remove risky icons
+import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, Phone, CheckSquare, Square, RefreshCcw, X, Plus, Edit2, FileSpreadsheet, BarChart, History, TrendingUp, Filter, Cloud, UserX, PieChart, Download, Activity, Save as SaveIcon, Layers, Maximize, Palette, ChevronDown } from 'lucide-react';
 
 // =============================================================================
 //  FIREBASE IMPORTS & CONFIGURATION
@@ -26,8 +25,7 @@ import {
   onSnapshot, 
   query, 
   orderBy,
-  writeBatch,
-  where
+  writeBatch
 } from "firebase/firestore";
 
 // *** 請在此填入你的真實 Firebase Config ***
@@ -336,626 +334,262 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
             </div>
 
             <div className="flex space-x-2 mb-6 overflow-x-auto pb-2">
-                <button onClick={() => setStatsViewMode('dashboard')} className={`px-4 py-2 rounded-lg flex items-center transition ${statsViewMode === 'dashboard' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}><PieChart size={18} className="mr-2"/> 總覽儀表板</button>
-                <button onClick={() => setStatsViewMode('activities')} className={`px-4 py-2 rounded-lg flex items-center transition ${statsViewMode === 'activities' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}><List size={18} className="mr-2"/> 活動統計</button>
-                <button onClick={() => setStatsViewMode('students')} className={`px-4 py-2 rounded-lg flex items-center transition ${statsViewMode === 'students' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}><User size={18} className="mr-2"/> 學生統計</button>
+                <button onClick={() => setStatsViewMode('dashboard')} className={`px-4 py-2 rounded-lg flex items-center transition ${statsViewMode === 'dashboard' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}><PieChart size={18} className="mr-2"/> 數據概覽</button>
+                <button onClick={() => setStatsViewMode('activities')} className={`px-4 py-2 rounded-lg flex items-center transition ${statsViewMode === 'activities' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}><Activity size={18} className="mr-2"/> 活動列表 ({filteredActivityList.length})</button>
+                <button onClick={() => setStatsViewMode('students')} className={`px-4 py-2 rounded-lg flex items-center transition ${statsViewMode === 'students' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}><Users size={18} className="mr-2"/> 學生監測 ({filteredStudentList.length})</button>
+                <button onClick={() => setStatsViewMode('logs')} className={`px-4 py-2 rounded-lg flex items-center transition ${statsViewMode === 'logs' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}><History size={18} className="mr-2"/> 系統紀錄</button>
             </div>
 
-            {/* DASHBOARD VIEW */}
-            {statsViewMode === 'dashboard' && (
-                <div className="animate-in fade-in space-y-6">
-                    {/* Top Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-5 rounded-xl text-white shadow-lg">
-                            <div className="text-blue-100 text-sm mb-1">總課外活動時數</div>
-                            <div className="text-3xl font-bold">{filteredTotalHours.toFixed(1)}h</div>
-                        </div>
-                        <div className="bg-white border p-5 rounded-xl shadow-sm">
-                            <div className="text-slate-500 text-sm mb-1">參與學生人數</div>
-                            <div className="text-2xl font-bold text-slate-800">{filteredStudentList.length}</div>
-                        </div>
-                        <div className="bg-white border p-5 rounded-xl shadow-sm">
-                            <div className="text-slate-500 text-sm mb-1">活動項目數</div>
-                            <div className="text-2xl font-bold text-slate-800">{filteredActivityList.length}</div>
-                        </div>
-                        <div className="bg-white border p-5 rounded-xl shadow-sm">
-                            <div className="text-slate-500 text-sm mb-1">平均每人時數</div>
-                            <div className="text-2xl font-bold text-slate-800">
-                                {(filteredStudentList.length > 0 ? filteredTotalHours / filteredStudentList.length : 0).toFixed(1)}h
-                            </div>
-                        </div>
+            {selectedActs.size > 0 && (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex justify-between items-center animate-in slide-in-from-top-2">
+                    <div className="text-sm text-blue-800">
+                        <span className="font-bold flex items-center"><Filter size={16} className="mr-1"/> 關注模式: </span>
+                        {Array.from(selectedActs).join(', ')}
                     </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                         {/* Activity Pie Chart */}
-                        <div className="bg-white border rounded-xl p-6 shadow-sm flex flex-col items-center">
-                            <h3 className="font-bold text-slate-700 mb-4 flex items-center"><Activity className="mr-2 text-blue-500"/> 活動時數佔比</h3>
-                            <div className="relative w-64 h-64 rounded-full mb-6 transition-all duration-500"
-                                style={{ background: `conic-gradient(${ghostPieGradient})` }}>
-                                <div className="absolute inset-4 bg-white rounded-full flex items-center justify-center flex-col">
-                                    <span className="text-3xl font-bold text-slate-700">{filteredTotalHours.toFixed(0)}h</span>
-                                    <span className="text-xs text-slate-400">Total</span>
-                                </div>
-                            </div>
-                            <div className="w-full grid grid-cols-2 gap-2 text-xs overflow-y-auto max-h-40">
-                                {activityStats.slice(0, 10).map((a, i) => (
-                                    <div key={i} 
-                                        onClick={() => toggleSelection(a.name)}
-                                        className={`flex items-center p-1 rounded cursor-pointer ${selectedActs.has(a.name) ? 'bg-blue-50' : 'hover:bg-slate-50'} ${selectedActs.size > 0 && !selectedActs.has(a.name) ? 'opacity-40' : ''}`}>
-                                        <div className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: getSafeColor(i) }}></div>
-                                        <span className="truncate flex-1">{a.name}</span>
-                                        <span className="font-bold">{a.hours.toFixed(0)}h</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Grade Bar Chart */}
-                        <div className="bg-white border rounded-xl p-6 shadow-sm">
-                            <div className="flex justify-between items-center mb-4">
-                                <h3 className="font-bold text-slate-700 flex items-center"><TrendingUp className="mr-2 text-green-500"/> 各級時數分佈</h3>
-                                <button onClick={exportGradeStats} className="text-xs bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded">匯出</button>
-                            </div>
-                            <div className="space-y-4">
-                                {gradeDistribution.map((g, i) => {
-                                    // Calculate filtered hours for this grade
-                                    let gradeH = 0;
-                                    Object.entries(g.details).forEach(([actName, h]) => {
-                                        if (selectedActs.size === 0 || selectedActs.has(actName)) gradeH += h;
-                                    });
-                                    const percent = (gradeH / maxGradeHours) * 100;
-                                    
-                                    return (
-                                        <div key={i} className="flex items-center">
-                                            <span className="w-10 text-sm font-bold text-slate-600">{g.grade}</span>
-                                            <div className="flex-1 h-8 bg-slate-100 rounded-lg mx-3 relative overflow-hidden group">
-                                                <div className="h-full bg-blue-500 rounded-lg transition-all duration-700 relative" style={{ width: `${percent}%` }}>
-                                                    <span className="absolute right-2 top-1 text-[10px] text-white font-bold">{gradeH.toFixed(0)}</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )
-                                })}
-                            </div>
-                            <div className="mt-4 pt-4 border-t relative h-8">
-                                <span className="absolute top-0 left-1 text-[10px] text-slate-400 bg-slate-50 px-1">Max: {maxGradeHours.toFixed(0)}h</span>
-                            </div>
-                        </div>
-                    </div>
+                    <button onClick={clearSelection} className="text-xs bg-white text-slate-500 border px-2 py-1 rounded hover:bg-red-50 hover:text-red-500 transition">清除篩選 (顯示全校)</button>
                 </div>
             )}
 
-            {/* ACTIVITY LIST WITH CATEGORY SELECTOR */}
-            {statsViewMode === 'activities' && (
-                <div className="bg-white border rounded-xl overflow-hidden">
-                    <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
-                        <h3 className="font-bold text-slate-700">活動統計列表 (新算法: 單節 x 節數)</h3>
-                        <button onClick={() => exportToCSV(filteredActivityList, 'Activity_Report')} className="text-sm bg-white border px-3 py-1 rounded hover:bg-slate-50">匯出 CSV</button>
-                    </div>
-                    <div className="overflow-y-auto max-h-[500px]">
-                        <table className="w-full text-left">
-                            <thead className="bg-slate-100 text-slate-600 text-sm sticky top-0">
-                                <tr>
-                                    <th className="p-3">排名</th>
-                                    <th className="p-3">活動名稱</th>
-                                    <th className="p-3">分類 (點擊修改)</th>
-                                    <th className="p-3 text-right">節數</th>
-                                    <th className="p-3 text-right">總時數</th>
-                                    <th className="p-3 text-center">操作</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y">
-                                {filteredActivityList.map((row, idx) => (
-                                    <tr key={idx} className="hover:bg-slate-50 group">
-                                        <td className="p-3 text-slate-500 font-mono">#{idx + 1}</td>
-                                        <td className="p-3 font-medium text-slate-800">{row.name}</td>
-                                        <td className="p-3">
-                                            <select 
-                                                value={row.category} 
-                                                onChange={(e) => handleCategoryChange(row.name, e.target.value)}
-                                                disabled={updatingCategory}
-                                                className="bg-transparent border-none text-sm text-slate-600 focus:ring-0 cursor-pointer hover:bg-slate-200 rounded px-2 py-1">
-                                                {CATEGORY_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                                            </select>
-                                        </td>
-                                        <td className="p-3 text-right text-slate-600">{row.count}</td>
-                                        <td className="p-3 text-right font-bold text-blue-600">{row.hours.toFixed(1)}</td>
-                                        <td className="p-3 text-center">
-                                            <button onClick={() => toggleSelection(row.name)} className={`text-xs px-2 py-1 rounded border ${selectedActs.has(row.name) ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>
-                                                {selectedActs.has(row.name) ? '已選' : '篩選'}
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            )}
-
-            {/* STUDENT LIST */}
-            {statsViewMode === 'students' && (
-                <div className="bg-white border rounded-xl overflow-hidden">
-                    <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
-                        <h3 className="font-bold text-slate-700">學生表現排名</h3>
-                        <button onClick={() => exportToCSV(filteredStudentList, 'Student_Stats')} className="text-sm bg-white border px-3 py-1 rounded hover:bg-slate-50">匯出 CSV</button>
-                    </div>
-                    <div className="overflow-y-auto max-h-[500px]">
-                        <table className="w-full text-left">
-                            <thead className="bg-slate-100 text-slate-600 text-sm sticky top-0">
-                                <tr>
-                                    <th className="p-3">排名</th>
-                                    <th className="p-3">班別</th>
-                                    <th className="p-3">姓名</th>
-                                    <th className="p-3 text-right">參與活動數</th>
-                                    <th className="p-3 text-right">總時數</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y">
-                                {filteredStudentList.slice(0, 200).map((s, idx) => ( // Limit rendering for perf
-                                    <tr key={idx} className="hover:bg-slate-50">
-                                        <td className="p-3 text-slate-500 font-mono">
-                                            {idx < 3 ? <span className="text-yellow-500 font-bold">TOP {idx+1}</span> : `#${idx + 1}`}
-                                        </td>
-                                        <td className="p-3">{s.classCode}</td>
-                                        <td className="p-3 font-medium">{s.chiName}</td>
-                                        <td className="p-3 text-right text-slate-600">{s.count}</td>
-                                        <td className="p-3 text-right font-bold text-blue-600">{s.hours.toFixed(1)}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                        {filteredStudentList.length > 200 && <div className="p-3 text-center text-slate-400 text-sm">顯示前 200 名...</div>}
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-};
-
-// -----------------------------------------------------------------------------
-// 4. ATTENDANCE VIEW COMPONENT (V3.9 - New Feature)
-// -----------------------------------------------------------------------------
-const AttendanceView = ({ activities, masterList, onBack }) => {
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [password, setPassword] = useState('');
-    const [viewMode, setViewMode] = useState('list'); // list or detail
-    const [selectedActivity, setSelectedActivity] = useState(null);
-    const [attendanceRecords, setAttendanceRecords] = useState({});
-    const [loading, setLoading] = useState(false);
-
-    // Login Check
-    const handleLogin = (e) => {
-        e.preventDefault();
-        if (password === 'how do you turn this on') {
-            setIsAuthenticated(true);
-        } else {
-            alert('密碼錯誤');
-        }
-    };
-
-    // Get Today's Date String
-    const getTodayStr = () => {
-        const d = new Date();
-        return d.toISOString().split('T')[0];
-    };
-
-    // Fetch Attendance Records for Today
-    useEffect(() => {
-        if (!isAuthenticated) return;
-        const today = getTodayStr();
-        // Simplified listener for today's records
-        const q = query(collection(db, "attendance_records"), where("date", "==", today));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const recs = {};
-            snapshot.docs.forEach(doc => {
-                const data = doc.data();
-                // Key: ActivityName-StudentKey
-                const key = `${data.activityName}-${data.studentKey}`;
-                recs[key] = data.status;
-            });
-            setAttendanceRecords(recs);
-        });
-        return () => unsubscribe();
-    }, [isAuthenticated]);
-
-    // Identify Today's Activities
-    const todayActivities = useMemo(() => {
-        const today = getTodayStr();
-        // Find all unique activity names that have a session today
-        const activeNames = new Set();
-        activities.forEach(item => {
-            if (item.specificDates && item.specificDates.includes(today)) {
-                activeNames.add(item.activity);
-            }
-        });
-        // Group by activity name
-        const groups = {};
-        activeNames.forEach(name => {
-            const students = activities.filter(a => a.activity === name).map(a => ({
-                ...a,
-                masterData: masterList.find(m => m.key === `${a.verifiedClass}-${a.verifiedName}`) || {}
-            }));
-            groups[name] = students;
-        });
-        return groups;
-    }, [activities, masterList]);
-
-    const handleMark = async (student, status) => {
-        if (!selectedActivity) return;
-        const today = getTodayStr();
-        const docId = `${today}_${student.verifiedClass}_${student.verifiedName}_${selectedActivity}`;
-        const record = {
-            date: today,
-            activityName: selectedActivity,
-            studentKey: `${student.verifiedClass}-${student.verifiedName}`,
-            studentName: student.verifiedName,
-            classCode: student.verifiedClass,
-            status: status,
-            timestamp: new Date().toISOString()
-        };
-        try {
-            await setDoc(doc(db, "attendance_records", docId), record);
-        } catch (err) {
-            console.error(err);
-            alert("點名失敗，請檢查網絡");
-        }
-    };
-
-    const exportAttendance = async () => {
-         // Export logic could be expanded to query all history, for now just export current view or alert
-         alert("功能開發中：請使用教職員通道查詢完整記錄");
-    };
-
-    if (!isAuthenticated) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-[600px] bg-slate-50">
-                <div className="bg-white p-8 rounded-2xl shadow-xl w-96 border-t-4 border-purple-500">
-                    <div className="flex justify-center mb-4">
-                        <div className="p-3 bg-purple-100 rounded-full"><ClipboardCheck size={32} className="text-purple-600"/></div>
-                    </div>
-                    <h2 className="text-2xl font-bold text-center text-slate-800 mb-6">點名系統登入</h2>
-                    <form onSubmit={handleLogin} className="space-y-4">
-                        <input 
-                            type="password" 
-                            value={password}
-                            onChange={e => setPassword(e.target.value)}
-                            className="w-full p-3 border rounded-xl focus:ring-2 focus:ring-purple-500 outline-none transition"
-                            placeholder="請輸入密碼..."
-                        />
-                        <button type="submit" className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-xl transition shadow-lg shadow-purple-200">
-                            進入系統
-                        </button>
-                    </form>
-                    <button onClick={onBack} className="w-full mt-4 text-slate-400 text-sm hover:text-slate-600">返回主頁</button>
-                </div>
-            </div>
-        );
-    }
-
-    return (
-        <div className="bg-white min-h-screen">
-            {/* Header */}
-            <div className="bg-purple-600 text-white p-4 sticky top-0 z-20 shadow-md flex justify-between items-center">
-                <div className="flex items-center">
-                    <button onClick={() => selectedActivity ? setSelectedActivity(null) : onBack()} className="mr-4 hover:bg-white/20 p-2 rounded-full transition">
-                        <ArrowLeft size={24} />
-                    </button>
-                    <h1 className="text-xl font-bold flex items-center">
-                        <ClipboardCheck className="mr-2" /> 
-                        {selectedActivity ? selectedActivity : `今日點名 (${getTodayStr()})`}
-                    </h1>
-                </div>
-                {!selectedActivity && <button onClick={exportAttendance} className="bg-white/20 hover:bg-white/30 px-3 py-1 rounded text-sm">匯出記錄</button>}
-            </div>
-
-            <div className="p-4 max-w-4xl mx-auto">
-                {!selectedActivity ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {Object.keys(todayActivities).length === 0 ? (
-                            <div className="col-span-2 text-center py-20 text-slate-400">
-                                <Calendar size={48} className="mx-auto mb-4 opacity-50"/>
-                                <p>今日沒有安排任何活動</p>
-                            </div>
-                        ) : (
-                            Object.entries(todayActivities).map(([name, list]) => (
-                                <div key={name} onClick={() => setSelectedActivity(name)} 
-                                    className="bg-white border rounded-xl p-5 hover:shadow-lg transition cursor-pointer group hover:border-purple-300">
-                                    <div className="flex justify-between items-start mb-2">
-                                        <h3 className="font-bold text-lg text-slate-800 group-hover:text-purple-700">{name}</h3>
-                                        <span className="bg-slate-100 text-slate-600 text-xs px-2 py-1 rounded-full">{list.length} 人</span>
-                                    </div>
-                                    <div className="flex items-center text-slate-500 text-sm">
-                                        <Clock size={16} className="mr-1"/> {list[0].time}
-                                    </div>
-                                    {/* Progress Bar for Attendance */}
-                                    <div className="mt-4 h-2 bg-slate-100 rounded-full overflow-hidden">
-                                        <div className="h-full bg-green-500" style={{ width: `${(list.filter(s => attendanceRecords[`${name}-${s.verifiedClass}-${s.verifiedName}`]).length / list.length) * 100}%` }}></div>
-                                    </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                ) : (
-                    <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-                         <div className="divide-y">
-                            {todayActivities[selectedActivity].map((student, idx) => {
-                                const key = `${selectedActivity}-${student.verifiedClass}-${student.verifiedName}`;
-                                const status = attendanceRecords[key];
-                                return (
-                                    <div key={idx} className="p-4 flex items-center justify-between hover:bg-slate-50">
-                                        <div className="flex items-center">
-                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold mr-4 ${status === 'present' ? 'bg-green-100 text-green-600' : status === 'absent' ? 'bg-red-100 text-red-600' : status === 'affair' ? 'bg-yellow-100 text-yellow-600' : 'bg-slate-200 text-slate-500'}`}>
-                                                {student.verifiedClass}
-                                            </div>
-                                            <div>
-                                                <div className="font-bold text-slate-800">{student.verifiedName}</div>
-                                                <div className="text-xs text-slate-500">{student.masterData.engName}</div>
-                                            </div>
-                                        </div>
-                                        <div className="flex space-x-2">
-                                            <button onClick={() => handleMark(student, 'present')} className={`p-2 rounded-lg flex flex-col items-center w-16 transition ${status === 'present' ? 'bg-green-500 text-white shadow-md' : 'bg-slate-100 text-slate-400 hover:bg-green-100'}`}>
-                                                <CheckCircle size={20} className="mb-1"/> <span className="text-[10px]">出席</span>
-                                            </button>
-                                            <button onClick={() => handleMark(student, 'absent')} className={`p-2 rounded-lg flex flex-col items-center w-16 transition ${status === 'absent' ? 'bg-red-500 text-white shadow-md' : 'bg-slate-100 text-slate-400 hover:bg-red-100'}`}>
-                                                <X size={20} className="mb-1"/> <span className="text-[10px]">病假</span>
-                                            </button>
-                                            <button onClick={() => handleMark(student, 'affair')} className={`p-2 rounded-lg flex flex-col items-center w-16 transition ${status === 'affair' ? 'bg-yellow-500 text-white shadow-md' : 'bg-slate-100 text-slate-400 hover:bg-yellow-100'}`}>
-                                                <FileText size={20} className="mb-1"/> <span className="text-[10px]">事假</span>
-                                            </button>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                         </div>
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-};
-// [Part 2/2]
-
-// -----------------------------------------------------------------------------
-// 5. STAFF VIEW COMPONENT (V3.9 - Enhanced with Dropdown & Live Status)
-// -----------------------------------------------------------------------------
-const StaffView = ({ activities, masterList, onBack }) => {
-    const [searchTerm, setSearchTerm] = useState('');
-    const [searchResult, setSearchResult] = useState(null);
-    const [selectedActivityDetail, setSelectedActivityDetail] = useState(null); // For Dropdown
-    const [todayAttendance, setTodayAttendance] = useState({}); // Real-time status
-
-    // V3.9: Real-time Attendance Listener for "The Dot"
-    useEffect(() => {
-        const today = new Date().toISOString().split('T')[0];
-        const q = query(collection(db, "attendance_records"), where("date", "==", today));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const map = {};
-            snapshot.docs.forEach(doc => {
-                const data = doc.data();
-                // Key: StudentKey (Class-Name) -> Status
-                map[data.studentKey] = data.status; 
-            });
-            setTodayAttendance(map);
-        });
-        return () => unsubscribe();
-    }, []);
-
-    const handleSearch = () => {
-        if (!searchTerm) return;
-        const term = searchTerm.trim().toLowerCase();
-        
-        // Find students
-        const students = masterList.filter(s => 
-            s.key.toLowerCase().includes(term) || 
-            s.engName.toLowerCase().includes(term) ||
-            s.chiName.includes(term)
-        );
-
-        const res = students.map(stu => {
-            const acts = activities.filter(a => 
-                a.verifiedName === stu.chiName && a.verifiedClass === stu.classCode
-            );
-            return { student: stu, activities: acts };
-        });
-
-        setSearchResult(res);
-        setSelectedActivityDetail(null); // Clear activity view if searching
-    };
-
-    // V3.9: Get Unique Activity List for Dropdown
-    const uniqueActivities = useMemo(() => {
-        const names = [...new Set(activities.map(a => a.activity))];
-        return names.sort();
-    }, [activities]);
-
-    const handleActivitySelect = (actName) => {
-        if (!actName) {
-            setSelectedActivityDetail(null);
-            return;
-        }
-        // Gather details
-        const acts = activities.filter(a => a.activity === actName);
-        if (acts.length === 0) return;
-
-        // Extract generic info from the first entry (assuming location/dates similar)
-        const info = {
-            name: actName,
-            dates: acts[0].specificDates || [],
-            location: acts[0].location || '未指定',
-            students: acts.map(a => ({
-                class: a.verifiedClass,
-                name: a.verifiedName
-            }))
-        };
-        setSelectedActivityDetail(info);
-        setSearchResult(null); // Clear search if selecting activity
-    };
-
-    // V3.9: Helper to get Dot Color
-    const getStatusDot = (stu) => {
-        // 1. Check if student has activity TODAY
-        const today = new Date().toISOString().split('T')[0];
-        // Find if this student has any activity today in the activities list
-        const hasClassToday = activities.some(a => 
-            a.verifiedName === stu.chiName && 
-            a.verifiedClass === stu.classCode && 
-            a.specificDates && 
-            a.specificDates.includes(today)
-        );
-
-        if (!hasClassToday) return null; // No dot if no class
-
-        const status = todayAttendance[stu.key];
-        if (status === 'present') return <div className="w-3 h-3 rounded-full bg-green-500 ml-2 animate-pulse" title="上課中"></div>;
-        if (status === 'absent') return <div className="w-3 h-3 rounded-full bg-red-500 ml-2" title="缺席"></div>;
-        if (status === 'affair') return <div className="w-3 h-3 rounded-full bg-yellow-500 ml-2" title="事假"></div>;
-        
-        // Has class but no record yet -> Grey
-        return <div className="w-3 h-3 rounded-full bg-slate-400 ml-2" title="未點名"></div>;
-    };
-
-    return (
-        <div className="bg-slate-50 min-h-screen">
-             <div className="bg-white shadow-sm sticky top-0 z-10 p-4">
-                <div className="max-w-3xl mx-auto flex items-center justify-between">
-                    <button onClick={onBack} className="flex items-center text-slate-500 hover:text-blue-600">
-                        <ArrowLeft size={20} className="mr-1"/> 返回
-                    </button>
-                    <h1 className="font-bold text-lg text-slate-800">教職員查詢通道 (V3.9)</h1>
-                </div>
-            </div>
-
-            <div className="max-w-3xl mx-auto p-4 space-y-6">
-                
-                {/* Search Bar */}
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-blue-100">
-                    <div className="flex gap-2 mb-4">
-                        <input 
-                            type="text" 
-                            className="flex-1 p-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50"
-                            placeholder="輸入學生姓名或班別 (例如: 1A, 陳大文)..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                        />
-                        <button onClick={handleSearch} className="bg-blue-600 hover:bg-blue-700 text-white px-6 rounded-xl font-bold transition flex items-center">
-                            <Search size={20} className="mr-2"/> 搜尋
-                        </button>
-                    </div>
-
-                    {/* V3.9: Activity Dropdown */}
-                    <div className="pt-4 border-t flex items-center">
-                        <label className="text-slate-500 text-sm font-bold mr-3 flex items-center"><List size={16} className="mr-1"/> 快速查看活動詳情:</label>
-                        <select 
-                            className="flex-1 p-2 border rounded-lg text-sm bg-white hover:bg-slate-50 cursor-pointer outline-none focus:ring-2 focus:ring-blue-300"
-                            onChange={(e) => handleActivitySelect(e.target.value)}
-                        >
-                            <option value="">-- 請選擇活動 --</option>
-                            {uniqueActivities.map(act => (
-                                <option key={act} value={act}>{act}</option>
-                            ))}
-                        </select>
-                    </div>
-                </div>
-
-                {/* V3.9: Activity Detail View */}
-                {selectedActivityDetail && (
-                     <div className="bg-white rounded-2xl shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4">
-                        <div className="bg-blue-600 p-4 text-white">
-                            <h2 className="text-xl font-bold flex items-center">
-                                <Activity className="mr-2"/> {selectedActivityDetail.name}
-                            </h2>
-                        </div>
-                        <div className="p-6 space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="bg-slate-50 p-3 rounded-lg flex items-start">
-                                    <MapPin className="text-blue-500 mt-1 mr-2" size={18}/>
-                                    <div>
-                                        <div className="text-xs text-slate-500 font-bold uppercase">地點</div>
-                                        <div className="font-medium text-slate-800">{selectedActivityDetail.location}</div>
-                                    </div>
-                                </div>
-                                <div className="bg-slate-50 p-3 rounded-lg flex items-start">
-                                    <Calendar className="text-orange-500 mt-1 mr-2" size={18}/>
-                                    <div>
-                                        <div className="text-xs text-slate-500 font-bold uppercase">舉行日期</div>
-                                        <div className="text-sm font-medium text-slate-800">
-                                            {selectedActivityDetail.dates.length > 0 
-                                                ? selectedActivityDetail.dates.join(', ') 
-                                                : "恆常 / 未指定"}
-                                        </div>
-                                    </div>
-                                </div>
+            <div className="flex-1 overflow-y-auto">
+                {statsViewMode === 'dashboard' && (
+                    <div className="flex flex-col space-y-12 pb-12">
+                        
+                        {/* 1. PIE CHART */}
+                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col md:flex-row items-center md:items-start relative min-h-[400px]">
+                            <div className="absolute top-4 left-4 z-20">
+                                 <button onClick={() => exportToCSV(filteredActivityList, 'Activity_Hours_Report')} className="text-xs bg-indigo-600 text-white border px-3 py-1.5 rounded flex items-center hover:bg-indigo-700 shadow-md transition"><Download size={14} className="mr-1"/> 匯出 CSV</button>
                             </div>
                             
-                            <div>
-                                <h3 className="text-sm font-bold text-slate-500 mb-2 uppercase flex items-center"><Users size={16} className="mr-1"/> 參加名單 ({selectedActivityDetail.students.length}人)</h3>
-                                <div className="max-h-60 overflow-y-auto bg-slate-50 rounded-lg p-2 grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                    {selectedActivityDetail.students.map((s, idx) => (
-                                        <div key={idx} className="flex items-center p-2 bg-white rounded border text-sm">
-                                            <span className="font-bold text-blue-600 mr-2 w-6">{s.class}</span>
-                                            <span>{s.name}</span>
+                            <div className="flex-1 flex flex-col items-center justify-center p-4 pt-10">
+                                <h3 className="font-bold text-slate-700 mb-6 flex items-center text-lg"><Clock className="mr-2 text-orange-500"/> 活動總時數分佈 (真實比例)</h3>
+                                <div className="relative w-72 h-72 rounded-full shadow-2xl border-4 border-white transition-all duration-500"
+                                    style={{ background: `conic-gradient(${ghostPieGradient})` }}
+                                >
+                                    <div className="absolute inset-0 m-auto w-36 h-36 bg-slate-50 rounded-full flex flex-col items-center justify-center shadow-inner">
+                                        <div className="text-xs text-slate-400 mb-1">
+                                            {selectedActs.size > 0 ? "已選 / 總計" : "總學時"}
+                                        </div>
+                                        <div className="flex items-baseline">
+                                            {selectedActs.size > 0 && <span className="text-2xl font-bold text-blue-600 mr-1">{filteredTotalHours.toFixed(0)}</span>}
+                                            {selectedActs.size > 0 && <span className="text-slate-400">/</span>}
+                                            <span className={`font-bold text-slate-800 ${selectedActs.size > 0 ? 'text-lg ml-1' : 'text-4xl'}`}>{totalHours.toFixed(0)}</span>
+                                        </div>
+                                        <span className="text-xs text-slate-400">Hours</span>
+                                    </div>
+                                </div>
+                                <p className="text-xs text-slate-400 mt-4">點擊右側圖例進行多項對比</p>
+                            </div>
+
+                            <div className="w-full md:w-80 h-96 border-l border-slate-200 pl-0 md:pl-6 overflow-y-auto">
+                                <h4 className="text-xs font-bold text-slate-400 uppercase mb-3 sticky top-0 bg-slate-50 py-2 z-10 flex justify-between">
+                                    <span>圖例 (點選切換)</span>
+                                    {selectedActs.size > 0 && <span className="text-blue-500">已選 {selectedActs.size} 項</span>}
+                                </h4>
+                                <div className="space-y-1">
+                                    {activityStats.map((a, i) => {
+                                        const isSelected = selectedActs.size === 0 || selectedActs.has(a.name);
+                                        const isDimmed = selectedActs.size > 0 && !isSelected;
+                                        return (
+                                            <button 
+                                                key={i} 
+                                                onClick={() => toggleSelection(a.name)}
+                                                className={`w-full flex items-center justify-between p-2 rounded text-xs transition-all duration-200 
+                                                    ${isSelected ? 'bg-white shadow ring-2 ring-blue-500 scale-[1.02] z-10' : 'hover:bg-white hover:shadow-sm'}
+                                                    ${isDimmed ? 'opacity-40 grayscale' : 'opacity-100'}
+                                                `}
+                                            >
+                                                <div className="flex items-center truncate">
+                                                    <span className="w-3 h-3 rounded-full mr-2 flex-shrink-0" style={{backgroundColor: getSafeColor(i)}}></span>
+                                                    <span className="truncate max-w-[120px]" title={a.name}>{a.name}</span>
+                                                </div>
+                                                <div className="font-bold text-slate-600">{((a.hours/(totalHours||1))*100).toFixed(1)}%</div>
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 2. CATEGORY CHART */}
+                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col md:flex-row items-center md:items-start relative min-h-[300px]">
+                            <div className="absolute top-4 left-4 z-20">
+                                 <button onClick={exportCategoryStats} className="text-xs bg-indigo-600 text-white border px-3 py-1.5 rounded flex items-center hover:bg-indigo-700 shadow-md transition"><Download size={14} className="mr-1"/> 匯出 CSV</button>
+                            </div>
+                            <div className="flex-1 flex flex-col items-center justify-center p-4 pt-10">
+                                <h3 className="font-bold text-slate-700 mb-6 flex items-center text-lg"><Palette className="mr-2 text-purple-500"/> 課程範疇分佈 (可手動修正)</h3>
+                                <div className="relative w-64 h-64 rounded-full shadow-xl border-4 border-white" style={{ background: `conic-gradient(${categoryPieGradient})` }}>
+                                    <div className="absolute inset-0 m-auto w-32 h-32 bg-slate-50 rounded-full flex flex-col items-center justify-center shadow-inner">
+                                        <span className="text-lg font-bold text-slate-600">分類統計</span>
+                                    </div>
+                                </div>
+                                <p className="text-xs text-slate-400 mt-4">前往「活動列表」即可手動更改分類</p>
+                            </div>
+                            <div className="w-full md:w-64 p-4">
+                                <h4 className="text-xs font-bold text-slate-400 uppercase mb-3">類別圖例</h4>
+                                <div className="space-y-2">
+                                    {categoryStats.map((cat, i) => (
+                                        <div key={i} className="flex items-center justify-between p-2 bg-white rounded shadow-sm">
+                                            <div className="flex items-center"><span className="w-3 h-3 rounded-full mr-2" style={{backgroundColor: CATEGORY_COLORS[cat.name] || '#94a3b8'}}></span><span className="text-xs font-bold">{cat.name}</span></div>
+                                            <div className="text-xs font-mono">{((cat.hours/(totalHours||1))*100).toFixed(1)}%</div>
                                         </div>
                                     ))}
                                 </div>
                             </div>
                         </div>
-                     </div>
+
+                        {/* 3. STACKED BAR CHART */}
+                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 relative flex flex-col h-[600px]">
+                            <div className="flex flex-col md:flex-row justify-between items-start mb-6">
+                                <div className="flex items-center space-x-4 mb-2 md:mb-0">
+                                    <button onClick={exportGradeStats} className="text-xs bg-indigo-600 text-white border px-3 py-1.5 rounded flex items-center hover:bg-indigo-700 shadow-md transition"><Download size={14} className="mr-1"/> 匯出 CSV</button>
+                                </div>
+                                <div className="text-right">
+                                    <h3 className="font-bold text-slate-700 text-lg flex items-center justify-end"><TrendingUp className="mr-2 text-green-500"/> 各級總時數分佈 (固定比例)</h3>
+                                    <p className="text-xs text-slate-500 mt-1">
+                                        {selectedActs.size > 0 ? '灰色: 該級總時數 | 彩色: 所選活動佔比' : '顯示全校所有活動堆疊'}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="flex-1 flex items-end justify-between space-x-8 border-b-2 border-slate-300 pb-0 px-4 mx-4 relative">
+                                {gradeDistribution.map((g) => {
+                                    const maxScale = maxGradeHours; 
+                                    const ghostHeightPct = (g.total / (maxScale || 1)) * 100;
+
+                                    const activeItems = Object.entries(g.details)
+                                        .filter(([name]) => selectedActs.size === 0 || selectedActs.has(name))
+                                        .sort((a,b) => b[1] - a[1]); 
+                                    const selectedTotalHours = activeItems.reduce((acc, cur) => acc + cur[1], 0);
+                                    const activeHeightPct = (selectedTotalHours / (maxScale || 1)) * 100;
+
+                                    return (
+                                        <div key={g.grade} className="flex flex-col items-center flex-1 h-full relative group">
+                                            
+                                            {selectedActs.size > 0 && (
+                                                <div 
+                                                    className="w-full absolute bottom-0 bg-slate-200 rounded-t-sm transition-all duration-700 pointer-events-none" 
+                                                    style={{height: `${ghostHeightPct}%`}}
+                                                />
+                                            )}
+
+                                            <div 
+                                                className={`w-full absolute bottom-0 flex flex-col-reverse rounded-t-sm overflow-hidden transition-all duration-700 ${selectedActs.size > 0 ? 'w-4/5 z-10 shadow-lg left-1/2 -translate-x-1/2' : 'bg-slate-200'}`}
+                                                style={{height: `${activeHeightPct}%`}}
+                                            >
+                                                {activeItems.map(([actName, hrs], idx) => {
+                                                    const colorIdx = getActColorIndex(actName);
+                                                    const color = getSafeColor(colorIdx);
+                                                    const pctOfStack = (hrs / (selectedTotalHours || 1)) * 100;
+                                                    return (
+                                                        <div key={actName} className="w-full relative" style={{height: `${pctOfStack}%`, backgroundColor: color}} />
+                                                    );
+                                                })}
+                                            </div>
+
+                                            <div className="absolute w-full text-center -top-6 transition-all duration-500" style={{bottom: `${Math.max(ghostHeightPct, activeHeightPct) + 2}%`}}>
+                                                <span className="text-xs font-bold text-slate-600 bg-white/80 px-1 rounded">
+                                                    {selectedActs.size > 0 ? selectedTotalHours.toFixed(0) : g.total.toFixed(0)}h
+                                                </span>
+                                            </div>
+
+                                            {/* Hover Tooltip */}
+                                            <div className="hidden group-hover:block absolute bottom-1/2 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-xs p-3 rounded-lg shadow-xl z-50 w-48 pointer-events-none">
+                                                <div className="font-bold border-b border-slate-600 pb-1 mb-1">{g.grade} 統計詳情</div>
+                                                <div className="flex justify-between mb-1"><span>全級總時數:</span> <span className="font-mono">{g.total.toFixed(1)}h</span></div>
+                                                {selectedActs.size > 0 && (
+                                                    <div className="flex justify-between text-yellow-400"><span>所選活動:</span> <span className="font-mono">{selectedTotalHours.toFixed(1)}h</span></div>
+                                                )}
+                                            </div>
+
+                                            <div className="absolute -bottom-8 w-full text-center">
+                                                <div className="text-sm font-bold text-slate-700">{g.grade}</div>
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                                <div className="absolute left-0 top-0 h-full border-l border-dashed border-slate-300 pointer-events-none">
+                                    <span className="absolute top-0 left-1 text-[10px] text-slate-400 bg-slate-50 px-1">Max: {maxGradeHours.toFixed(0)}h</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 )}
 
-                {/* Search Results */}
-                {searchResult && (
-                    <div className="space-y-4">
-                        <h2 className="text-slate-500 font-bold text-sm ml-1">搜尋結果: {searchResult.length} 位學生</h2>
-                        {searchResult.length === 0 ? (
-                            <div className="text-center p-10 bg-white rounded-2xl border border-dashed text-slate-400">
-                                找不到相關學生
-                            </div>
-                        ) : (
-                            searchResult.map(({ student, activities }, idx) => (
-                                <div key={idx} className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition">
-                                    <div className="flex items-start justify-between border-b pb-3 mb-3">
-                                        <div className="flex items-center">
-                                            <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-lg mr-4">
-                                                {student.classCode}
+                {/* V3.8: ACTIVITY LIST WITH CATEGORY SELECTOR */}
+                {statsViewMode === 'activities' && (
+                    <div className="bg-white border rounded-xl overflow-hidden">
+                        <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
+                            <h3 className="font-bold text-slate-700">活動統計列表 (新算法: 單節 x 節數)</h3>
+                            <button onClick={() => exportToCSV(filteredActivityList, 'Activity_Report')} className="text-sm bg-white border px-3 py-1 rounded hover:bg-slate-50 flex items-center text-blue-600 border-blue-200"><Download size={14} className="mr-1"/> 匯出 CSV</button>
+                        </div>
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-slate-100 text-slate-500 uppercase"><tr><th className="p-3">活動名稱</th><th className="p-3 w-48">類別 (可手動更改)</th><th className="p-3 text-right">總人次</th><th className="p-3 text-right">總學時</th></tr></thead>
+                            <tbody className="divide-y">
+                                {filteredActivityList.map((a, i) => (
+                                    <tr key={i} className="hover:bg-slate-50">
+                                        <td className="p-3 font-medium flex items-center">
+                                            <span className="w-2 h-2 rounded-full mr-2" style={{backgroundColor: getSafeColor(getActColorIndex(a.name))}}></span>
+                                            {a.name}
+                                        </td>
+                                        <td className="p-3">
+                                            <div className="relative group/cat">
+                                                <select 
+                                                    className="w-full text-xs p-1 border rounded bg-slate-50 hover:bg-white focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
+                                                    value={a.category}
+                                                    disabled={updatingCategory}
+                                                    onChange={(e) => handleCategoryChange(a.name, e.target.value)}
+                                                >
+                                                    {CATEGORY_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                                </select>
+                                                {updatingCategory && <span className="absolute right-0 top-0 text-[8px] text-blue-500">更新中...</span>}
                                             </div>
-                                            <div>
-                                                <div className="font-bold text-lg text-slate-800 flex items-center">
-                                                    {student.chiName}
-                                                    {/* V3.9: Real-time Status Dot */}
-                                                    {getStatusDot(student)}
-                                                </div>
-                                                <div className="text-slate-400 text-sm">{student.engName}</div>
-                                            </div>
-                                        </div>
-                                        <div className="text-right">
-                                            <span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-xs font-bold">
-                                                {activities.length} 項活動
-                                            </span>
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="space-y-2">
-                                        {activities.length > 0 ? activities.map((act, i) => (
-                                            <div key={i} className="flex items-center text-sm p-2 hover:bg-slate-50 rounded-lg transition">
-                                                <div className="w-2 h-2 rounded-full bg-blue-400 mr-3"></div>
-                                                <div className="flex-1">
-                                                    <span className="font-medium text-slate-700">{act.activity}</span>
-                                                    <div className="text-xs text-slate-400 flex items-center mt-1">
-                                                        <Clock size={12} className="mr-1"/> {act.time}
-                                                        <span className="mx-2">|</span>
-                                                        <MapPin size={12} className="mr-1"/> {act.location}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )) : (
-                                            <div className="text-slate-400 text-sm italic pl-4">沒有參與任何活動</div>
-                                        )}
-                                    </div>
-                                </div>
-                            ))
-                        )}
+                                        </td>
+                                        <td className="p-3 text-right">{a.count}</td>
+                                        <td className="p-3 text-right font-bold text-blue-600">{a.hours.toFixed(1)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+
+                {statsViewMode === 'logs' && (
+                    <div className="bg-white border rounded-xl overflow-hidden">
+                        <div className="p-4 bg-slate-50 border-b"><h3 className="font-bold text-slate-700">查詢日誌 (Audit Log)</h3></div>
+                        <table className="w-full text-sm text-left"><thead className="bg-slate-100 text-slate-500"><tr><th className="p-3">日期</th><th className="p-3">時間</th><th className="p-3">查詢班別</th><th className="p-3">學生姓名</th><th className="p-3">結果</th></tr></thead>
+                        <tbody>{queryLogs.length > 0 ? queryLogs.map((log, i) => (
+                            <tr key={i} className="border-b last:border-0 hover:bg-white">
+                                <td className="p-3 text-slate-600">{log.dateStr}</td>
+                                <td className="p-3 font-mono text-slate-500 text-xs">{log.timeStr}</td>
+                                <td className="p-3 font-bold text-slate-800">{log.class} ({log.classNo})</td>
+                                <td className="p-3">{log.name}</td>
+                                <td className="p-3">{log.success ? <span className="text-green-600 text-xs bg-green-100 px-2 py-1 rounded">成功</span> : <span className="text-red-500 text-xs">無記錄</span>}</td>
+                            </tr>)) : (<tr><td colSpan="5" className="p-8 text-center text-slate-400">暫無查詢紀錄</td></tr>)}</tbody>
+                        </table>
+                    </div>
+                )}
+
+                {statsViewMode === 'students' && (
+                    <div className="bg-white border rounded-xl overflow-hidden">
+                            <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
+                            <h3 className="font-bold text-slate-700 flex items-center"><AlertTriangle className="mr-2 text-orange-500" size={18}/> 學生參與度監測</h3>
+                            <button onClick={() => exportToCSV(filteredStudentList, 'Student_Participation')} className="text-sm bg-white border px-3 py-1 rounded hover:bg-slate-50 flex items-center text-blue-600 border-blue-200"><Download size={14} className="mr-1"/> 匯出 CSV</button>
+                        </div>
+                        <div className="max-h-[500px] overflow-y-auto">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-slate-100 text-slate-500 uppercase sticky top-0"><tr><th className="p-3">班別 (學號)</th><th className="p-3">姓名</th><th className="p-3 text-right">參與時數</th><th className="p-3 text-center">狀態</th></tr></thead>
+                            <tbody className="divide-y">
+                                {filteredStudentList.map((s, i) => (
+                                    <tr key={i} className={`hover:bg-slate-50 ${s.hours === 0 ? 'bg-red-50' : ''}`}>
+                                        <td className="p-3 text-slate-600">{s.classCode} ({s.classNo})</td>
+                                        <td className="p-3 font-bold">{s.chiName}</td>
+                                        <td className="p-3 text-right">{s.hours.toFixed(1)}</td>
+                                        <td className="p-3 text-center">{s.hours === 0 ? <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded font-bold">關注</span> : <span className="text-xs text-green-600">正常</span>}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        </div>
                     </div>
                 )}
             </div>
@@ -964,278 +598,841 @@ const StaffView = ({ activities, masterList, onBack }) => {
 };
 
 // -----------------------------------------------------------------------------
-// 6. ADMIN PANEL (V3.8 - Maintained for Admin Tasks)
+// 4. ATTENDANCE VIEW COMPONENT (V3.9.0 - New Feature)
 // -----------------------------------------------------------------------------
-const AdminPanel = ({ activities, setActivities, masterList, setMasterList, onLogout }) => {
-    // ... (Keeping AdminPanel logic same as V3.8 for stability, shortened for brevity but functional) ...
-    // Note: For this task, assuming the user knows the AdminPanel is standard. 
-    // To save lines, I will provide the essential render structure.
-    
-    const [activeTab, setActiveTab] = useState('activities');
-    const [uploading, setUploading] = useState(false);
-    const [showStats, setShowStats] = useState(false);
-    const [showQueryLogs, setShowQueryLogs] = useState(false); // Placeholder for logs
-    const [editingId, setEditingId] = useState(null);
-    const [editForm, setEditForm] = useState({});
+const AttendanceView = ({ masterList, activities, onBack, db }) => {
+    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+    const [selectedActivity, setSelectedActivity] = useState('');
+    const [filterGrade, setFilterGrade] = useState('ALL');
+    const [attendanceMap, setAttendanceMap] = useState({});
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // --- CSV Parsing for Activities ---
-    const parseActivityCSV = (text) => {
-        const lines = text.trim().split('\n');
-        return lines.map((line, idx) => {
-            const cols = line.split(','); 
-            // Simplified parsing logic similar to previous versions
-            if (cols.length < 5) return null;
-            return {
-                id: `csv-${Date.now()}-${idx}`,
-                activity: cols[0]?.trim(),
-                time: cols[1]?.trim(),
-                location: cols[2]?.trim(),
-                class: cols[3]?.trim(),
-                studentName: cols[4]?.trim(),
-                verified: false,
-                specificDates: []
-            };
-        }).filter(x => x);
+    const uniqueActivityNames = useMemo(() => {
+        if (!activities) return [];
+        const names = new Set(activities.map(a => a.activity));
+        return Array.from(names).sort();
+    }, [activities]);
+
+    const displayedStudents = useMemo(() => {
+        if (!masterList) return [];
+        return masterList.filter(s => {
+            if (filterGrade === 'ALL') return true;
+            return s.classCode && s.classCode.startsWith(filterGrade);
+        }).sort((a, b) => {
+            if (a.classCode !== b.classCode) return a.classCode.localeCompare(b.classCode);
+            return parseInt(a.classNo || 0) - parseInt(b.classNo || 0);
+        });
+    }, [masterList, filterGrade]);
+
+    const markAll = (status) => {
+        const newMap = { ...attendanceMap };
+        displayedStudents.forEach(s => {
+            newMap[s.key] = status;
+        });
+        setAttendanceMap(newMap);
     };
 
-    const handleFileUpload = async (e, type) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        setUploading(true);
-        const reader = new FileReader();
-        reader.onload = async (evt) => {
-            const text = evt.target.result;
-            try {
-                const batch = writeBatch(db);
-                if (type === 'master') {
-                    const data = parseMasterCSV(text);
-                    data.forEach(item => {
-                        batch.set(doc(db, "students", item.key), item);
-                    });
-                    setMasterList(data); // Optimistic update
-                    alert(`已讀取 ${data.length} 筆學生資料，正在寫入資料庫...`);
-                } else {
-                    const data = parseActivityCSV(text);
-                    data.forEach(item => {
-                        const newRef = doc(collection(db, "activities"));
-                        batch.set(newRef, { ...item, timestamp: new Date() });
-                    });
-                }
-                await batch.commit();
-                alert("上傳成功！");
-            } catch (err) {
-                console.error(err);
-                alert("上傳失敗: " + err.message);
-            } finally {
-                setUploading(false);
-            }
-        };
-        reader.readAsText(file);
+    const handleStatusChange = (key, status) => {
+        setAttendanceMap(prev => ({ ...prev, [key]: status }));
     };
 
-    const verifyStudent = async (act) => {
-        // Simple fuzzy match logic
-        const match = masterList.find(s => s.chiName === act.studentName && act.class.includes(s.classCode));
-        if (match) {
-            await updateDoc(doc(db, "activities", act.id), {
-                verified: true,
-                verifiedName: match.chiName,
-                verifiedClass: match.classCode,
-                studentId: match.key
+    const saveAttendance = async () => {
+        if (!selectedActivity) return alert("請選擇或輸入活動名稱");
+        if (Object.keys(attendanceMap).length === 0) return alert("未有任何點名記錄");
+        if (!window.confirm(`確認提交 ${Object.keys(attendanceMap).length} 筆點名紀錄？`)) return;
+
+        setIsSubmitting(true);
+        try {
+            const batch = writeBatch(db);
+            const timestamp = new Date().toISOString();
+            Object.entries(attendanceMap).forEach(([key, status]) => {
+                const student = masterList.find(s => s.key === key);
+                const docId = `${selectedDate}_${selectedActivity}_${key}`.replace(/[\s\/]/g, '_'); 
+                const docRef = doc(db, "attendance_records", docId);
+                batch.set(docRef, {
+                    date: selectedDate,
+                    activity: selectedActivity,
+                    studentKey: key,
+                    studentName: student?.chiName || '',
+                    classCode: student?.classCode || '',
+                    classNo: student?.classNo || '',
+                    status: status,
+                    updatedAt: timestamp
+                });
             });
-        } else {
-            alert(`找不到學生: ${act.class} - ${act.studentName}`);
+            await batch.commit();
+            alert("點名紀錄已成功上傳雲端！");
+            setAttendanceMap({});
+        } catch (error) {
+            console.error(error);
+            alert("上傳失敗: " + error.message);
+        } finally {
+            setIsSubmitting(false);
         }
     };
-    
-    const handleDelete = async (id) => {
-        if(window.confirm("確定刪除?")) await deleteDoc(doc(db, "activities", id));
-    };
-
-    if (showStats) return <StatsView masterList={masterList} activities={activities} onBack={() => setShowStats(false)} />;
 
     return (
-        <div className="min-h-screen bg-slate-100 flex">
-            {/* Sidebar */}
-            <div className="w-64 bg-slate-900 text-slate-300 flex flex-col p-4 shadow-xl">
-                <div className="text-xl font-bold text-white mb-8 flex items-center">
-                    <Shield className="mr-2 text-blue-500"/> 校務系統 V3.9
-                </div>
-                <nav className="space-y-2 flex-1">
-                    <button onClick={() => setActiveTab('activities')} className={`w-full text-left p-3 rounded transition ${activeTab === 'activities' ? 'bg-blue-600 text-white shadow-lg' : 'hover:bg-slate-800'}`}>活動管理</button>
-                    <button onClick={() => setActiveTab('master')} className={`w-full text-left p-3 rounded transition ${activeTab === 'master' ? 'bg-blue-600 text-white shadow-lg' : 'hover:bg-slate-800'}`}>學生名冊</button>
-                    <button onClick={() => setShowStats(true)} className="w-full text-left p-3 rounded hover:bg-slate-800 text-green-400 flex items-center"><BarChart size={16} className="mr-2"/> 數據分析</button>
-                </nav>
-                <button onClick={onLogout} className="mt-auto p-3 bg-red-900/50 text-red-200 rounded hover:bg-red-900 flex items-center justify-center">
-                    <LogOut size={16} className="mr-2"/> 登出
+        <div className="bg-white p-6 rounded-xl shadow-md min-h-[600px] flex flex-col animate-pulse-once">
+            <div className="flex justify-between items-center mb-6 border-b pb-4">
+                <button onClick={onBack} className="flex items-center text-slate-500 hover:text-blue-600 transition">
+                    <ArrowLeft className="mr-2" size={20} /> 返回
                 </button>
-            </div>
-
-            {/* Main Content */}
-            <div className="flex-1 p-8 overflow-y-auto">
-                <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center">
-                    {activeTab === 'activities' ? '課外活動資料庫' : '全校學生資料庫'}
-                    {uploading && <span className="ml-4 text-sm font-normal text-blue-600 animate-pulse">處理中...</span>}
+                <h2 className="text-2xl font-bold text-slate-800 flex items-center">
+                    <CheckSquare className="mr-2 text-green-600" /> 電子點名系統 (V3.9.0)
                 </h2>
-
-                {activeTab === 'activities' ? (
-                    <div className="bg-white rounded-xl shadow p-6">
-                        <div className="flex justify-between mb-4">
-                            <label className="btn-primary cursor-pointer bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 flex items-center">
-                                <Upload size={16} className="mr-2"/> 匯入活動 CSV
-                                <input type="file" hidden onChange={(e) => handleFileUpload(e, 'activity')} />
-                            </label>
-                            <div className="text-slate-500 text-sm self-center">共 {activities.length} 筆記錄</div>
-                        </div>
-                        {/* Simple List for Admin */}
-                        <div className="space-y-2">
-                            {activities.slice(0, 50).map(act => (
-                                <div key={act.id} className="border p-3 rounded flex justify-between items-center hover:bg-slate-50">
-                                    <div className="flex-1">
-                                        <div className="font-bold">{act.activity}</div>
-                                        <div className="text-xs text-slate-500">{act.time} | {act.location}</div>
-                                    </div>
-                                    <div className="w-32">
-                                        <div className={act.verified ? "text-green-600 font-bold" : "text-red-500 font-bold"}>
-                                            {act.studentName} ({act.class})
-                                        </div>
-                                    </div>
-                                    <div className="flex space-x-2">
-                                        {!act.verified && <button onClick={() => verifyStudent(act)} className="p-1 bg-green-100 text-green-600 rounded"><CheckCircle size={16}/></button>}
-                                        <button onClick={() => handleDelete(act.id)} className="p-1 bg-red-100 text-red-600 rounded"><Trash2 size={16}/></button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+                <div className="w-20"></div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">日期</label>
+                    <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full p-2 border rounded shadow-sm outline-none focus:ring-2 focus:ring-green-500"/>
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">活動名稱</label>
+                    <input list="act-list" type="text" value={selectedActivity} onChange={e => setSelectedActivity(e.target.value)} placeholder="選擇或輸入..." className="w-full p-2 border rounded shadow-sm outline-none focus:ring-2 focus:ring-green-500"/>
+                    <datalist id="act-list">{uniqueActivityNames.map(n => <option key={n} value={n}/>)}</datalist>
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">班級篩選</label>
+                    <div className="flex gap-1">
+                        {['ALL','1','2','3','4','5','6'].map(g => (
+                            <button key={g} onClick={() => setFilterGrade(g)} className={`flex-1 py-2 text-xs rounded transition ${filterGrade === g ? 'bg-green-600 text-white shadow' : 'bg-white border hover:bg-slate-100'}`}>{g==='ALL'?'全':'P'+g}</button>
+                        ))}
                     </div>
-                ) : (
-                    <div className="bg-white rounded-xl shadow p-6">
-                         <div className="flex justify-between mb-4">
-                            <label className="btn-primary cursor-pointer bg-green-600 text-white px-4 py-2 rounded shadow hover:bg-green-700 flex items-center">
-                                <Upload size={16} className="mr-2"/> 匯入學生名冊 CSV
-                                <input type="file" hidden onChange={(e) => handleFileUpload(e, 'master')} />
-                            </label>
-                            <div className="text-slate-500 text-sm self-center">共 {masterList.length} 位學生</div>
-                        </div>
-                         <div className="h-96 overflow-y-auto border rounded bg-slate-50 p-4">
-                            <pre className="text-xs text-slate-600">{JSON.stringify(masterList.slice(0, 20), null, 2)}</pre>
-                            <p className="text-center text-slate-400 mt-4">... (僅顯示前20筆預覽)</p>
-                         </div>
-                    </div>
-                )}
+                </div>
+            </div>
+            <div className="flex justify-between items-center mb-2">
+                <span className="text-sm text-slate-500">顯示: <b>{displayedStudents.length}</b> 人 | 已點: <b className="text-green-600">{Object.keys(attendanceMap).length}</b></span>
+                <div className="flex gap-2">
+                    <button onClick={() => markAll('present')} className="px-3 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 font-bold">全選出席</button>
+                    <button onClick={() => setAttendanceMap({})} className="px-3 py-1 text-xs bg-slate-100 text-slate-600 rounded hover:bg-slate-200">重置</button>
+                    <button onClick={saveAttendance} disabled={isSubmitting} className={`ml-2 px-4 py-1 rounded text-white text-sm font-bold flex items-center ${isSubmitting ? 'bg-slate-400':'bg-green-600 hover:bg-green-700 shadow-md'}`}><Save size={16} className="mr-1"/> {isSubmitting ? '...' : '儲存'}</button>
+                </div>
+            </div>
+            <div className="flex-1 overflow-auto border rounded-xl bg-slate-50">
+                <table className="w-full text-sm text-left">
+                    <thead className="bg-slate-200 text-slate-600 sticky top-0 z-10 font-bold">
+                        <tr><th className="p-3">班別</th><th className="p-3">姓名</th><th className="p-3 text-center w-20">出席</th><th className="p-3 text-center w-20">缺席</th><th className="p-3 text-center w-20">遲到</th></tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 bg-white">
+                        {displayedStudents.map(s => {
+                            const st = attendanceMap[s.key];
+                            return (
+                                <tr key={s.key} className={`hover:bg-blue-50 ${st ? 'bg-blue-50/40':''}`}>
+                                    <td className="p-3 font-mono">{s.classCode} ({s.classNo})</td>
+                                    <td className="p-3 font-bold">{s.chiName}</td>
+                                    <td className="p-3 text-center"><button onClick={()=>handleStatusChange(s.key,'present')} className={`p-1 rounded-full ${st==='present'?'bg-green-100 text-green-600 ring-2 ring-green-500':'text-slate-300 hover:bg-slate-100'}`}><CheckCircle size={20}/></button></td>
+                                    <td className="p-3 text-center"><button onClick={()=>handleStatusChange(s.key,'absent')} className={`p-1 rounded-full ${st==='absent'?'bg-red-100 text-red-600 ring-2 ring-red-500':'text-slate-300 hover:bg-slate-100'}`}><X size={20}/></button></td>
+                                    <td className="p-3 text-center"><button onClick={()=>handleStatusChange(s.key,'late')} className={`p-1 rounded-full ${st==='late'?'bg-orange-100 text-orange-600 ring-2 ring-orange-500':'text-slate-300 hover:bg-slate-100'}`}><Clock size={20}/></button></td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
             </div>
         </div>
     );
 };
 
 // -----------------------------------------------------------------------------
-// 7. MAIN APP COMPONENT (V3.9 - Routing & State)
+// MAIN APP COMPONENT
 // -----------------------------------------------------------------------------
+
 const App = () => {
-    // Global State
-    const [user, setUser] = useState(null);
-    const [view, setView] = useState('landing'); // landing, staff, admin, attendance
-    const [activities, setActivities] = useState([]);
-    const [masterList, setMasterList] = useState([]);
-    
-    // Auth Listener
-    useEffect(() => {
-        onAuthStateChanged(auth, (u) => {
-            setUser(u);
-            if(u) setView('admin');
-        });
-    }, []);
+  const [currentView, setCurrentView] = useState('student'); 
+  
+  // Auth State
+  const [user, setUser] = useState(null); 
+  const [authLoading, setAuthLoading] = useState(true); 
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPwd, setLoginPwd] = useState('');
+  
+  // Data State
+  const [masterList, setMasterList] = useState([]); 
+  const [activities, setActivities] = useState([]); 
+  const [pendingImports, setPendingImports] = useState([]);
+  const [queryLogs, setQueryLogs] = useState([]);
 
-    // Data Listener
-    useEffect(() => {
-        const qAct = query(collection(db, "activities"), orderBy("timestamp", "desc"));
-        const unsubAct = onSnapshot(qAct, (snap) => {
-            setActivities(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        });
+  // Loading States
+  const [isMasterLoading, setIsMasterLoading] = useState(false);
 
-        const qStu = query(collection(db, "students"));
-        const unsubStu = onSnapshot(qStu, (snap) => {
-            setMasterList(snap.docs.map(d => d.data()));
-        });
+  // V2.9: School Year State
+  const [schoolYearStart, setSchoolYearStart] = useState(2025); 
 
-        return () => { unsubAct(); unsubStu(); };
-    }, []);
+  // Import Form State
+  const [bulkInput, setBulkInput] = useState('');
+  const [importActivity, setImportActivity] = useState('無人機班');
+  const [importTime, setImportTime] = useState('15:30-16:30');
+  const [importLocation, setImportLocation] = useState('禮堂');
+  const [importDayId, setImportDayId] = useState(1);
+  const [importDates, setImportDates] = useState([]); 
+  const [tempDateInput, setTempDateInput] = useState('');
+  const dateInputRef = useRef(null); 
 
-    const handleLogin = (e) => {
-        e.preventDefault();
-        const email = e.target.email.value;
-        const pass = e.target.password.value;
-        signInWithEmailAndPassword(auth, email, pass).catch(err => alert("登入失敗"));
+  // Admin UI State
+  const [adminTab, setAdminTab] = useState('import'); 
+  const [selectedMatchIds, setSelectedMatchIds] = useState(new Set());
+  const [csvEncoding, setCsvEncoding] = useState('Big5'); 
+  const fileInputRef = useRef(null); 
+
+  // DB Management UI State
+  const [dbSearchTerm, setDbSearchTerm] = useState('');
+  const [dbSelectedIds, setDbSelectedIds] = useState(new Set());
+  const [dbBatchMode, setDbBatchMode] = useState(false);
+  const [batchEditForm, setBatchEditForm] = useState({ activity: '', time: '', location: '', dateText: '' });
+
+  // DB Editing State
+  const [editingId, setEditingId] = useState(null);
+  const [editFormData, setEditFormData] = useState({});
+
+  // Staff View State
+  const [staffShowAll, setStaffShowAll] = useState(false); 
+
+  // Search UI
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedClass, setSelectedClass] = useState('1A');
+  const [selectedClassNo, setSelectedClassNo] = useState('');
+  const [studentResult, setStudentResult] = useState(null);
+  const [currentDateTime, setCurrentDateTime] = useState(new Date()); 
+
+  // ---------------------------------------------------------------------------
+  // FIREBASE LISTENERS
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const q = query(collection(db, "activities"), orderBy("time")); 
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const acts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setActivities(acts);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const fetchMaster = async () => {
+        setIsMasterLoading(true);
+        try {
+            const docRef = doc(db, "settings", "master_list");
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                if (data.students) setMasterList(data.students);
+                if (data.schoolYearStart) setSchoolYearStart(data.schoolYearStart);
+            }
+        } catch (error) {
+            console.error("Error fetching master list:", error);
+        } finally {
+            setIsMasterLoading(false);
+        }
     };
+    fetchMaster();
+  }, []);
 
-    // Navigation Render
-    if (view === 'staff') return <StaffView activities={activities} masterList={masterList} onBack={() => setView('landing')} />;
-    if (view === 'attendance') return <AttendanceView activities={activities} masterList={masterList} onBack={() => setView('landing')} />;
-    if (user && view === 'admin') return <AdminPanel activities={activities} setActivities={setActivities} masterList={masterList} setMasterList={setMasterList} onLogout={() => signOut(auth).then(() => setView('landing'))} />;
+  useEffect(() => {
+      const timer = setInterval(() => setCurrentDateTime(new Date()), 1000);
+      return () => clearInterval(timer);
+  }, []);
 
-    // Landing Page
+  // ---------------------------------------------------------------------------
+  // AUTH ACTIONS
+  // ---------------------------------------------------------------------------
+  const handleLogin = async (e) => {
+      e.preventDefault();
+      try {
+          await signInWithEmailAndPassword(auth, loginEmail, loginPwd);
+          setLoginPwd(''); 
+      } catch (error) {
+          alert("登入失敗: " + error.message);
+      }
+  };
+
+  const handleLogout = async () => {
+      await signOut(auth);
+      setUser(null);
+      setCurrentView('student'); 
+  };
+
+  // ---------------------------------------------------------------------------
+  // MASTER DATA ACTIONS
+  // ---------------------------------------------------------------------------
+  const handleMasterUploadTrigger = () => fileInputRef.current.click();
+
+  const handleMasterFileChange = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.readAsText(file, csvEncoding);
+      reader.onload = async (event) => {
+          const text = event.target.result;
+          try {
+              const newMaster = parseMasterCSV(text);
+              if (newMaster.length > 0) {
+                  if (window.confirm(`解析成功！共 ${newMaster.length} 筆資料。\n確定要上傳至雲端資料庫嗎？(這將覆蓋舊有名單)`)) {
+                      setIsMasterLoading(true);
+                      try {
+                          await setDoc(doc(db, "settings", "master_list"), {
+                              students: newMaster,
+                              schoolYearStart: schoolYearStart, 
+                              updatedAt: new Date().toISOString(),
+                              updatedBy: user.email
+                          });
+                          setMasterList(newMaster);
+                          alert("雲端數據庫更新成功！");
+                      } catch (error) {
+                          alert("上傳失敗: " + error.message);
+                      } finally {
+                          setIsMasterLoading(false);
+                      }
+                  }
+              } else {
+                  alert("CSV 無法識別。請檢查格式或編碼。");
+              }
+          } catch (err) {
+              alert("解析 CSV 失敗: " + err.message);
+          }
+      };
+  };
+
+  const handleSchoolYearChange = async (e) => {
+      const newYear = parseInt(e.target.value);
+      setSchoolYearStart(newYear);
+      if (user) {
+          try {
+              await setDoc(doc(db, "settings", "master_list"), {
+                  students: masterList,
+                  schoolYearStart: newYear,
+                  updatedAt: new Date().toISOString(),
+                  updatedBy: user.email
+              });
+          } catch (err) { console.error("Failed to sync year", err); }
+      }
+  };
+
+  // ---------------------------------------------------------------------------
+  // DATA LOGIC (Date & Import)
+  // ---------------------------------------------------------------------------
+  const handleAddDate = () => {
+      if (!tempDateInput) return;
+      let dateString = tempDateInput;
+      const ddmmRegex = /^(\d{1,2})(\d{2})$/;
+      const match = tempDateInput.match(ddmmRegex);
+
+      if (match) {
+          const day = parseInt(match[1]);
+          const month = parseInt(match[2]);
+          if (month < 1 || month > 12) { alert("無效的月份"); return; }
+          if (day < 1 || day > 31) { alert("無效的日期"); return; }
+          let year = schoolYearStart;
+          if (month >= 1 && month <= 8) year = schoolYearStart + 1;
+          else if (month >= 9 && month <= 12) year = schoolYearStart;
+          const fMonth = String(month).padStart(2, '0');
+          const fDay = String(day).padStart(2, '0');
+          dateString = `${year}-${fMonth}-${fDay}`;
+      } else {
+          const d = new Date(tempDateInput);
+          if (isNaN(d.getTime())) { alert("日期格式錯誤，請輸入 DDMM"); return; }
+      }
+
+      if (!importDates.includes(dateString)) {
+          const newDates = [...importDates, dateString].sort();
+          setImportDates(newDates);
+          if (newDates.length === 1) {
+              const d = new Date(dateString);
+              setImportDayId(d.getDay());
+          }
+      }
+      setTempDateInput(''); 
+      if(dateInputRef.current) dateInputRef.current.focus();
+  };
+
+  const handleDateInputKeyDown = (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); handleAddDate(); }
+  };
+
+  const handleRemoveDate = (d) => setImportDates(prev => prev.filter(x => x !== d));
+  const handleClearDates = () => setImportDates([]);
+  const formatDisplayDate = (isoDate) => {
+      const parts = isoDate.split('-');
+      if (parts.length === 3) return `${parts[2]}${parts[1]}`; 
+      return isoDate;
+  };
+
+  const handleBulkImport = () => {
+      const lines = bulkInput.trim().split('\n');
+      const newItems = [];
+      const dayMap = {1:'逢星期一', 2:'逢星期二', 3:'逢星期三', 4:'逢星期四', 5:'逢星期五', 6:'逢星期六', 0:'逢星期日'};
+      let finalDateText = dayMap[importDayId];
+      if (importDates.length > 0) finalDateText = `共${importDates.length}堂 (${importDates[0]}起)`;
+
+      lines.forEach((line) => {
+          const cleanLine = line.trim().replace(/['"]/g, ''); 
+          if(!cleanLine) return;
+          const mixedClassRegex = /([1-6][A-E])(\d{0,2})/; 
+          const nameRegex = /[\u4e00-\u9fa5]{2,}/; 
+          const phoneRegex = /[569]\d{7}/; 
+          const classMatch = cleanLine.match(mixedClassRegex);
+          const nameMatch = cleanLine.match(nameRegex);
+          const phoneMatch = cleanLine.match(phoneRegex);
+
+          if (classMatch && nameMatch) {
+              newItems.push({
+                  id: Date.now() + Math.random(),
+                  rawName: nameMatch[0],
+                  rawClass: classMatch[1],
+                  rawClassNo: classMatch[2] ? classMatch[2].padStart(2, '0') : '00', 
+                  rawPhone: phoneMatch ? phoneMatch[0] : '', 
+                  activity: importActivity,
+                  time: importTime,
+                  location: importLocation,
+                  dateText: finalDateText,
+                  dayIds: [parseInt(importDayId)], 
+                  specificDates: importDates, 
+                  forceConflict: false 
+              });
+          }
+      });
+
+      if (newItems.length > 0) {
+          setPendingImports(prev => [...prev, ...newItems]);
+          setBulkInput('');
+          alert(`成功識別 ${newItems.length} 筆。`);
+      } else {
+          alert("無法識別。");
+      }
+  };
+
+  const { matched, conflicts } = useMemo(() => {
+    const matched = [];
+    const conflicts = [];
+    pendingImports.forEach(item => {
+      if (item.forceConflict) { conflicts.push({ ...item, status: 'manual_conflict' }); return; }
+      let student = masterList.find(s => s.classCode === item.rawClass && s.chiName === item.rawName);
+      if (!student && item.rawClassNo !== '00') student = masterList.find(s => s.classCode === item.rawClass && s.classNo === item.rawClassNo);
+      if (!student) { const potential = masterList.filter(s => s.chiName === item.rawName); if (potential.length === 1) student = potential[0]; }
+
+      if (student) {
+        matched.push({ ...item, verifiedName: student.chiName, verifiedClass: student.classCode, verifiedClassNo: student.classNo, status: 'verified' });
+      } else {
+        conflicts.push({ ...item, status: 'conflict' });
+      }
+    });
+    return { matched, conflicts };
+  }, [pendingImports, masterList]);
+
+  useEffect(() => { setSelectedMatchIds(new Set(matched.map(m => m.id))); }, [matched.length]);
+  
+  const toggleSelectMatch = (id) => {
+      const newSet = new Set(selectedMatchIds);
+      if (newSet.has(id)) newSet.delete(id); else newSet.add(id);
+      setSelectedMatchIds(newSet);
+  };
+  const toggleSelectAll = () => setSelectedMatchIds(selectedMatchIds.size === matched.length ? new Set() : new Set(matched.map(m => m.id)));
+
+  const handlePublish = async () => {
+    const toPublish = matched.filter(m => selectedMatchIds.has(m.id));
+    if (toPublish.length === 0) return alert("請選擇資料");
+    try {
+        const batchPromises = toPublish.map(item => {
+            const { id, status, forceConflict, ...dataToSave } = item;
+            return addDoc(collection(db, "activities"), { ...dataToSave, createdAt: new Date().toISOString() });
+        });
+        await Promise.all(batchPromises);
+        const publishedIds = new Set(toPublish.map(m => m.id));
+        setPendingImports(prev => prev.filter(p => !publishedIds.has(p.id)));
+        alert(`成功發布 ${toPublish.length} 筆資料到雲端！`);
+    } catch (error) {
+        alert("發布失敗: " + error.message);
+    }
+  };
+
+  const handleManualConflict = (id) => setPendingImports(prev => prev.map(i => i.id === id ? { ...i, forceConflict: true } : i));
+  const handleResolveConflict = (item, correctStudent) => {
+    setPendingImports(prev => prev.map(i => i.id === item.id ? { ...i, rawClass: correctStudent.classCode, rawName: correctStudent.chiName, rawClassNo: correctStudent.classNo, forceConflict: false } : i));
+  };
+  const handleDeleteImport = (id) => setPendingImports(prev => prev.filter(i => i.id !== id));
+
+  // ---------------------------------------------------------------------------
+  // DB MANAGEMENT LOGIC (V3.1)
+  // ---------------------------------------------------------------------------
+  
+  const filteredDbActivities = useMemo(() => {
+      if (!dbSearchTerm) return activities;
+      const lower = dbSearchTerm.toLowerCase();
+      return activities.filter(a => 
+          a.activity?.toLowerCase().includes(lower) || 
+          a.verifiedName?.includes(lower) || 
+          a.verifiedClass?.includes(lower)
+      );
+  }, [activities, dbSearchTerm]);
+
+  const toggleDbSelect = (id) => {
+      const newSet = new Set(dbSelectedIds);
+      if (newSet.has(id)) newSet.delete(id); else newSet.add(id);
+      setDbSelectedIds(newSet);
+  };
+
+  const toggleDbSelectAll = () => {
+      if (dbSelectedIds.size === filteredDbActivities.length) {
+          setDbSelectedIds(new Set());
+      } else {
+          setDbSelectedIds(new Set(filteredDbActivities.map(a => a.id)));
+      }
+  };
+
+  const handleBatchDelete = async () => {
+      if (!window.confirm(`確定要刪除選取的 ${dbSelectedIds.size} 筆資料嗎？`)) return;
+      const batch = writeBatch(db);
+      dbSelectedIds.forEach(id => { const ref = doc(db, "activities", id); batch.delete(ref); });
+      try { await batch.commit(); setDbSelectedIds(new Set()); alert("批量刪除成功！"); } catch (e) { alert("批量刪除失敗: " + e.message); }
+  };
+
+  const handleBatchEdit = async () => {
+      if (!window.confirm(`確定要將選取的 ${dbSelectedIds.size} 筆資料統一修改嗎？`)) return;
+      const batch = writeBatch(db);
+      const updates = {};
+      if (batchEditForm.activity) updates.activity = batchEditForm.activity;
+      if (batchEditForm.time) updates.time = batchEditForm.time;
+      if (batchEditForm.location) updates.location = batchEditForm.location;
+      if (batchEditForm.dateText) updates.dateText = batchEditForm.dateText;
+      if (Object.keys(updates).length === 0) return alert("請輸入要修改的內容");
+      dbSelectedIds.forEach(id => { const ref = doc(db, "activities", id); batch.update(ref, updates); });
+      try { await batch.commit(); setDbSelectedIds(new Set()); setDbBatchMode(false); setBatchEditForm({ activity: '', time: '', location: '', dateText: '' }); alert("批量修改成功！"); } catch (e) { alert("批量修改失敗: " + e.message); }
+  };
+
+  const handleDeleteActivity = async (id) => {
+      if(window.confirm('確定要刪除這筆紀錄嗎？')) {
+          try { await deleteDoc(doc(db, "activities", id)); } catch(e) { alert("刪除失敗:" + e.message) }
+      }
+  };
+
+  const startEditActivity = (act) => {
+      setEditingId(act.id);
+      setEditFormData({ activity: act.activity, time: act.time, location: act.location, dateText: act.dateText });
+  };
+
+  const saveEditActivity = async (id) => {
+      try {
+          await updateDoc(doc(db, "activities", id), editFormData);
+          setEditingId(null);
+      } catch(e) { alert("更新失敗:" + e.message) }
+  };
+  const cancelEdit = () => { setEditingId(null); setEditFormData({}); };
+
+  // Logic: Search (Updated with enhanced logging)
+  const handleStudentSearch = () => {
+    const formattedClassNo = selectedClassNo.padStart(2, '0');
+    const student = masterList.find(s => s.classCode === selectedClass && s.classNo === formattedClassNo);
+    
+    const now = new Date();
+    const newLog = { 
+        id: Date.now(), 
+        dateStr: now.toLocaleDateString('zh-HK'),
+        timeStr: now.toLocaleTimeString('zh-HK'),
+        class: selectedClass, 
+        classNo: formattedClassNo, 
+        name: student ? student.chiName : '未知', 
+        success: !!student 
+    };
+    
+    setQueryLogs(prev => [newLog, ...prev]);
+    const results = activities.filter(item => item.verifiedClass === selectedClass && item.verifiedClassNo === formattedClassNo);
+    setStudentResult(results);
+    setCurrentView('kiosk_result');
+  };
+
+  // Staff View Logic
+  const filteredActivities = useMemo(() => {
+      let result = activities;
+      if (!staffShowAll) {
+          const d = new Date();
+          const todayString = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          const currentDayId = d.getDay();
+          result = result.filter(act => {
+              if (act.specificDates && act.specificDates.length > 0) {
+                  return act.specificDates.includes(todayString);
+              }
+              return act.dayIds && act.dayIds.includes(currentDayId);
+          });
+      }
+      if (searchTerm) {
+          const lower = searchTerm.toLowerCase();
+          result = result.filter(item => 
+            item.verifiedName?.includes(lower) || 
+            item.verifiedClass?.includes(lower) || 
+            item.activity?.includes(lower)
+          );
+      }
+      return result;
+  }, [activities, searchTerm, staffShowAll]);
+
+  // -------------------------------------------------------------------------
+  // VIEWS
+  // -------------------------------------------------------------------------
+  const renderTopNavBar = () => (
+    <div className="bg-slate-900 text-white p-3 flex justify-between items-center shadow-md sticky top-0 z-50">
+        <div className="flex items-center space-x-2 cursor-pointer" onClick={() => setCurrentView('student')}>
+            <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center font-bold text-sm">佛</div>
+            <span className="font-bold text-lg tracking-wide hidden sm:block">佛教正覺蓮社學校</span>
+        </div>
+        
+        <div className="hidden md:flex flex-col items-center justify-center text-xs text-slate-400 font-mono">
+            <div>{currentDateTime.toLocaleDateString('zh-HK', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
+            <div className="text-white font-bold text-lg">{currentDateTime.toLocaleTimeString('zh-HK')}</div>
+        </div>
+
+        <div className="flex space-x-1">
+            <button onClick={() => setCurrentView('student')} className={`px-4 py-2 rounded-lg flex items-center text-sm transition-all ${currentView === 'student' || currentView === 'kiosk_result' ? 'bg-orange-600 text-white font-bold shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}><User size={16} className="mr-2" /> 學生</button>
+            <button onClick={() => setCurrentView('staff')} className={`px-4 py-2 rounded-lg flex items-center text-sm transition-all ${currentView === 'staff' ? 'bg-blue-600 text-white font-bold shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}><Users size={16} className="mr-2" /> 教職員</button>
+            <button onClick={() => setCurrentView('admin')} className={`px-4 py-2 rounded-lg flex items-center text-sm transition-all ${currentView === 'admin' ? 'bg-slate-700 text-white font-bold shadow-lg ring-1 ring-slate-500' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+                {user ? <Shield size={16} className="mr-2 text-green-400" /> : <Lock size={16} className="mr-2" />} 管理員
+            </button>
+        </div>
+    </div>
+  );
+
+  const renderStudentView = () => {
+    const allClasses = [
+        '1A', '1B', '1C', '1D', '1E',
+        '2A', '2B', '2C', '2D', '2E',
+        '3A', '3B', '3C', '3D', '3E',
+        '4A', '4B', '4C', '4D', '4E',
+        '5A', '5B', '5C', '5D',
+        '6A', '6B', '6C', '6D'
+    ];
+
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-100 to-blue-50 flex items-center justify-center p-4">
-            <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="flex-1 flex flex-col bg-gradient-to-b from-orange-50 to-white">
+            <div className="flex-1 flex flex-col items-center justify-center p-4">
+            <div className="w-full max-w-4xl bg-white p-8 rounded-3xl shadow-xl border border-orange-100">
+                <div className="text-center mb-6"><h1 className="text-2xl font-bold text-slate-800">課外活動查詢</h1><p className="text-slate-500">請輸入你的班別及學號</p></div>
                 
-                {/* Left: Branding & Staff Entry */}
-                <div className="space-y-6 flex flex-col justify-center">
-                    <div className="bg-white p-8 rounded-3xl shadow-xl border-l-8 border-blue-600 hover:scale-[1.02] transition duration-300">
-                        <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mb-6">
-                            <Home size={32} className="text-blue-600"/>
-                        </div>
-                        <h1 className="text-3xl font-extrabold text-slate-800 mb-2">香海正覺蓮社</h1>
-                        <h2 className="text-xl text-slate-600 mb-6">佛教正覺蓮社學校 - 綜合平台 V3.9</h2>
-                        
-                        <div className="space-y-3">
-                            <button 
-                                onClick={() => setView('staff')}
-                                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-200 flex items-center justify-center transition"
-                            >
-                                <Search className="mr-2"/> 進入教職員查詢通道
+                <div className="mb-6">
+                    <label className="block text-slate-400 text-sm mb-2 font-bold uppercase tracking-wider">班別 Class</label>
+                    <div className="grid grid-cols-5 md:grid-cols-10 gap-2">
+                        {allClasses.map((cls) => (
+                            <button key={cls} onClick={() => setSelectedClass(cls)} className={`py-2 rounded-lg font-bold text-lg transition-colors ${selectedClass === cls ? 'bg-orange-500 text-white shadow-lg scale-105' : 'bg-slate-100 text-slate-600 hover:bg-orange-100'}`}>
+                                {cls}
                             </button>
-                            
-                            {/* V3.9: Attendance Button */}
-                            <button 
-                                onClick={() => setView('attendance')}
-                                className="w-full bg-white border-2 border-purple-500 text-purple-600 hover:bg-purple-50 font-bold py-4 rounded-xl flex items-center justify-center transition"
-                            >
-                                <ClipboardCheck className="mr-2"/> 點名系統 (Roll Call)
-                            </button>
-                        </div>
+                        ))}
                     </div>
                 </div>
-
-                {/* Right: Admin Login */}
-                <div className="bg-white p-8 rounded-3xl shadow-xl flex flex-col justify-center">
-                    <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center">
-                        <Lock size={20} className="mr-2 text-slate-400"/> 管理員登入
-                    </h3>
-                    <form onSubmit={handleLogin} className="space-y-4">
-                        <div>
-                            <label className="text-xs font-bold text-slate-500 ml-1">Email</label>
-                            <input name="email" type="email" required className="w-full p-3 bg-slate-50 rounded-xl border focus:ring-2 focus:ring-blue-500 outline-none" placeholder="admin@school.edu.hk" />
-                        </div>
-                        <div>
-                            <label className="text-xs font-bold text-slate-500 ml-1">Password</label>
-                            <input name="password" type="password" required className="w-full p-3 bg-slate-50 rounded-xl border focus:ring-2 focus:ring-blue-500 outline-none" placeholder="••••••••" />
-                        </div>
-                        <button type="submit" className="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-3 rounded-xl transition">
-                            系統登入
-                        </button>
-                    </form>
-                    <div className="mt-8 pt-6 border-t text-center">
-                        <p className="text-xs text-slate-400">
-                            System Version 3.9 (Stable) <br/>
-                            Designed by Educational Software Expert <br/>
-                            For Internal Use Only
-                        </p>
+                
+                <div className="flex flex-col md:flex-row gap-8">
+                    <div className="flex-1">
+                        <label className="block text-slate-400 text-sm mb-2 font-bold uppercase tracking-wider">學號 Class No.</label>
+                        <div className="flex items-center justify-center mb-4"><div className="h-20 w-32 bg-slate-100 rounded-2xl flex items-center justify-center text-5xl font-bold tracking-widest text-slate-800 border-2 border-orange-200 shadow-inner">{selectedClassNo || <span className="text-slate-300 text-3xl">--</span>}</div></div>
+                        <div className="grid grid-cols-3 gap-3">{[1,2,3,4,5,6,7,8,9].map((num) => (<button key={num} onClick={() => { if (selectedClassNo.length < 2) setSelectedClassNo(prev => prev + num); }} className="h-14 bg-white border border-slate-200 rounded-xl text-2xl font-bold text-slate-700 active:bg-orange-100 active:border-orange-500 shadow-sm transition-all">{num}</button>))}<button onClick={() => setSelectedClassNo('')} className="h-14 bg-red-50 text-red-500 rounded-xl font-bold border border-red-100">清除</button><button onClick={() => { if (selectedClassNo.length < 2) setSelectedClassNo(prev => prev + 0); }} className="h-14 bg-white border border-slate-200 rounded-xl text-2xl font-bold text-slate-700 active:bg-orange-100 shadow-sm">0</button><button onClick={() => setSelectedClassNo(prev => prev.slice(0, -1))} className="h-14 bg-slate-100 text-slate-500 rounded-xl font-bold">←</button></div>
+                    </div>
+                    <div className="flex items-center justify-center md:w-1/3">
+                         <button onClick={handleStudentSearch} disabled={selectedClassNo.length === 0} className={`w-full py-8 rounded-2xl text-3xl font-bold text-white shadow-xl transition-all flex items-center justify-center ${selectedClassNo.length > 0 ? 'bg-orange-600 hover:bg-orange-700 transform hover:scale-[1.02]' : 'bg-slate-300 cursor-not-allowed'}`}><Search className="mr-3" size={32} strokeWidth={3} /> 查詢</button>
                     </div>
                 </div>
-
+            </div>
             </div>
         </div>
     );
+  };
+
+  const renderStaffView = () => (
+      <div className="min-h-screen bg-slate-50 p-6 flex-1">
+        <div className="max-w-6xl mx-auto">
+            <div className="mb-6 flex justify-between items-end">
+                <div>
+                    <h2 className="text-2xl font-bold text-blue-900 flex items-center"><Users className="mr-2" /> 教職員查詢通道</h2>
+                    <p className="text-slate-500 text-sm">
+                        {staffShowAll ? '顯示所有活動紀錄' : '僅顯示今天 (Today) 的活動，如需查看其他日期請切換。'}
+                    </p>
+                </div>
+                <div className="flex bg-white rounded-lg border border-slate-200 p-1">
+                    <button onClick={() => setStaffShowAll(false)} className={`px-4 py-1 text-sm rounded-md font-bold transition ${!staffShowAll ? 'bg-blue-100 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}>今天</button>
+                    <button onClick={() => setStaffShowAll(true)} className={`px-4 py-1 text-sm rounded-md font-bold transition ${staffShowAll ? 'bg-blue-100 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}>全部</button>
+                </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-xl shadow-md border-t-4 border-blue-500">
+              <div className="flex items-center space-x-2 mb-4 bg-slate-100 p-3 rounded-lg"><Search className="text-slate-400" /><input type="text" placeholder="輸入搜尋 (姓名/班別/活動)..." className="bg-transparent w-full outline-none text-lg" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
+              <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-slate-50 sticky top-0 z-10"><tr className="text-slate-600 text-sm uppercase tracking-wider border-b"><th className="p-3">姓名</th><th className="p-3">班別 (學號)</th><th className="p-3">活動名稱</th><th className="p-3">時間</th><th className="p-3">地點</th><th className="p-3 text-blue-600">聯絡電話</th></tr></thead>
+                  <tbody className="text-slate-700">
+                      {filteredActivities.length > 0 ? filteredActivities.map((act) => (
+                          <tr key={act.id} className="border-b hover:bg-blue-50 transition-colors">
+                              <td className="p-3 font-medium">{act.verifiedName}</td>
+                              <td className="p-3"><span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-bold">{act.verifiedClass} ({act.verifiedClassNo})</span></td>
+                              <td className="p-3 font-bold text-slate-800">{act.activity}</td>
+                              <td className="p-3 text-sm">{act.time}</td>
+                              <td className="p-3 text-sm flex items-center"><MapPin size={14} className="mr-1 text-red-400"/> {act.location}</td>
+                              <td className="p-3 text-sm font-mono text-blue-600">{act.rawPhone || '-'}</td>
+                          </tr>
+                      )) : (
+                          <tr><td colSpan="6" className="p-12 text-center text-slate-400">
+                              {staffShowAll ? '沒有找到相關資料' : '今天沒有已安排的活動 (或尚未輸入)'}
+                          </td></tr>
+                      )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+        </div>
+      </div>
+  );
+
+  const renderLoginView = () => (
+      <div className="flex-1 flex flex-col items-center justify-center bg-slate-100 p-6">
+          <div className="bg-white p-8 rounded-2xl shadow-lg w-full max-w-md border border-slate-200">
+              <div className="text-center mb-8"><div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4 text-white"><Lock size={32} /></div><h2 className="text-2xl font-bold text-slate-800">管理員登入</h2><p className="text-slate-500 text-sm">請使用 Firebase 帳戶登入</p></div>
+              <form onSubmit={handleLogin} className="space-y-4">
+                  <div><label className="block text-slate-600 text-sm font-bold mb-2">Email</label><input type="email" required className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="admin@school.edu.hk" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} /></div>
+                  <div><label className="block text-slate-600 text-sm font-bold mb-2">Password</label><input type="password" required className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="••••••••" value={loginPwd} onChange={(e) => setLoginPwd(e.target.value)} /></div>
+                  <button type="submit" disabled={authLoading} className="w-full py-3 bg-slate-800 text-white font-bold rounded-lg hover:bg-slate-900 transition flex items-center justify-center">{authLoading ? '登入中...' : '登入系統'}</button>
+              </form>
+          </div>
+      </div>
+  );
+
+  const renderDatabaseManager = () => (
+      <div className="bg-white p-6 rounded-xl shadow-md min-h-[500px]">
+          <div className="flex justify-between items-center mb-6"><button onClick={() => setAdminTab('import')} className="flex items-center text-slate-500 hover:text-blue-600"><ArrowLeft className="mr-2" size={20} /> 返回導入介面</button><h2 className="text-2xl font-bold text-slate-800 flex items-center"><Database className="mr-2 text-blue-600" /> 數據庫管理</h2><div className="w-24"></div></div>
+          <div className="mb-4 space-y-4">
+              <div className="flex gap-4 items-center">
+                  <div className="flex-1 bg-slate-50 border rounded-lg flex items-center px-3 py-2"><Search size={18} className="text-slate-400 mr-2" /><input type="text" placeholder="搜尋學生、活動或日期..." className="bg-transparent outline-none w-full text-sm" value={dbSearchTerm} onChange={(e) => setDbSearchTerm(e.target.value)} /></div>
+                  {dbSelectedIds.size > 0 && (<div className="flex items-center gap-2"><button onClick={() => setDbBatchMode(!dbBatchMode)} className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-bold flex items-center hover:bg-blue-700"><Edit2 size={16} className="mr-2" /> 批量修改 ({dbSelectedIds.size})</button><button onClick={handleBatchDelete} className="bg-red-50 text-red-600 px-3 py-2 rounded-lg text-sm font-bold flex items-center hover:bg-red-100 border border-red-200"><Trash2 size={16} className="mr-2" /> 刪除</button></div>)}
+              </div>
+              {dbBatchMode && dbSelectedIds.size > 0 && (<div className="bg-blue-50 border border-blue-200 rounded-lg p-4 animate-in slide-in-from-top-2"><h3 className="font-bold text-blue-800 text-sm mb-3">批量修改選取的 {dbSelectedIds.size} 筆資料 (留空則不修改)</h3><div className="grid grid-cols-4 gap-2 mb-3"><input className="p-2 border rounded text-sm" placeholder="新活動名稱..." value={batchEditForm.activity} onChange={e => setBatchEditForm({...batchEditForm, activity: e.target.value})} /><input className="p-2 border rounded text-sm" placeholder="新時間..." value={batchEditForm.time} onChange={e => setBatchEditForm({...batchEditForm, time: e.target.value})} /><input className="p-2 border rounded text-sm" placeholder="新地點..." value={batchEditForm.location} onChange={e => setBatchEditForm({...batchEditForm, location: e.target.value})} /><input className="p-2 border rounded text-sm" placeholder="新備註/日期..." value={batchEditForm.dateText} onChange={e => setBatchEditForm({...batchEditForm, dateText: e.target.value})} /></div><div className="flex justify-end gap-2"><button onClick={() => setDbBatchMode(false)} className="px-3 py-1 text-slate-500 hover:text-slate-800 text-sm">取消</button><button onClick={handleBatchEdit} className="bg-blue-600 text-white px-4 py-1 rounded text-sm font-bold hover:bg-blue-700">確認修改</button></div></div>)}
+          </div>
+          <div className="overflow-x-auto"><table className="w-full text-left text-sm border-collapse"><thead className="bg-slate-100 text-slate-600 uppercase"><tr><th className="p-3 w-10 text-center"><input type="checkbox" checked={filteredDbActivities.length > 0 && dbSelectedIds.size === filteredDbActivities.length} onChange={toggleDbSelectAll} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"/></th><th className="p-3">學生</th><th className="p-3">活動名稱</th><th className="p-3">時間</th><th className="p-3">地點</th><th className="p-3">日期/備註</th><th className="p-3 text-right">操作</th></tr></thead><tbody>
+              {filteredDbActivities.map(act => (<tr key={act.id} className={`border-b hover:bg-slate-50 ${dbSelectedIds.has(act.id) ? 'bg-blue-50/50' : ''}`}>
+                  <td className="p-3 text-center"><input type="checkbox" checked={dbSelectedIds.has(act.id)} onChange={() => toggleDbSelect(act.id)} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer" /></td>
+                  <td className="p-3"><div className="font-bold text-slate-800">{act.verifiedClass} ({act.verifiedClassNo})</div><div className="text-slate-500">{act.verifiedName}</div></td>
+                  {editingId === act.id ? (<><td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.activity} onChange={e => setEditFormData({...editFormData, activity: e.target.value})} /></td><td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.time} onChange={e => setEditFormData({...editFormData, time: e.target.value})} /></td><td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.location} onChange={e => setEditFormData({...editFormData, location: e.target.value})} /></td><td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.dateText} onChange={e => setEditFormData({...editFormData, dateText: e.target.value})} /></td><td className="p-3 text-right"><div className="flex justify-end gap-2"><button onClick={() => saveEditActivity(act.id)} className="bg-green-100 text-green-700 p-1 rounded hover:bg-green-200"><CheckCircle size={18} /></button><button onClick={cancelEdit} className="bg-slate-100 text-slate-600 p-1 rounded hover:bg-slate-200"><X size={18} /></button></div></td></>) : (<><td className="p-3 font-bold text-blue-700">{act.activity}</td><td className="p-3">{act.time}</td><td className="p-3">{act.location}</td><td className="p-3 text-slate-500">{act.dateText}</td><td className="p-3 text-right"><div className="flex justify-end gap-2"><button onClick={() => startEditActivity(act)} className="text-blue-500 hover:text-blue-700 p-1"><Edit2 size={18} /></button><button onClick={() => handleDeleteActivity(act.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={18} /></button></div></td></>)}
+              </tr>))}
+              {filteredDbActivities.length === 0 && <tr><td colSpan="7" className="p-8 text-center text-slate-400">沒有符合搜尋的資料。</td></tr>}
+          </tbody></table></div>
+      </div>
+  );
+
+  const renderAdminView = () => (
+      <div className="min-h-screen bg-slate-100 p-6 flex-1">
+        <div className="max-w-7xl mx-auto">
+            <div className="flex justify-between items-center mb-6">
+                <div><h2 className="text-2xl font-bold text-slate-800 flex items-center"><Shield className="mr-2" /> 管理員控制台</h2><p className="text-slate-500 text-sm">數據校對與發布。</p></div>
+                <div className="flex items-center space-x-4"><div className="bg-white px-4 py-2 rounded-lg shadow text-sm font-mono text-slate-600 border border-slate-200">Admin: <span className="font-bold text-blue-600">{user.email}</span></div><button onClick={handleLogout} className="bg-red-50 text-red-500 px-4 py-2 rounded-lg hover:bg-red-100 border border-red-200 flex items-center text-sm font-bold"><LogOut size={16} className="mr-2"/> 登出</button></div>
+            </div>
+            <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleMasterFileChange} />
+            {adminTab === 'manage_db' ? renderDatabaseManager() : adminTab === 'stats' ? (
+                // StatsView Component (Independent)
+                // V3.6.2: Pass queryLogs prop to StatsView
+                <StatsView masterList={masterList} activities={activities} queryLogs={queryLogs} onBack={() => setAdminTab('import')} />
+            ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 space-y-6">
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                        <div className="flex justify-between items-center mb-4"><div className="flex items-center space-x-3"><h3 className="font-bold text-lg text-green-700 flex items-center"><CheckCircle className="mr-2" size={20} /> 等待發布 ({matched.length})</h3><button onClick={toggleSelectAll} className="text-sm text-slate-500 flex items-center hover:text-slate-800">{selectedMatchIds.size === matched.length ? <CheckSquare size={16} className="mr-1"/> : <Square size={16} className="mr-1"/>}全選/取消</button></div>{matched.length > 0 && (<button onClick={handlePublish} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center shadow-md active:scale-95 transition"><Save size={18} className="mr-2" /> 發布選取項目 ({selectedMatchIds.size})</button>)}</div>
+                        <div className="bg-green-50 rounded-lg border border-green-100 max-h-96 overflow-y-auto"><table className="w-full text-sm"><thead className="bg-green-100/50 text-green-800 sticky top-0 border-b border-green-200"><tr><th className="py-2 px-2 w-8"></th><th className="py-2 px-4 text-left w-1/3">原始 PDF 資料</th><th className="py-2 px-4 text-center w-10"></th><th className="py-2 px-4 text-left w-1/3">Master Data (真理)</th><th className="py-2 px-4 text-right">操作</th></tr></thead><tbody>
+                            {matched.map(m => (<tr key={m.id} className={`border-b border-green-100 last:border-0 hover:bg-green-100/40 transition-colors ${selectedMatchIds.has(m.id) ? 'bg-green-100/20' : 'opacity-50'}`}><td className="py-3 px-2 text-center"><input type="checkbox" checked={selectedMatchIds.has(m.id)} onChange={() => toggleSelectMatch(m.id)} className="w-4 h-4 rounded text-green-600 focus:ring-green-500" /></td><td className="py-3 px-4"><div className="text-slate-500 text-xs uppercase mb-0.5">PDF Source</div><div className="font-medium text-slate-700">{m.rawClass} {m.rawName}</div><div className="text-xs text-red-400 font-mono">{m.rawClassNo === '00' ? '缺學號' : m.rawClassNo}</div>{m.rawPhone && <div className="text-xs text-blue-500 font-mono flex items-center mt-1"><Phone size={10} className="mr-1"/>{m.rawPhone}</div>}</td><td className="py-3 px-2 text-center text-slate-300"><ArrowRight size={16} /></td><td className="py-3 px-4 bg-green-100/30"><div className="text-green-600 text-xs uppercase font-bold flex items-center mb-0.5"><Database size={10} className="mr-1" /> Master Data</div><div className="font-bold text-green-700 text-lg flex items-center"><span className="mr-2">{m.verifiedClass}</span><span className="bg-white text-green-800 border border-green-200 px-1.5 rounded text-sm min-w-[24px] text-center mr-2">{m.verifiedClassNo}</span><span>{m.verifiedName}</span></div></td><td className="py-3 px-4 text-right"><button onClick={() => handleManualConflict(m.id)} className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded hover:bg-red-200 flex items-center ml-auto"><AlertTriangle size={12} className="mr-1" /> 轉為異常</button><div className="text-xs text-slate-400 mt-1">{m.activity}</div>{m.specificDates && m.specificDates.length > 0 && <div className="text-xs bg-blue-100 text-blue-600 px-1 rounded inline-block mt-1">共 {m.specificDates.length} 堂</div>}</td></tr>))}
+                        </tbody></table></div>
+                    </div>
+                    {conflicts.length > 0 && (<div className="bg-white p-6 rounded-xl shadow-md border-l-4 border-red-500 animate-pulse-border"><h3 className="font-bold text-lg text-red-700 flex items-center mb-4"><AlertTriangle className="mr-2" /> 異常資料需修正 ({conflicts.length})</h3><div className="space-y-3">{conflicts.map(item => (<div key={item.id} className="border border-red-100 rounded-lg p-4 bg-red-50/50 flex flex-col md:flex-row items-center justify-between gap-4"><div className="flex-1"><div className="font-bold text-slate-800">{item.rawClass} {item.rawName}</div><div className="text-xs text-slate-500">{item.activity} {item.rawPhone && `| ${item.rawPhone}`}</div>{item.status === 'manual_conflict' && <div className="text-xs text-red-600 font-bold mt-1">* 人手標記異常</div>}</div><ArrowRight className="text-slate-300 md:rotate-0 rotate-90" /><div className="flex-1 w-full"><select className="w-full p-2 border border-slate-300 rounded-lg bg-white text-sm" onChange={(e) => { if(e.target.value) { const student = masterList.find(s => s.key === e.target.value); if(student) handleResolveConflict(item, student); }}} defaultValue=""><option value="" disabled>-- 選擇正確學生 --</option><optgroup label="智能推薦">{masterList.filter(s => s.classCode === item.rawClass || s.chiName.includes(item.rawName[0])).map(s => (<option key={s.key} value={s.key}>{s.classCode} ({s.classNo}) {s.chiName}</option>))}</optgroup><optgroup label="全部名單"><option value="search">...</option></optgroup></select></div><button onClick={() => handleDeleteImport(item.id)} className="p-2 text-red-400 hover:bg-red-100 rounded"><Trash2 size={18} /></button></div>))}</div></div>)}
+                </div>
+                <div className="space-y-6">
+                    <div className="bg-slate-800 text-slate-300 p-6 rounded-xl shadow-md border border-slate-700">
+                        <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-white flex items-center"><Database className="mr-2" size={16}/> 數據庫狀態</h3></div>
+                        <div className="space-y-3"><button onClick={() => setAdminTab('manage_db')} className="w-full bg-slate-700 hover:bg-slate-600 text-white p-3 rounded-lg text-sm font-bold flex items-center justify-between transition"><span>管理活動資料庫</span><span className="bg-blue-600 text-xs px-2 py-1 rounded">{activities.length}</span></button><button onClick={() => setAdminTab('stats')} className="w-full bg-purple-700 hover:bg-purple-600 text-white p-3 rounded-lg text-sm font-bold flex items-center justify-center transition shadow-lg"><BarChart className="mr-2" size={16} /> 查看統計報表</button></div>
+                        <div className="mt-4 pt-4 border-t border-slate-700 text-xs text-slate-500 text-center flex items-center justify-center">
+                            {isMasterLoading ? <RefreshCcw className="animate-spin mr-2"/> : null} 學生總數: {masterList.length}
+                        </div>
+                    </div>
+                    <div className="flex justify-end mb-1"><select className="text-xs p-1 border border-slate-300 rounded bg-white text-slate-600 outline-none focus:ring-1 focus:ring-emerald-500" value={csvEncoding} onChange={(e) => setCsvEncoding(e.target.value)}><option value="Big5">CSV 編碼: Big5 (解決 Excel 亂碼)</option><option value="UTF-8">CSV 編碼: UTF-8 (通用格式)</option></select></div>
+                    <button onClick={handleMasterUploadTrigger} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white p-4 rounded-xl flex items-center justify-center font-bold shadow-md transition"><Cloud className="mr-2" /> 上載真理 Data (雲端版)</button>
+                    <div className="bg-white p-6 rounded-xl shadow-md border-t-4 border-blue-500">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-bold text-lg text-slate-800 flex items-center"><PlusCircle className="mr-2 text-blue-500" /> 新增活動資料</h3>
+                            <div className="text-xs bg-slate-100 px-2 py-1 rounded text-slate-500">
+                                年度: <select className="bg-transparent font-bold outline-none" value={schoolYearStart} onChange={handleSchoolYearChange}><option value={2024}>24-25</option><option value={2025}>25-26</option><option value={2026}>26-27</option></select>
+                            </div>
+                        </div>
+                        <div className="space-y-3 mb-4">
+                            <div><label className="text-xs text-slate-500 font-bold uppercase">活動名稱</label><input type="text" className="w-full p-2 border rounded" value={importActivity} onChange={e => setImportActivity(e.target.value)} /></div>
+                            <div className="grid grid-cols-2 gap-2"><div><label className="text-xs text-slate-500 font-bold uppercase">時間</label><input type="text" className="w-full p-2 border rounded" value={importTime} onChange={e => setImportTime(e.target.value)} /></div><div><label className="text-xs text-slate-500 font-bold uppercase">地點</label><input type="text" className="w-full p-2 border rounded" value={importLocation} onChange={e => setImportLocation(e.target.value)} /></div></div>
+                            <div className="border border-slate-200 rounded p-3 bg-slate-50"><label className="text-xs text-slate-500 font-bold uppercase mb-2 block">選擇日期 (輸入 0209 代表 9月2日)</label><div className="flex gap-2 mb-2"><input type="text" ref={dateInputRef} placeholder="DDMM (如 0209)" className="flex-1 p-2 border rounded text-sm" value={tempDateInput} onChange={(e) => setTempDateInput(e.target.value)} onKeyDown={handleDateInputKeyDown} /><button onClick={handleAddDate} className="bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 flex items-center"><Plus size={16} /></button></div><div className="flex flex-wrap gap-2 mb-2">{importDates.map(date => (<span key={date} className="bg-white border border-blue-200 text-blue-800 text-xs px-2 py-1 rounded-full flex items-center shadow-sm">{formatDisplayDate(date)}<button onClick={() => handleRemoveDate(date)} className="ml-1 text-blue-400 hover:text-red-500"><X size={12} /></button></span>))}</div><div className="flex justify-between items-center text-xs"><span className="font-bold text-slate-600">已選: {importDates.length} 天 (共{importDates.length}堂)</span>{importDates.length > 0 && <button onClick={handleClearDates} className="text-red-400 hover:underline">清空</button>}</div></div>
+                            <div><label className="text-xs text-slate-500 font-bold uppercase">星期 (自動/預設)</label><select className="w-full p-2 border rounded" value={importDayId} onChange={e => setImportDayId(e.target.value)}><option value="1">逢星期一</option><option value="2">逢星期二</option><option value="3">逢星期三</option><option value="4">逢星期四</option><option value="5">逢星期五</option><option value="6">逢星期六</option><option value="0">逢星期日</option></select></div>
+                        </div>
+                        <div className="mb-4"><label className="text-xs text-slate-500 font-bold uppercase flex justify-between"><span>貼上名單 (PDF Copy/Paste)</span><span className="text-blue-500 cursor-pointer flex items-center" title="格式: 4A 蔡舒朗 (可含電話)"><FileText size={12} className="mr-1"/> 說明</span></label><textarea className="w-full h-32 p-2 border rounded bg-slate-50 text-sm font-mono" placeholder={`4A 蔡舒朗 91234567\n2A1 陳嘉瑩`} value={bulkInput} onChange={e => setBulkInput(e.target.value)}></textarea></div>
+                        <button onClick={handleBulkImport} className="w-full py-2 bg-blue-600 text-white font-bold rounded hover:bg-blue-700 transition">識別並載入</button>
+                        {/* V3.9.0: 點名功能入口 */}
+              <button 
+                onClick={() => setCurrentView('attendance')}
+                className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-xl border border-slate-100 hover:border-green-200 transition-all duration-300 group text-left relative overflow-hidden"
+              >
+                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition">
+                  <CheckSquare size={64} className="text-green-600 transform rotate-12"/>
+                </div>
+                <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition">
+                  <CheckSquare className="text-green-600" size={24} />
+                </div>
+                <h3 className="text-lg font-bold text-slate-800 mb-1">活動點名系統</h3>
+                <p className="text-slate-500 text-xs">處理出席、缺席及遲到紀錄</p>
+              </button>
+                    </div>
+                </div>
+                </div>
+            )}
+        </div>
+      </div>
+  );
+
+  const renderKioskResultView = () => {
+     const upcomingDays = [];
+     const today = new Date();
+     const weekDayNames = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+     const weekDayEnNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+     for (let i = 0; i < 8; i++) { 
+         const d = new Date(today); d.setDate(today.getDate() + i);
+         const year = d.getFullYear(); const month = String(d.getMonth() + 1).padStart(2, '0'); const day = String(d.getDate()).padStart(2, '0');
+         const localDateString = `${year}-${month}-${day}`; const displayDate = `(${day}/${month}/${year})`;
+         upcomingDays.push({ dayId: d.getDay(), dateString: localDateString, label: i === 0 ? '今天' : weekDayNames[d.getDay()], fullLabel: `${weekDayNames[d.getDay()]} ${weekDayEnNames[d.getDay()]} ${displayDate}` });
+     }
+     const currentStudent = masterList.find(s => s.classCode === selectedClass && s.classNo === selectedClassNo.padStart(2, '0'));
+
+     return (
+        <div className="flex-1 bg-slate-800 flex flex-col font-sans text-white h-screen overflow-hidden">
+            <div className="p-4 flex items-center justify-between bg-slate-900 shadow-md shrink-0"><h2 className="text-xl font-bold text-slate-300">活動日程表</h2><button onClick={() => { setCurrentView('student'); setStudentResult(null); setSelectedClassNo(''); }} className="bg-white/10 px-4 py-2 rounded-full flex items-center text-sm backdrop-blur-md hover:bg-white/20 transition"><ArrowLeft size={20} className="mr-1" /> 返回</button></div>
+            <div className="px-8 pt-6 pb-2 shrink-0"><h1 className="text-4xl font-bold">{selectedClass}班 ({selectedClassNo})號 <span className="text-orange-400">{currentStudent ? currentStudent.chiName : ''}</span></h1><p className="text-slate-400 mt-1">未來一週活動概覽</p></div>
+            <div className="flex-1 px-8 pb-8 overflow-y-auto"><div className="space-y-6 mt-4">{upcomingDays.map((dayItem) => {
+                const dayActivities = studentResult ? studentResult.filter(act => { if (act.specificDates && act.specificDates.length > 0) { return act.specificDates.includes(dayItem.dateString); } return act.dayIds && act.dayIds.includes(dayItem.dayId); }) : [];
+                const isToday = dayItem.label === '今天';
+                return (<div key={dayItem.dateString} className={`rounded-3xl p-6 transition-all ${isToday ? 'bg-slate-700/80 ring-2 ring-green-500 shadow-[0_0_20px_rgba(34,197,94,0.3)]' : 'bg-slate-700/30'}`}><div className="flex items-center mb-4 border-b border-slate-600 pb-2"><div className={`text-2xl font-bold ${isToday ? 'text-green-400' : 'text-slate-200'}`}>{dayItem.fullLabel}</div>{isToday && <span className="ml-3 bg-green-600 text-white text-xs px-2 py-1 rounded-full animate-pulse">Today</span>}</div><div className="space-y-4">{dayActivities.length > 0 ? (dayActivities.map((item, idx) => (<div key={`${item.id}-${idx}`} className="bg-white text-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden"><div className="flex justify-between items-start mb-2"><h3 className="text-2xl font-bold text-slate-900">{item.activity}</h3></div><div className="grid grid-cols-2 gap-4 mt-3"><div className="flex items-center text-slate-600 bg-slate-100 p-2 rounded-lg"><Clock size={20} className="mr-2 text-orange-500" /><span className="font-bold">{item.time}</span></div><div className="flex items-center text-blue-800 bg-blue-50 p-2 rounded-lg"><MapPin size={20} className="mr-2 text-blue-500" /><span className="font-bold">{item.location}</span></div></div></div>))) : (<div className="text-slate-500 text-sm italic py-4 text-center border border-dashed border-slate-600 rounded-xl">沒有安排活動</div>)}</div></div>);
+            })}</div>{(!studentResult) && (<div className="flex flex-col items-center justify-center h-40 mt-8 text-slate-400 bg-slate-700/30 rounded-2xl border border-dashed border-slate-600"><Calendar size={48} className="mb-2 opacity-50" /><p className="text-lg">請輸入班別及學號查詢</p></div>)}</div></div>
+     );
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col font-sans">
+      {renderTopNavBar()}
+      {currentView === 'student' && renderStudentView()}
+      {currentView === 'staff' && renderStaffView()}
+      {currentView === 'admin' && (user ? renderAdminView() : renderLoginView())}
+      {currentView === 'kiosk_result' && renderKioskResultView()}
+      {/* V3.9.0: Render Attendance View */}
+      {currentView === 'attendance' && (
+        <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in zoom-in duration-300">
+           <AttendanceView 
+              masterList={masterList} 
+              activities={activities} 
+              db={db}
+              onBack={() => setCurrentView('admin')} 
+           />
+        </div>
+      )}
+    </div>
+  );
 };
 
 export default App;
