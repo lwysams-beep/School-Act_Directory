@@ -182,7 +182,7 @@ const AttendanceView = ({ masterList, activities, onBack, db }) => {
                 const code = s.classCode || '';
                 return code.toString().startsWith(filterMode);
             });
-        }
+        };
 
         // 安全排序
         return filtered.sort((a, b) => {
@@ -979,10 +979,12 @@ const App = () => {
             </div>
             <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleMasterFileChange} />
             {adminTab === 'manage_db' ? renderDatabaseManager() : adminTab === 'stats' ? (
-            // -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
 // 3. STATS VIEW COMPONENT (V3.9.3 - Emergency Fix: Anti-Crash)
 // -----------------------------------------------------------------------------
 const StatsView = ({ masterList, activities, onBack }) => {
+};
     // 安全數據處理 (Data Sanitization)
     const safeList = useMemo(() => {
       if (!Array.isArray(masterList)) return [];
