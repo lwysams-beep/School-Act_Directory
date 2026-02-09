@@ -1,6 +1,5 @@
-//
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-// V4.2: Database Date Format Update (Smart Year Logic & MMDD Display)
+// V3.8.1: Stability Fix - Safe Math, Color Guards, Error Boundary, Remove risky icons
 import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, Phone, CheckSquare, Square, RefreshCcw, X, Plus, Edit2, FileSpreadsheet, BarChart, History, TrendingUp, Filter, Cloud, UserX, PieChart, Download, Activity, Save as SaveIcon, Layers, Maximize, Palette, ChevronDown } from 'lucide-react';
 
 // =============================================================================
@@ -137,47 +136,6 @@ const CATEGORY_COLORS = {
     '服務/制服 (Service)': '#10b981',
     '其他 (Others)': '#94a3b8'
 };
-
-// =============================================================================
-// V4.2 DATE HELPERS (Smart Academic Year Logic)
-// =============================================================================
-const ACADEMIC_YEAR_START = 2025; // Sep 2025
-// Logic: Sep-Dec = 2025, Jan-Aug = 2026
-
-const formatDateForDisplay = (dates) => {
-    // Input: ['2026-01-01', '2026-02-01']
-    // Output: "0101, 0201"
-    if (!Array.isArray(dates)) return '';
-    return dates.map(d => {
-        const parts = d.split('-');
-        if (parts.length < 3) return '';
-        return `${parts[1]}${parts[2]}`;
-    }).join(', ');
-};
-
-const parseSmartDateString = (str) => {
-    // Input: "0101, 0901"
-    // Logic: 0101 -> 2026-01-01, 0901 -> 2025-09-01
-    if (!str) return [];
-    
-    // Split by comma, space, or Chinese comma
-    const tokens = str.split(/[,，\s]+/).filter(t => t.trim().length === 4);
-    const result = tokens.map(token => {
-        const month = parseInt(token.substring(0, 2), 10);
-        const day = token.substring(2, 4);
-        
-        let year = ACADEMIC_YEAR_START + 1; // Default to 2026 (Jan-Aug)
-        if (month >= 9) {
-            year = ACADEMIC_YEAR_START; // 2025 (Sep-Dec)
-        }
-        
-        return `${year}-${token.substring(0, 2)}-${day}`;
-    });
-    
-    // Sort dates
-    return result.sort();
-};
-
 
 // -----------------------------------------------------------------------------
 // 3. STATS VIEW COMPONENT (V3.8.1 - Stability Fix)
@@ -613,24 +571,24 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
 
                 {statsViewMode === 'students' && (
                     <div className="bg-white border rounded-xl overflow-hidden">
-                        <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
+                            <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
                             <h3 className="font-bold text-slate-700 flex items-center"><AlertTriangle className="mr-2 text-orange-500" size={18}/> 學生參與度監測</h3>
                             <button onClick={() => exportToCSV(filteredStudentList, 'Student_Participation')} className="text-sm bg-white border px-3 py-1 rounded hover:bg-slate-50 flex items-center text-blue-600 border-blue-200"><Download size={14} className="mr-1"/> 匯出 CSV</button>
                         </div>
                         <div className="max-h-[500px] overflow-y-auto">
-                            <table className="w-full text-sm text-left">
-                                <thead className="bg-slate-100 text-slate-500 uppercase sticky top-0"><tr><th className="p-3">班別 (學號)</th><th className="p-3">姓名</th><th className="p-3 text-right">參與時數</th><th className="p-3 text-center">狀態</th></tr></thead>
-                                <tbody className="divide-y">
-                                    {filteredStudentList.map((s, i) => (
-                                        <tr key={i} className={`hover:bg-slate-50 ${s.hours === 0 ? 'bg-red-50' : ''}`}>
-                                            <td className="p-3 text-slate-600">{s.classCode} ({s.classNo})</td>
-                                            <td className="p-3 font-bold">{s.chiName}</td>
-                                            <td className="p-3 text-right">{s.hours.toFixed(1)}</td>
-                                            <td className="p-3 text-center">{s.hours === 0 ? <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded font-bold">關注</span> : <span className="text-xs text-green-600">正常</span>}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-slate-100 text-slate-500 uppercase sticky top-0"><tr><th className="p-3">班別 (學號)</th><th className="p-3">姓名</th><th className="p-3 text-right">參與時數</th><th className="p-3 text-center">狀態</th></tr></thead>
+                            <tbody className="divide-y">
+                                {filteredStudentList.map((s, i) => (
+                                    <tr key={i} className={`hover:bg-slate-50 ${s.hours === 0 ? 'bg-red-50' : ''}`}>
+                                        <td className="p-3 text-slate-600">{s.classCode} ({s.classNo})</td>
+                                        <td className="p-3 font-bold">{s.chiName}</td>
+                                        <td className="p-3 text-right">{s.hours.toFixed(1)}</td>
+                                        <td className="p-3 text-center">{s.hours === 0 ? <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded font-bold">關注</span> : <span className="text-xs text-green-600">正常</span>}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                         </div>
                     </div>
                 )}
@@ -639,372 +597,1041 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
     );
 };
 
+// ========== 在這裡插入 DatabaseManagement 代碼 (Version 1.0) ==========
+// Version 1.0: DatabaseManagement Component Update
+// 修改內容：
+// 1. 新增 dateStats (useMemo) 以統計並顯示所有獨特日期及活動數。
+// 2. 在「批量修改」(activeTab === 'bulk') 中新增日期顯示區塊。
+// 3. 新增「批量日期遷移」功能，可指定舊日期全部更新為新日期。
+
+// =============================================================================
+//  VERSION 1.0: DATABASE SYSTEM COMPONENT
+//  功能：整合資料庫列表、批量日期遷移、批量修改
+// =============================================================================
+const DatabaseSystemV1 = ({ 
+    activities, 
+    onDelete, 
+    onUpdate, 
+    categories = [], 
+    locations = [] 
+}) => {
+    const [viewMode, setViewMode] = useState('list'); // 'list' | 'date_migration'
+    const [searchTerm, setSearchTerm] = useState('');
+    const [selectedIds, setSelectedIds] = useState(new Set());
+    
+    // 批量修改 (文字/地點/時間)
+    const [batchEditMode, setBatchEditMode] = useState(false);
+    const [batchForm, setBatchForm] = useState({ activity: '', time: '', location: '', dateText: '' });
+
+    // 單行編輯
+    const [editingId, setEditingId] = useState(null);
+    const [editForm, setEditForm] = useState({});
+
+    // 日期遷移專用狀態
+    const [migrationSourceDate, setMigrationSourceDate] = useState('');
+    const [migrationTargetDate, setMigrationTargetDate] = useState('');
+    const [isMigrating, setIsMigrating] = useState(false);
+
+    // 1. 數據篩選邏輯
+    const filteredData = useMemo(() => {
+        if (!searchTerm) return activities;
+        const lower = searchTerm.toLowerCase();
+        return activities.filter(a => 
+            (a.activity && a.activity.toLowerCase().includes(lower)) || 
+            (a.verifiedName && a.verifiedName.includes(lower)) || 
+            (a.verifiedClass && a.verifiedClass.includes(lower)) ||
+            (a.dateText && a.dateText.includes(lower))
+        );
+    }, [activities, searchTerm]);
+
+    // 2. 日期統計邏輯 (核心新功能)
+    const dateStats = useMemo(() => {
+        const stats = {};
+        activities.forEach(act => {
+            const d = act.dateText || "未指定日期";
+            stats[d] = (stats[d] || 0) + 1;
+        });
+        return Object.entries(stats).sort((a, b) => a[0].localeCompare(b[0])); // 排序
+    }, [activities]);
+
+    // 操作：切換選取
+    const toggleSelect = (id) => {
+        const newSet = new Set(selectedIds);
+        if (newSet.has(id)) newSet.delete(id); else newSet.add(id);
+        setSelectedIds(newSet);
+    };
+
+    const toggleSelectAll = () => {
+        if (selectedIds.size === filteredData.length) setSelectedIds(new Set());
+        else setSelectedIds(new Set(filteredData.map(a => a.id)));
+    };
+
+    // 操作：開始編輯單行
+    const startEdit = (act) => {
+        setEditingId(act.id);
+        setEditForm({ ...act });
+    };
+
+    // 操作：儲存單行
+    const saveEdit = async () => {
+        await onUpdate(editingId, editForm);
+        setEditingId(null);
+    };
+
+    // 操作：批量文字修改
+    const handleBatchTextUpdate = async () => {
+        if (!window.confirm(`確定修改選取的 ${selectedIds.size} 筆資料嗎？`)) return;
+        
+        const updates = {};
+        if (batchForm.activity) updates.activity = batchForm.activity;
+        if (batchForm.time) updates.time = batchForm.time;
+        if (batchForm.location) updates.location = batchForm.location;
+        if (batchForm.dateText) updates.dateText = batchForm.dateText;
+
+        if (Object.keys(updates).length === 0) return alert("請輸入至少一項修改內容");
+
+        const db = getFirestore();
+        const batch = writeBatch(db);
+        selectedIds.forEach(id => {
+            batch.update(doc(db, "activities", id), updates);
+        });
+
+        await batch.commit();
+        alert("批量修改完成");
+        setBatchEditMode(false);
+        setSelectedIds(new Set());
+    };
+
+    // 操作：批量日期遷移 (新功能)
+    const handleDateMigration = async () => {
+        if (!migrationSourceDate || !migrationTargetDate) return alert("請選擇原本日期及新日期");
+        
+        // 找出所有符合舊日期的活動 (不只是當前頁面，是整個資料庫)
+        const targets = activities.filter(a => a.dateText === migrationSourceDate);
+        
+        if (window.confirm(`【危險操作】\n確定要將所有日期為「${migrationSourceDate}」的活動 (${targets.length} 筆)\n全部遷移至新日期「${migrationTargetDate}」嗎？`)) {
+            setIsMigrating(true);
+            try {
+                const db = getFirestore();
+                const batch = writeBatch(db);
+                
+                targets.forEach(act => {
+                    // 同步更新 dateText (顯示用) 和 date (如果存在，格式化用)
+                    // 這裡主要依賴 dateText 因為這是你在表格中顯示的欄位
+                    batch.update(doc(db, "activities", act.id), { 
+                        dateText: migrationTargetDate,
+                        date: migrationTargetDate // 嘗試同步更新標準日期欄位
+                    });
+                });
+
+                await batch.commit();
+                alert(`成功遷移 ${targets.length} 筆資料！`);
+                setMigrationSourceDate('');
+                setMigrationTargetDate('');
+            } catch (e) {
+                alert("遷移失敗：" + e.message);
+            } finally {
+                setIsMigrating(false);
+            }
+        }
+    };
+
+    return (
+        <div className="bg-white p-6 rounded-xl shadow-md min-h-[600px] flex flex-col">
+            {/* Header Area */}
+            <div className="flex justify-between items-center mb-6 border-b pb-4">
+                <div className="flex items-center gap-4">
+                    <h2 className="text-2xl font-bold text-slate-800 flex items-center">
+                        <Database className="mr-2 text-blue-600" /> 
+                        數據庫管理 (V1.0)
+                    </h2>
+                    <div className="flex bg-slate-100 rounded-lg p-1">
+                        <button 
+                            onClick={() => setViewMode('list')}
+                            className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${viewMode === 'list' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            列表管理
+                        </button>
+                        <button 
+                            onClick={() => setViewMode('date_migration')}
+                            className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${viewMode === 'date_migration' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            批量日期遷移
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* VIEW 1: LIST MANAGEMENT */}
+            {viewMode === 'list' && (
+                <div className="animate-in fade-in slide-in-from-bottom-2">
+                    {/* Toolbar */}
+                    <div className="mb-4 space-y-4">
+                        <div className="flex gap-4 items-center">
+                            <div className="flex-1 bg-slate-50 border rounded-lg flex items-center px-3 py-2">
+                                <Search size={18} className="text-slate-400 mr-2" />
+                                <input 
+                                    type="text" 
+                                    placeholder="搜尋學生、活動或日期..." 
+                                    className="bg-transparent outline-none w-full text-sm" 
+                                    value={searchTerm} 
+                                    onChange={(e) => setSearchTerm(e.target.value)} 
+                                />
+                            </div>
+                            {selectedIds.size > 0 && (
+                                <div className="flex items-center gap-2">
+                                    <button onClick={() => setBatchEditMode(!batchEditMode)} className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-bold flex items-center hover:bg-blue-700">
+                                        <Edit2 size={16} className="mr-2" /> 
+                                        批量修改 ({selectedIds.size})
+                                    </button>
+                                    <button 
+                                        onClick={() => {
+                                            if(window.confirm(`確定刪除 ${selectedIds.size} 筆資料？`)) {
+                                                const db = getFirestore();
+                                                const batch = writeBatch(db);
+                                                selectedIds.forEach(id => batch.delete(doc(db, "activities", id)));
+                                                batch.commit().then(() => setSelectedIds(new Set()));
+                                            }
+                                        }} 
+                                        className="bg-red-50 text-red-600 px-3 py-2 rounded-lg text-sm font-bold flex items-center hover:bg-red-100 border border-red-200"
+                                    >
+                                        <Trash2 size={16} className="mr-2" /> 刪除
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Batch Edit Panel */}
+                        {batchEditMode && selectedIds.size > 0 && (
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                <h3 className="font-bold text-blue-800 text-sm mb-3">批量修改內容 (留空不變)</h3>
+                                <div className="grid grid-cols-4 gap-2 mb-3">
+                                    <input className="p-2 border rounded text-sm" placeholder="新活動名稱..." value={batchForm.activity} onChange={e => setBatchForm({...batchForm, activity: e.target.value})} />
+                                    <input className="p-2 border rounded text-sm" placeholder="新時間..." value={batchForm.time} onChange={e => setBatchForm({...batchForm, time: e.target.value})} />
+                                    <input className="p-2 border rounded text-sm" placeholder="新地點..." value={batchForm.location} onChange={e => setBatchForm({...batchForm, location: e.target.value})} />
+                                    <input className="p-2 border rounded text-sm" placeholder="新日期/備註..." value={batchForm.dateText} onChange={e => setBatchForm({...batchForm, dateText: e.target.value})} />
+                                </div>
+                                <div className="flex justify-end gap-2">
+                                    <button onClick={() => setBatchEditMode(false)} className="px-3 py-1 text-slate-500 hover:text-slate-800 text-sm">取消</button>
+                                    <button onClick={handleBatchTextUpdate} className="bg-blue-600 text-white px-4 py-1 rounded text-sm font-bold hover:bg-blue-700">確認修改</button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Table */}
+                    <div className="overflow-x-auto border rounded-xl">
+                        <table className="w-full text-left text-sm border-collapse">
+                            <thead className="bg-slate-100 text-slate-600 uppercase">
+                                <tr>
+                                    <th className="p-3 w-10 text-center">
+                                        <input type="checkbox" checked={filteredData.length > 0 && selectedIds.size === filteredData.length} onChange={toggleSelectAll} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"/>
+                                    </th>
+                                    <th className="p-3">學生</th>
+                                    <th className="p-3">活動名稱</th>
+                                    <th className="p-3">時間/地點</th>
+                                    <th className="p-3">日期/備註</th>
+                                    <th className="p-3 text-right">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {filteredData.map(act => (
+                                    <tr key={act.id} className={`border-b hover:bg-slate-50 ${selectedIds.has(act.id) ? 'bg-blue-50/50' : ''}`}>
+                                        <td className="p-3 text-center">
+                                            <input type="checkbox" checked={selectedIds.has(act.id)} onChange={() => toggleSelect(act.id)} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer" />
+                                        </td>
+                                        
+                                        {editingId === act.id ? (
+                                            // 編輯模式
+                                            <>
+                                                <td className="p-3 text-slate-400 text-xs">不可編輯學生</td>
+                                                <td className="p-3"><input className="w-full p-1 border rounded" value={editForm.activity} onChange={e => setEditForm({...editForm, activity: e.target.value})} /></td>
+                                                <td className="p-3">
+                                                    <input className="w-full p-1 border rounded mb-1" value={editForm.time} onChange={e => setEditForm({...editForm, time: e.target.value})} />
+                                                    <input className="w-full p-1 border rounded" value={editForm.location} onChange={e => setEditForm({...editForm, location: e.target.value})} />
+                                                </td>
+                                                <td className="p-3"><input className="w-full p-1 border rounded" value={editForm.dateText} onChange={e => setEditForm({...editForm, dateText: e.target.value})} /></td>
+                                                <td className="p-3 text-right">
+                                                    <div className="flex justify-end gap-2">
+                                                        <button onClick={saveEdit} className="bg-green-100 text-green-700 p-1.5 rounded hover:bg-green-200"><CheckCircle size={16} /></button>
+                                                        <button onClick={() => setEditingId(null)} className="bg-slate-100 text-slate-600 p-1.5 rounded hover:bg-slate-200"><X size={16} /></button>
+                                                    </div>
+                                                </td>
+                                            </>
+                                        ) : (
+                                            // 顯示模式
+                                            <>
+                                                <td className="p-3">
+                                                    <div className="font-bold text-slate-800">{act.verifiedClass} {act.verifiedClassNo}</div>
+                                                    <div className="text-slate-500 text-xs">{act.verifiedName}</div>
+                                                </td>
+                                                <td className="p-3 font-bold text-blue-700">{act.activity}</td>
+                                                <td className="p-3">
+                                                    <div className="text-slate-800">{act.time}</div>
+                                                    <div className="text-slate-500 text-xs">{act.location}</div>
+                                                </td>
+                                                <td className="p-3">
+                                                    <span className="inline-block bg-slate-100 text-slate-600 px-2 py-1 rounded text-xs font-bold">
+                                                        {act.dateText}
+                                                    </span>
+                                                </td>
+                                                <td className="p-3 text-right">
+                                                    <div className="flex justify-end gap-2">
+                                                        <button onClick={() => startEdit(act)} className="text-blue-500 hover:text-blue-700 p-1"><Edit2 size={16} /></button>
+                                                        <button onClick={() => onDelete(act.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={16} /></button>
+                                                    </div>
+                                                </td>
+                                            </>
+                                        )}
+                                    </tr>
+                                ))}
+                                {filteredData.length === 0 && <tr><td colSpan="6" className="p-8 text-center text-slate-400">沒有符合搜尋的資料。</td></tr>}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {/* VIEW 2: BULK DATE MIGRATION */}
+            {viewMode === 'date_migration' && (
+                <div className="animate-in fade-in slide-in-from-right-4 max-w-4xl mx-auto w-full">
+                    <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-6 mb-8">
+                        <h3 className="font-bold text-indigo-900 text-lg mb-4 flex items-center">
+                            <RefreshCcw className="mr-2" size={20}/> 批量日期遷移 (Migration)
+                        </h3>
+                        <p className="text-indigo-700 text-sm mb-6">
+                            此功能允許您將某一個日期的<span className="font-bold">所有活動</span>一次性移動到新日期。請先在下方選擇舊日期。
+                        </p>
+
+                        <div className="flex flex-col md:flex-row gap-6 items-end">
+                            <div className="flex-1 w-full">
+                                <label className="block text-xs font-bold text-indigo-600 mb-1 uppercase">原本日期 (Source)</label>
+                                <select 
+                                    className="w-full p-3 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                                    value={migrationSourceDate}
+                                    onChange={(e) => setMigrationSourceDate(e.target.value)}
+                                >
+                                    <option value="">-- 請選擇要遷移的舊日期 --</option>
+                                    {dateStats.map(([date, count]) => (
+                                        <option key={date} value={date}>{date} (共 {count} 筆)</option>
+                                    ))}
+                                </select>
+                            </div>
+                            
+                            <div className="text-indigo-300 pb-3">
+                                <ArrowRight size={24} />
+                            </div>
+
+                            <div className="flex-1 w-full">
+                                <label className="block text-xs font-bold text-indigo-600 mb-1 uppercase">新日期 (Target)</label>
+                                <input 
+                                    type="text" 
+                                    className="w-full p-3 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                                    placeholder="輸入新日期 (如: 2024-03-15 或 逢星期五)"
+                                    value={migrationTargetDate}
+                                    onChange={(e) => setMigrationTargetDate(e.target.value)}
+                                />
+                            </div>
+
+                            <button 
+                                onClick={handleDateMigration}
+                                disabled={!migrationSourceDate || !migrationTargetDate || isMigrating}
+                                className={`px-6 py-3 rounded-lg font-bold text-white shadow-lg flex items-center ${!migrationSourceDate ? 'bg-slate-300' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+                            >
+                                {isMigrating ? <span className="animate-pulse">處理中...</span> : '確認遷移'}
+                            </button>
+                        </div>
+                    </div>
+
+                    <h4 className="font-bold text-slate-700 mb-4">現有日期統計一覽：</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {dateStats.map(([date, count]) => (
+                            <div key={date} className="bg-white border rounded-lg p-3 flex justify-between items-center shadow-sm">
+                                <span className="font-mono text-sm font-bold text-slate-700">{date}</span>
+                                <span className="bg-slate-100 text-slate-500 text-xs px-2 py-1 rounded-full">{count}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+// ====================================================================
+
 // -----------------------------------------------------------------------------
 // MAIN APP COMPONENT
 // -----------------------------------------------------------------------------
+
 const App = () => {
-  const [currentView, setCurrentView] = useState('student');
+  const [currentView, setCurrentView] = useState('student'); 
+  
   // Auth State
-  const [user, setUser] = useState(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  const [user, setUser] = useState(null); 
+  const [authLoading, setAuthLoading] = useState(true); 
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPwd, setLoginPwd] = useState('');
-
+  
   // Data State
-  const [masterList, setMasterList] = useState([]);
-  const [activities, setActivities] = useState([]);
+  const [masterList, setMasterList] = useState([]); 
+  const [activities, setActivities] = useState([]); 
   const [pendingImports, setPendingImports] = useState([]);
   const [queryLogs, setQueryLogs] = useState([]);
-  
+
   // Loading States
   const [isMasterLoading, setIsMasterLoading] = useState(false);
 
-  // V4.2: New Edit State for Dates
-  const [editingId, setEditingId] = useState(null);
-  const [tempDateInput, setTempDateInput] = useState(''); // Stores the "MMDD" string
+  // V2.9: School Year State
+  const [schoolYearStart, setSchoolYearStart] = useState(2025); 
+
+  // Import Form State
+  const [bulkInput, setBulkInput] = useState('');
+  const [importActivity, setImportActivity] = useState('無人機班');
+  const [importTime, setImportTime] = useState('15:30-16:30');
+  const [importLocation, setImportLocation] = useState('禮堂');
+  const [importDayId, setImportDayId] = useState(1);
+  const [importDates, setImportDates] = useState([]); 
+  const [tempDateInput, setTempDateInput] = useState('');
+  const dateInputRef = useRef(null); 
 
   // Admin UI State
-  const [adminTab, setAdminTab] = useState('database'); // Default to database for checking
+  const [adminTab, setAdminTab] = useState('import'); 
   const [selectedMatchIds, setSelectedMatchIds] = useState(new Set());
-  
-  // Student Search State
-  const [searchClass, setSearchClass] = useState('');
-  const [searchNo, setSearchNo] = useState('');
-  const [studentResult, setStudentResult] = useState(null);
-  const [searchHistory, setSearchHistory] = useState([]);
+  const [csvEncoding, setCsvEncoding] = useState('Big5'); 
+  const fileInputRef = useRef(null); 
 
-  // Init Data
+  // DB Management UI State
+  const [dbSearchTerm, setDbSearchTerm] = useState('');
+  const [dbSelectedIds, setDbSelectedIds] = useState(new Set());
+  const [dbBatchMode, setDbBatchMode] = useState(false);
+  const [batchEditForm, setBatchEditForm] = useState({ activity: '', time: '', location: '', dateText: '' });
+
+  // DB Editing State
+  const [editingId, setEditingId] = useState(null);
+  const [editFormData, setEditFormData] = useState({});
+
+  // Staff View State
+  const [staffShowAll, setStaffShowAll] = useState(false); 
+
+  // Search UI
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedClass, setSelectedClass] = useState('1A');
+  const [selectedClassNo, setSelectedClassNo] = useState('');
+  const [studentResult, setStudentResult] = useState(null);
+  const [currentDateTime, setCurrentDateTime] = useState(new Date()); 
+
+  // ---------------------------------------------------------------------------
+  // FIREBASE LISTENERS
+  // ---------------------------------------------------------------------------
   useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, (u) => {
-      setUser(u);
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
       setAuthLoading(false);
     });
-
-    const unsubAct = onSnapshot(query(collection(db, "activities"), orderBy("classCode")), (snap) => {
-      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setActivities(data);
-    });
-
-    const unsubLogs = onSnapshot(query(collection(db, "query_logs"), orderBy("timestamp", "desc")), (snap) => {
-      const logs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setQueryLogs(logs);
-    });
-
-    return () => { unsubAuth(); unsubAct(); unsubLogs(); };
+    return () => unsubscribe();
   }, []);
 
-  // Fetch Master List on Login
   useEffect(() => {
-    if (user && !isMasterLoading && masterList.length === 0) {
-      setIsMasterLoading(true);
-      getDoc(doc(db, "settings", "master_list")).then(snap => {
-        if (snap.exists() && snap.data().csv) {
-          setMasterList(parseMasterCSV(snap.data().csv));
-        }
-        setIsMasterLoading(false);
-      });
-    }
-  }, [user]);
-
-  // Login Handler
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    try { await signInWithEmailAndPassword(auth, loginEmail, loginPwd); } 
-    catch (e) { alert("登入失敗: " + e.message); }
-  };
-
-  // Student Search Logic
-  const handleSearch = async (e) => {
-    e.preventDefault();
-    if (!searchClass || !searchNo) return;
-    
-    // Log
-    const now = new Date();
-    const dateStr = now.toLocaleDateString('zh-HK');
-    const timeStr = now.toLocaleTimeString('zh-HK');
-    
-    // Normalize Input
-    const sClass = searchClass.toUpperCase();
-    const sNo = searchNo.padStart(2, '0');
-    const sKey = `${sClass}-${sNo}`; // Note: key matching might differ based on master list format
-    
-    // Find Student Logic (Simplified for this version)
-    const studentActs = activities.filter(a => 
-      (a.verifiedClass === sClass && a.verifiedClassNo === sNo) ||
-      (a.classCode === sClass && a.classNo === sNo)
-    );
-
-    // Find Student Name from Master
-    const studentInfo = masterList.find(s => s.classCode === sClass && s.classNo === sNo);
-    const sName = studentInfo ? studentInfo.chiName : "未知學生";
-
-    // Add Log
-    addDoc(collection(db, "query_logs"), {
-        timestamp: now,
-        dateStr, timeStr,
-        class: sClass, classNo: sNo,
-        name: sName,
-        success: studentActs.length > 0
+    const q = query(collection(db, "activities"), orderBy("time")); 
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const acts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setActivities(acts);
     });
+    return () => unsubscribe();
+  }, []);
 
-    setStudentResult({ info: studentInfo, acts: studentActs });
-  };
+  useEffect(() => {
+    const fetchMaster = async () => {
+        setIsMasterLoading(true);
+        try {
+            const docRef = doc(db, "settings", "master_list");
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                if (data.students) setMasterList(data.students);
+                if (data.schoolYearStart) setSchoolYearStart(data.schoolYearStart);
+            }
+        } catch (error) {
+            console.error("Error fetching master list:", error);
+        } finally {
+            setIsMasterLoading(false);
+        }
+    };
+    fetchMaster();
+  }, []);
 
-  // V4.2 Date Editing Handlers
-  const startEditing = (act) => {
-      setEditingId(act.id);
-      // Convert stored dates to MMDD display format for editing
-      setTempDateInput(formatDateForDisplay(act.specificDates || []));
-  };
+  useEffect(() => {
+      const timer = setInterval(() => setCurrentDateTime(new Date()), 1000);
+      return () => clearInterval(timer);
+  }, []);
 
-  const saveDateEdit = async (actId) => {
-      // Parse MMDD back to YYYY-MM-DD using smart logic
-      const newDates = parseSmartDateString(tempDateInput);
+  // ---------------------------------------------------------------------------
+  // AUTH ACTIONS
+  // ---------------------------------------------------------------------------
+  const handleLogin = async (e) => {
+      e.preventDefault();
       try {
-          await updateDoc(doc(db, "activities", actId), { specificDates: newDates });
-          setEditingId(null);
-      } catch (e) {
-          alert("更新失敗");
-          console.error(e);
+          await signInWithEmailAndPassword(auth, loginEmail, loginPwd);
+          setLoginPwd(''); 
+      } catch (error) {
+          alert("登入失敗: " + error.message);
       }
   };
-  
-  const cancelEdit = () => {
-      setEditingId(null);
-      setTempDateInput('');
+
+  const handleLogout = async () => {
+      await signOut(auth);
+      setUser(null);
+      setCurrentView('student'); 
   };
 
-  // ---------------- RENDER ----------------
-  
-  if (authLoading) return <div className="min-h-screen flex items-center justify-center bg-slate-100"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>;
+  // ---------------------------------------------------------------------------
+  // MASTER DATA ACTIONS
+  // ---------------------------------------------------------------------------
+  const handleMasterUploadTrigger = () => fileInputRef.current.click();
 
-  // 1. ADMIN VIEW
-  if (user) {
-    if (currentView === 'analysis') {
-        return <StatsView masterList={masterList} activities={activities} queryLogs={queryLogs} onBack={() => setCurrentView('admin')} />;
+  const handleMasterFileChange = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.readAsText(file, csvEncoding);
+      reader.onload = async (event) => {
+          const text = event.target.result;
+          try {
+              const newMaster = parseMasterCSV(text);
+              if (newMaster.length > 0) {
+                  if (window.confirm(`解析成功！共 ${newMaster.length} 筆資料。\n確定要上傳至雲端資料庫嗎？(這將覆蓋舊有名單)`)) {
+                      setIsMasterLoading(true);
+                      try {
+                          await setDoc(doc(db, "settings", "master_list"), {
+                              students: newMaster,
+                              schoolYearStart: schoolYearStart, 
+                              updatedAt: new Date().toISOString(),
+                              updatedBy: user.email
+                          });
+                          setMasterList(newMaster);
+                          alert("雲端數據庫更新成功！");
+                      } catch (error) {
+                          alert("上傳失敗: " + error.message);
+                      } finally {
+                          setIsMasterLoading(false);
+                      }
+                  }
+              } else {
+                  alert("CSV 無法識別。請檢查格式或編碼。");
+              }
+          } catch (err) {
+              alert("解析 CSV 失敗: " + err.message);
+          }
+      };
+  };
+
+  const handleSchoolYearChange = async (e) => {
+      const newYear = parseInt(e.target.value);
+      setSchoolYearStart(newYear);
+      if (user) {
+          try {
+              await setDoc(doc(db, "settings", "master_list"), {
+                  students: masterList,
+                  schoolYearStart: newYear,
+                  updatedAt: new Date().toISOString(),
+                  updatedBy: user.email
+              });
+          } catch (err) { console.error("Failed to sync year", err); }
+      }
+  };
+
+  // ---------------------------------------------------------------------------
+  // DATA LOGIC (Date & Import)
+  // ---------------------------------------------------------------------------
+  const handleAddDate = () => {
+      if (!tempDateInput) return;
+      let dateString = tempDateInput;
+      const ddmmRegex = /^(\d{1,2})(\d{2})$/;
+      const match = tempDateInput.match(ddmmRegex);
+
+      if (match) {
+          const day = parseInt(match[1]);
+          const month = parseInt(match[2]);
+          if (month < 1 || month > 12) { alert("無效的月份"); return; }
+          if (day < 1 || day > 31) { alert("無效的日期"); return; }
+          let year = schoolYearStart;
+          if (month >= 1 && month <= 8) year = schoolYearStart + 1;
+          else if (month >= 9 && month <= 12) year = schoolYearStart;
+          const fMonth = String(month).padStart(2, '0');
+          const fDay = String(day).padStart(2, '0');
+          dateString = `${year}-${fMonth}-${fDay}`;
+      } else {
+          const d = new Date(tempDateInput);
+          if (isNaN(d.getTime())) { alert("日期格式錯誤，請輸入 DDMM"); return; }
+      }
+
+      if (!importDates.includes(dateString)) {
+          const newDates = [...importDates, dateString].sort();
+          setImportDates(newDates);
+          if (newDates.length === 1) {
+              const d = new Date(dateString);
+              setImportDayId(d.getDay());
+          }
+      }
+      setTempDateInput(''); 
+      if(dateInputRef.current) dateInputRef.current.focus();
+  };
+
+  const handleDateInputKeyDown = (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); handleAddDate(); }
+  };
+
+  const handleRemoveDate = (d) => setImportDates(prev => prev.filter(x => x !== d));
+  const handleClearDates = () => setImportDates([]);
+  const formatDisplayDate = (isoDate) => {
+      const parts = isoDate.split('-');
+      if (parts.length === 3) return `${parts[2]}${parts[1]}`; 
+      return isoDate;
+  };
+
+  const handleBulkImport = () => {
+      const lines = bulkInput.trim().split('\n');
+      const newItems = [];
+      const dayMap = {1:'逢星期一', 2:'逢星期二', 3:'逢星期三', 4:'逢星期四', 5:'逢星期五', 6:'逢星期六', 0:'逢星期日'};
+      let finalDateText = dayMap[importDayId];
+      if (importDates.length > 0) finalDateText = `共${importDates.length}堂 (${importDates[0]}起)`;
+
+      lines.forEach((line) => {
+          const cleanLine = line.trim().replace(/['"]/g, ''); 
+          if(!cleanLine) return;
+          const mixedClassRegex = /([1-6][A-E])(\d{0,2})/; 
+          const nameRegex = /[\u4e00-\u9fa5]{2,}/; 
+          const phoneRegex = /[569]\d{7}/; 
+          const classMatch = cleanLine.match(mixedClassRegex);
+          const nameMatch = cleanLine.match(nameRegex);
+          const phoneMatch = cleanLine.match(phoneRegex);
+
+          if (classMatch && nameMatch) {
+              newItems.push({
+                  id: Date.now() + Math.random(),
+                  rawName: nameMatch[0],
+                  rawClass: classMatch[1],
+                  rawClassNo: classMatch[2] ? classMatch[2].padStart(2, '0') : '00', 
+                  rawPhone: phoneMatch ? phoneMatch[0] : '', 
+                  activity: importActivity,
+                  time: importTime,
+                  location: importLocation,
+                  dateText: finalDateText,
+                  dayIds: [parseInt(importDayId)], 
+                  specificDates: importDates, 
+                  forceConflict: false 
+              });
+          }
+      });
+
+      if (newItems.length > 0) {
+          setPendingImports(prev => [...prev, ...newItems]);
+          setBulkInput('');
+          alert(`成功識別 ${newItems.length} 筆。`);
+      } else {
+          alert("無法識別。");
+      }
+  };
+
+  const { matched, conflicts } = useMemo(() => {
+    const matched = [];
+    const conflicts = [];
+    pendingImports.forEach(item => {
+      if (item.forceConflict) { conflicts.push({ ...item, status: 'manual_conflict' }); return; }
+      let student = masterList.find(s => s.classCode === item.rawClass && s.chiName === item.rawName);
+      if (!student && item.rawClassNo !== '00') student = masterList.find(s => s.classCode === item.rawClass && s.classNo === item.rawClassNo);
+      if (!student) { const potential = masterList.filter(s => s.chiName === item.rawName); if (potential.length === 1) student = potential[0]; }
+
+      if (student) {
+        matched.push({ ...item, verifiedName: student.chiName, verifiedClass: student.classCode, verifiedClassNo: student.classNo, status: 'verified' });
+      } else {
+        conflicts.push({ ...item, status: 'conflict' });
+      }
+    });
+    return { matched, conflicts };
+  }, [pendingImports, masterList]);
+
+  useEffect(() => { setSelectedMatchIds(new Set(matched.map(m => m.id))); }, [matched.length]);
+  
+  const toggleSelectMatch = (id) => {
+      const newSet = new Set(selectedMatchIds);
+      if (newSet.has(id)) newSet.delete(id); else newSet.add(id);
+      setSelectedMatchIds(newSet);
+  };
+  const toggleSelectAll = () => setSelectedMatchIds(selectedMatchIds.size === matched.length ? new Set() : new Set(matched.map(m => m.id)));
+
+  const handlePublish = async () => {
+    const toPublish = matched.filter(m => selectedMatchIds.has(m.id));
+    if (toPublish.length === 0) return alert("請選擇資料");
+    try {
+        const batchPromises = toPublish.map(item => {
+            const { id, status, forceConflict, ...dataToSave } = item;
+            return addDoc(collection(db, "activities"), { ...dataToSave, createdAt: new Date().toISOString() });
+        });
+        await Promise.all(batchPromises);
+        const publishedIds = new Set(toPublish.map(m => m.id));
+        setPendingImports(prev => prev.filter(p => !publishedIds.has(p.id)));
+        alert(`成功發布 ${toPublish.length} 筆資料到雲端！`);
+    } catch (error) {
+        alert("發布失敗: " + error.message);
     }
+  };
+
+  const handleManualConflict = (id) => setPendingImports(prev => prev.map(i => i.id === id ? { ...i, forceConflict: true } : i));
+  const handleResolveConflict = (item, correctStudent) => {
+    setPendingImports(prev => prev.map(i => i.id === item.id ? { ...i, rawClass: correctStudent.classCode, rawName: correctStudent.chiName, rawClassNo: correctStudent.classNo, forceConflict: false } : i));
+  };
+  const handleDeleteImport = (id) => setPendingImports(prev => prev.filter(i => i.id !== id));
+
+  // ---------------------------------------------------------------------------
+  // DB MANAGEMENT LOGIC (V3.1)
+  // ---------------------------------------------------------------------------
+  
+  const filteredDbActivities = useMemo(() => {
+      if (!dbSearchTerm) return activities;
+      const lower = dbSearchTerm.toLowerCase();
+      return activities.filter(a => 
+          a.activity?.toLowerCase().includes(lower) || 
+          a.verifiedName?.includes(lower) || 
+          a.verifiedClass?.includes(lower)
+      );
+  }, [activities, dbSearchTerm]);
+
+  const toggleDbSelect = (id) => {
+      const newSet = new Set(dbSelectedIds);
+      if (newSet.has(id)) newSet.delete(id); else newSet.add(id);
+      setDbSelectedIds(newSet);
+  };
+
+  const toggleDbSelectAll = () => {
+      if (dbSelectedIds.size === filteredDbActivities.length) {
+          setDbSelectedIds(new Set());
+      } else {
+          setDbSelectedIds(new Set(filteredDbActivities.map(a => a.id)));
+      }
+  };
+
+  const handleBatchDelete = async () => {
+      if (!window.confirm(`確定要刪除選取的 ${dbSelectedIds.size} 筆資料嗎？`)) return;
+      const batch = writeBatch(db);
+      dbSelectedIds.forEach(id => { const ref = doc(db, "activities", id); batch.delete(ref); });
+      try { await batch.commit(); setDbSelectedIds(new Set()); alert("批量刪除成功！"); } catch (e) { alert("批量刪除失敗: " + e.message); }
+  };
+
+  const handleBatchEdit = async () => {
+      if (!window.confirm(`確定要將選取的 ${dbSelectedIds.size} 筆資料統一修改嗎？`)) return;
+      const batch = writeBatch(db);
+      const updates = {};
+      if (batchEditForm.activity) updates.activity = batchEditForm.activity;
+      if (batchEditForm.time) updates.time = batchEditForm.time;
+      if (batchEditForm.location) updates.location = batchEditForm.location;
+      if (batchEditForm.dateText) updates.dateText = batchEditForm.dateText;
+      if (Object.keys(updates).length === 0) return alert("請輸入要修改的內容");
+      dbSelectedIds.forEach(id => { const ref = doc(db, "activities", id); batch.update(ref, updates); });
+      try { await batch.commit(); setDbSelectedIds(new Set()); setDbBatchMode(false); setBatchEditForm({ activity: '', time: '', location: '', dateText: '' }); alert("批量修改成功！"); } catch (e) { alert("批量修改失敗: " + e.message); }
+  };
+
+  const handleDeleteActivity = async (id) => {
+      if(window.confirm('確定要刪除這筆紀錄嗎？')) {
+          try { await deleteDoc(doc(db, "activities", id)); } catch(e) { alert("刪除失敗:" + e.message) }
+      }
+  };
+
+  const startEditActivity = (act) => {
+      setEditingId(act.id);
+      setEditFormData({ activity: act.activity, time: act.time, location: act.location, dateText: act.dateText });
+  };
+
+  const saveEditActivity = async (id) => {
+      try {
+          await updateDoc(doc(db, "activities", id), editFormData);
+          setEditingId(null);
+      } catch(e) { alert("更新失敗:" + e.message) }
+  };
+  const cancelEdit = () => { setEditingId(null); setEditFormData({}); };
+
+  // Logic: Search (Updated with enhanced logging)
+  const handleStudentSearch = () => {
+    const formattedClassNo = selectedClassNo.padStart(2, '0');
+    const student = masterList.find(s => s.classCode === selectedClass && s.classNo === formattedClassNo);
+    
+    const now = new Date();
+    const newLog = { 
+        id: Date.now(), 
+        dateStr: now.toLocaleDateString('zh-HK'),
+        timeStr: now.toLocaleTimeString('zh-HK'),
+        class: selectedClass, 
+        classNo: formattedClassNo, 
+        name: student ? student.chiName : '未知', 
+        success: !!student 
+    };
+    
+    setQueryLogs(prev => [newLog, ...prev]);
+    const results = activities.filter(item => item.verifiedClass === selectedClass && item.verifiedClassNo === formattedClassNo);
+    setStudentResult(results);
+    setCurrentView('kiosk_result');
+  };
+
+  // Staff View Logic
+  const filteredActivities = useMemo(() => {
+      let result = activities;
+      if (!staffShowAll) {
+          const d = new Date();
+          const todayString = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          const currentDayId = d.getDay();
+          result = result.filter(act => {
+              if (act.specificDates && act.specificDates.length > 0) {
+                  return act.specificDates.includes(todayString);
+              }
+              return act.dayIds && act.dayIds.includes(currentDayId);
+          });
+      }
+      if (searchTerm) {
+          const lower = searchTerm.toLowerCase();
+          result = result.filter(item => 
+            item.verifiedName?.includes(lower) || 
+            item.verifiedClass?.includes(lower) || 
+            item.activity?.includes(lower)
+          );
+      }
+      return result;
+  }, [activities, searchTerm, staffShowAll]);
+
+  // -------------------------------------------------------------------------
+  // VIEWS
+  // -------------------------------------------------------------------------
+  const renderTopNavBar = () => (
+    <div className="bg-slate-900 text-white p-3 flex justify-between items-center shadow-md sticky top-0 z-50">
+        <div className="flex items-center space-x-2 cursor-pointer" onClick={() => setCurrentView('student')}>
+            <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center font-bold text-sm">佛</div>
+            <span className="font-bold text-lg tracking-wide hidden sm:block">佛教正覺蓮社學校</span>
+        </div>
+        
+        <div className="hidden md:flex flex-col items-center justify-center text-xs text-slate-400 font-mono">
+            <div>{currentDateTime.toLocaleDateString('zh-HK', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
+            <div className="text-white font-bold text-lg">{currentDateTime.toLocaleTimeString('zh-HK')}</div>
+        </div>
+
+        <div className="flex space-x-1">
+            <button onClick={() => setCurrentView('student')} className={`px-4 py-2 rounded-lg flex items-center text-sm transition-all ${currentView === 'student' || currentView === 'kiosk_result' ? 'bg-orange-600 text-white font-bold shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}><User size={16} className="mr-2" /> 學生</button>
+            <button onClick={() => setCurrentView('staff')} className={`px-4 py-2 rounded-lg flex items-center text-sm transition-all ${currentView === 'staff' ? 'bg-blue-600 text-white font-bold shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}><Users size={16} className="mr-2" /> 教職員</button>
+            <button onClick={() => setCurrentView('admin')} className={`px-4 py-2 rounded-lg flex items-center text-sm transition-all ${currentView === 'admin' ? 'bg-slate-700 text-white font-bold shadow-lg ring-1 ring-slate-500' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+                {user ? <Shield size={16} className="mr-2 text-green-400" /> : <Lock size={16} className="mr-2" />} 管理員
+            </button>
+        </div>
+    </div>
+  );
+
+  const renderStudentView = () => {
+    const allClasses = [
+        '1A', '1B', '1C', '1D', '1E',
+        '2A', '2B', '2C', '2D', '2E',
+        '3A', '3B', '3C', '3D', '3E',
+        '4A', '4B', '4C', '4D', '4E',
+        '5A', '5B', '5C', '5D',
+        '6A', '6B', '6C', '6D'
+    ];
 
     return (
-      <div className="min-h-screen bg-slate-50 flex">
-        {/* Sidebar */}
-        <div className="w-64 bg-slate-900 text-slate-300 flex flex-col">
-          <div className="p-6 border-b border-slate-800">
-            <h1 className="text-xl font-bold text-white flex items-center"><Monitor className="mr-2 text-blue-400"/> 校務系統 V4.2</h1>
-            <p className="text-xs text-slate-500 mt-2">Authenticated</p>
-          </div>
-          <nav className="flex-1 p-4 space-y-2">
-            <button onClick={() => setAdminTab('database')} className={`w-full text-left p-3 rounded flex items-center ${adminTab === 'database' ? 'bg-blue-600 text-white shadow-lg' : 'hover:bg-slate-800'}`}>
-                <Database className="mr-3" size={18}/> 數據庫管理
-            </button>
-            <button onClick={() => setCurrentView('analysis')} className="w-full text-left p-3 rounded flex items-center hover:bg-slate-800">
-                <BarChart className="mr-3" size={18}/> 數據分析 (Stats)
-            </button>
-          </nav>
-          <div className="p-4 border-t border-slate-800">
-            <button onClick={() => signOut(auth)} className="w-full flex items-center justify-center p-2 rounded border border-slate-600 hover:bg-slate-800 text-slate-400"><LogOut size={16} className="mr-2"/> 登出</button>
-          </div>
-        </div>
-
-        {/* Main Content */}
-        <div className="flex-1 overflow-auto">
-          {adminTab === 'database' && (
-             <div className="p-8">
-                <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-2xl font-bold text-slate-800">全校活動數據庫</h2>
-                    <div className="text-sm text-slate-500 bg-white px-3 py-1 rounded shadow-sm border">
-                        <span className="font-bold text-blue-600">V4.2 更新:</span> 日期輸入支援智能學年判斷 (輸入 0101 自動轉為 2026-01-01)
+        <div className="flex-1 flex flex-col bg-gradient-to-b from-orange-50 to-white">
+            <div className="flex-1 flex flex-col items-center justify-center p-4">
+            <div className="w-full max-w-4xl bg-white p-8 rounded-3xl shadow-xl border border-orange-100">
+                <div className="text-center mb-6"><h1 className="text-2xl font-bold text-slate-800">課外活動查詢</h1><p className="text-slate-500">請輸入你的班別及學號</p></div>
+                
+                <div className="mb-6">
+                    <label className="block text-slate-400 text-sm mb-2 font-bold uppercase tracking-wider">班別 Class</label>
+                    <div className="grid grid-cols-5 md:grid-cols-10 gap-2">
+                        {allClasses.map((cls) => (
+                            <button key={cls} onClick={() => setSelectedClass(cls)} className={`py-2 rounded-lg font-bold text-lg transition-colors ${selectedClass === cls ? 'bg-orange-500 text-white shadow-lg scale-105' : 'bg-slate-100 text-slate-600 hover:bg-orange-100'}`}>
+                                {cls}
+                            </button>
+                        ))}
                     </div>
                 </div>
-
-                <div className="bg-white rounded-xl shadow border overflow-hidden">
-                    <table className="w-full text-left border-collapse">
-                        <thead className="bg-slate-100 text-slate-600 uppercase text-xs">
-                            <tr>
-                                <th className="p-4 border-b">班別/姓名</th>
-                                <th className="p-4 border-b">活動名稱</th>
-                                <th className="p-4 border-b w-48">日期 (MMDD)</th>
-                                <th className="p-4 border-b">時間/地點</th>
-                                <th className="p-4 border-b w-24">操作</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y">
-                            {activities.map(act => (
-                                <tr key={act.id} className="hover:bg-slate-50 group">
-                                    <td className="p-4">
-                                        <div className="font-bold text-slate-800">{act.verifiedClass || act.classCode} ({act.verifiedClassNo || act.classNo})</div>
-                                        <div className="text-xs text-slate-500">{act.verifiedName || act.engName}</div>
-                                    </td>
-                                    <td className="p-4 font-medium text-blue-700">{act.activity}</td>
-                                    
-                                    {/* V4.2: SMART DATE EDITING */}
-                                    <td className="p-4">
-                                        {editingId === act.id ? (
-                                            <div className="flex flex-col space-y-1">
-                                                <input 
-                                                    type="text" 
-                                                    autoFocus
-                                                    className="border border-blue-500 rounded p-1 text-sm w-full bg-blue-50 focus:outline-none"
-                                                    value={tempDateInput}
-                                                    onChange={(e) => setTempDateInput(e.target.value)}
-                                                    placeholder="e.g. 0901, 0102"
-                                                />
-                                                <div className="text-[10px] text-slate-400">
-                                                    輸入: 0901=25年, 0101=26年
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <span className="font-mono text-sm text-slate-600 bg-slate-100 px-2 py-1 rounded">
-                                                {formatDateForDisplay(act.specificDates) || '-'}
-                                            </span>
-                                        )}
-                                    </td>
-
-                                    <td className="p-4 text-sm text-slate-500">
-                                        <div><Clock size={12} className="inline mr-1"/>{act.time}</div>
-                                        <div><MapPin size={12} className="inline mr-1"/>{act.location}</div>
-                                    </td>
-                                    <td className="p-4">
-                                        {editingId === act.id ? (
-                                            <div className="flex space-x-2">
-                                                <button onClick={() => saveDateEdit(act.id)} className="p-1.5 bg-green-100 text-green-700 rounded hover:bg-green-200"><Save size={16}/></button>
-                                                <button onClick={cancelEdit} className="p-1.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200"><X size={16}/></button>
-                                            </div>
-                                        ) : (
-                                            <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition">
-                                                <button onClick={() => startEditing(act)} className="p-1.5 bg-blue-50 text-blue-600 rounded hover:bg-blue-100" title="修改日期"><Edit2 size={16}/></button>
-                                                <button onClick={() => { if(confirm('刪除此紀錄?')) deleteDoc(doc(db, "activities", act.id)); }} className="p-1.5 bg-red-50 text-red-600 rounded hover:bg-red-100"><Trash2 size={16}/></button>
-                                            </div>
-                                        )}
-                                    </td>
-                                </tr>
-                            ))}
-                            {activities.length === 0 && <tr><td colSpan="5" className="p-8 text-center text-slate-400">暫無資料</td></tr>}
-                        </tbody>
-                    </table>
+                
+                <div className="flex flex-col md:flex-row gap-8">
+                    <div className="flex-1">
+                        <label className="block text-slate-400 text-sm mb-2 font-bold uppercase tracking-wider">學號 Class No.</label>
+                        <div className="flex items-center justify-center mb-4"><div className="h-20 w-32 bg-slate-100 rounded-2xl flex items-center justify-center text-5xl font-bold tracking-widest text-slate-800 border-2 border-orange-200 shadow-inner">{selectedClassNo || <span className="text-slate-300 text-3xl">--</span>}</div></div>
+                        <div className="grid grid-cols-3 gap-3">{[1,2,3,4,5,6,7,8,9].map((num) => (<button key={num} onClick={() => { if (selectedClassNo.length < 2) setSelectedClassNo(prev => prev + num); }} className="h-14 bg-white border border-slate-200 rounded-xl text-2xl font-bold text-slate-700 active:bg-orange-100 active:border-orange-500 shadow-sm transition-all">{num}</button>))}<button onClick={() => setSelectedClassNo('')} className="h-14 bg-red-50 text-red-500 rounded-xl font-bold border border-red-100">清除</button><button onClick={() => { if (selectedClassNo.length < 2) setSelectedClassNo(prev => prev + 0); }} className="h-14 bg-white border border-slate-200 rounded-xl text-2xl font-bold text-slate-700 active:bg-orange-100 shadow-sm">0</button><button onClick={() => setSelectedClassNo(prev => prev.slice(0, -1))} className="h-14 bg-slate-100 text-slate-500 rounded-xl font-bold">←</button></div>
+                    </div>
+                    <div className="flex items-center justify-center md:w-1/3">
+                         <button onClick={handleStudentSearch} disabled={selectedClassNo.length === 0} className={`w-full py-8 rounded-2xl text-3xl font-bold text-white shadow-xl transition-all flex items-center justify-center ${selectedClassNo.length > 0 ? 'bg-orange-600 hover:bg-orange-700 transform hover:scale-[1.02]' : 'bg-slate-300 cursor-not-allowed'}`}><Search className="mr-3" size={32} strokeWidth={3} /> 查詢</button>
+                    </div>
                 </div>
-             </div>
-          )}
+            </div>
+            </div>
         </div>
-      </div>
     );
-  }
+  };
 
-  // 2. STUDENT SEARCH VIEW (Default)
-  return (
-    <div className="min-h-screen flex flex-col bg-slate-50 relative overflow-hidden font-sans">
-      {/* Background Decor */}
-      <div className="absolute top-0 left-0 w-full h-64 bg-gradient-to-r from-blue-600 to-indigo-700 rounded-b-[3rem] shadow-2xl z-0"></div>
-      
-      {/* Header */}
-      <div className="relative z-10 px-6 pt-8 pb-2 flex justify-between items-start max-w-md mx-auto w-full">
-        <div>
-           <h1 className="text-2xl font-bold text-white tracking-wide">課後活動查閱</h1>
-           <p className="text-blue-100 text-sm opacity-90">香海正覺蓮社佛教正覺蓮社學校</p>
-        </div>
-        <button onClick={() => setLoginEmail('') || setLoginPwd('') || alert("請使用管理員帳號登入")} className="bg-white/10 p-2 rounded-full backdrop-blur-sm text-white hover:bg-white/20 transition">
-            <Lock size={18} />
-        </button>
-      </div>
+  const renderStaffView = () => (
+      <div className="min-h-screen bg-slate-50 p-6 flex-1">
+        <div className="max-w-6xl mx-auto">
+            <div className="mb-6 flex justify-between items-end">
+                <div>
+                    <h2 className="text-2xl font-bold text-blue-900 flex items-center"><Users className="mr-2" /> 教職員查詢通道</h2>
+                    <p className="text-slate-500 text-sm">
+                        {staffShowAll ? '顯示所有活動紀錄' : '僅顯示今天 (Today) 的活動，如需查看其他日期請切換。'}
+                    </p>
+                </div>
+                <div className="flex bg-white rounded-lg border border-slate-200 p-1">
+                    <button onClick={() => setStaffShowAll(false)} className={`px-4 py-1 text-sm rounded-md font-bold transition ${!staffShowAll ? 'bg-blue-100 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}>今天</button>
+                    <button onClick={() => setStaffShowAll(true)} className={`px-4 py-1 text-sm rounded-md font-bold transition ${staffShowAll ? 'bg-blue-100 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}>全部</button>
+                </div>
+            </div>
 
-      {/* Login Modal Overlay (Hidden unless needed, simple logic here for prompt) */}
-      {!user && loginEmail === 'admin' && ( // Just a trigger for demo, real login via dedicated button usually
-          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-              <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
-                  <h3 className="text-xl font-bold text-slate-800 mb-4">管理員登入</h3>
-                  <form onSubmit={handleLogin} className="space-y-4">
-                      <input type="email" placeholder="Email" className="w-full p-3 border rounded-xl bg-slate-50" value={loginEmail} onChange={e=>setLoginEmail(e.target.value)} />
-                      <input type="password" placeholder="Password" className="w-full p-3 border rounded-xl bg-slate-50" value={loginPwd} onChange={e=>setLoginPwd(e.target.value)} />
-                      <button type="submit" className="w-full bg-blue-600 text-white p-3 rounded-xl font-bold shadow-lg shadow-blue-200">登入系統</button>
-                      <button type="button" onClick={()=>setLoginEmail('')} className="w-full text-slate-400 p-2">取消</button>
-                  </form>
+            <div className="bg-white p-6 rounded-xl shadow-md border-t-4 border-blue-500">
+              <div className="flex items-center space-x-2 mb-4 bg-slate-100 p-3 rounded-lg"><Search className="text-slate-400" /><input type="text" placeholder="輸入搜尋 (姓名/班別/活動)..." className="bg-transparent w-full outline-none text-lg" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
+              <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-slate-50 sticky top-0 z-10"><tr className="text-slate-600 text-sm uppercase tracking-wider border-b"><th className="p-3">姓名</th><th className="p-3">班別 (學號)</th><th className="p-3">活動名稱</th><th className="p-3">時間</th><th className="p-3">地點</th><th className="p-3 text-blue-600">聯絡電話</th></tr></thead>
+                  <tbody className="text-slate-700">
+                      {filteredActivities.length > 0 ? filteredActivities.map((act) => (
+                          <tr key={act.id} className="border-b hover:bg-blue-50 transition-colors">
+                              <td className="p-3 font-medium">{act.verifiedName}</td>
+                              <td className="p-3"><span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-bold">{act.verifiedClass} ({act.verifiedClassNo})</span></td>
+                              <td className="p-3 font-bold text-slate-800">{act.activity}</td>
+                              <td className="p-3 text-sm">{act.time}</td>
+                              <td className="p-3 text-sm flex items-center"><MapPin size={14} className="mr-1 text-red-400"/> {act.location}</td>
+                              <td className="p-3 text-sm font-mono text-blue-600">{act.rawPhone || '-'}</td>
+                          </tr>
+                      )) : (
+                          <tr><td colSpan="6" className="p-12 text-center text-slate-400">
+                              {staffShowAll ? '沒有找到相關資料' : '今天沒有已安排的活動 (或尚未輸入)'}
+                          </td></tr>
+                      )}
+                  </tbody>
+                </table>
               </div>
-          </div>
-      )}
-
-      {/* Search Card */}
-      <div className="relative z-10 flex-1 px-4 pb-8 max-w-md mx-auto w-full flex flex-col">
-        <div className="bg-white rounded-3xl shadow-xl p-6 mb-6 animate-in slide-in-from-bottom-4 duration-700">
-            <form onSubmit={handleSearch} className="flex space-x-2">
-                <div className="flex-1">
-                    <label className="text-xs font-bold text-slate-400 ml-1 uppercase">班別</label>
-                    <input 
-                        type="text" 
-                        maxLength={2}
-                        placeholder="6A" 
-                        className="w-full text-center text-2xl font-bold border-b-2 border-slate-200 focus:border-blue-500 outline-none py-2 uppercase text-slate-800 placeholder:text-slate-200"
-                        value={searchClass}
-                        onChange={e => setSearchClass(e.target.value)}
-                    />
-                </div>
-                <div className="flex-1">
-                    <label className="text-xs font-bold text-slate-400 ml-1 uppercase">學號</label>
-                    <input 
-                        type="text" 
-                        maxLength={2}
-                        placeholder="01" 
-                        className="w-full text-center text-2xl font-bold border-b-2 border-slate-200 focus:border-blue-500 outline-none py-2 text-slate-800 placeholder:text-slate-200"
-                        value={searchNo}
-                        onChange={e => setSearchNo(e.target.value)}
-                    />
-                </div>
-                <button type="submit" className="bg-blue-600 text-white rounded-2xl w-16 flex items-center justify-center shadow-lg shadow-blue-200 hover:bg-blue-700 transition active:scale-95">
-                    <Search size={24} />
-                </button>
-            </form>
+            </div>
         </div>
+      </div>
+  );
 
-        {/* Results */}
-        <div className="flex-1 overflow-y-auto space-y-4 pb-20 no-scrollbar">
-            {studentResult ? (
-                studentResult.acts.length > 0 ? (
-                    studentResult.acts.map((item, idx) => (
-                        <div key={idx} className="bg-white text-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden animate-in fade-in slide-in-from-bottom-2" style={{animationDelay: `${idx * 100}ms`}}>
-                             <div className="flex justify-between items-start mb-2">
-                                <h3 className="text-xl font-bold text-slate-900">{item.activity}</h3>
-                                <span className="text-xs font-bold bg-blue-100 text-blue-600 px-2 py-1 rounded-full">{item.manualCategory || '活動'}</span>
-                             </div>
-                             
-                             {/* V4.2 Display in Student View as well */}
-                             <div className="mb-3">
-                                 <div className="text-xs text-slate-400 mb-1">活動日期</div>
-                                 <div className="flex flex-wrap gap-1">
-                                     {item.specificDates && item.specificDates.length > 0 ? 
-                                        item.specificDates.map(d => (
-                                            <span key={d} className="bg-slate-100 text-slate-600 text-xs px-2 py-1 rounded font-mono border border-slate-200">
-                                                {formatDateForDisplay([d])}
-                                            </span>
-                                        )) : <span className="text-slate-400 text-xs italic">全年活動</span>
-                                     }
-                                 </div>
-                             </div>
+  const renderLoginView = () => (
+      <div className="flex-1 flex flex-col items-center justify-center bg-slate-100 p-6">
+          <div className="bg-white p-8 rounded-2xl shadow-lg w-full max-w-md border border-slate-200">
+              <div className="text-center mb-8"><div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4 text-white"><Lock size={32} /></div><h2 className="text-2xl font-bold text-slate-800">管理員登入</h2><p className="text-slate-500 text-sm">請使用 Firebase 帳戶登入</p></div>
+              <form onSubmit={handleLogin} className="space-y-4">
+                  <div><label className="block text-slate-600 text-sm font-bold mb-2">Email</label><input type="email" required className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="admin@school.edu.hk" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} /></div>
+                  <div><label className="block text-slate-600 text-sm font-bold mb-2">Password</label><input type="password" required className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="••••••••" value={loginPwd} onChange={(e) => setLoginPwd(e.target.value)} /></div>
+                  <button type="submit" disabled={authLoading} className="w-full py-3 bg-slate-800 text-white font-bold rounded-lg hover:bg-slate-900 transition flex items-center justify-center">{authLoading ? '登入中...' : '登入系統'}</button>
+              </form>
+          </div>
+      </div>
+  );
 
-                             <div className="grid grid-cols-2 gap-4 mt-3 border-t pt-3 border-slate-100">
-                                <div className="flex items-center text-slate-600 bg-slate-50 p-2 rounded-lg">
-                                    <Clock size={16} className="mr-2 text-orange-500" />
-                                    <span className="font-bold text-sm">{item.time}</span>
-                                </div>
-                                <div className="flex items-center text-blue-800 bg-blue-50 p-2 rounded-lg">
-                                    <MapPin size={16} className="mr-2 text-blue-500" />
-                                    <span className="font-bold text-sm">{item.location}</span>
-                                </div>
-                             </div>
-                        </div>
-                    ))
-                ) : (
-                    <div className="text-slate-500 text-sm italic py-8 text-center border-2 border-dashed border-slate-300 rounded-3xl bg-white/50">
-                        沒有安排活動
-                    </div>
-                )
+// REPLACEMENT FOR RENDER DATABASE MANAGER
+  // 此函數負責呼叫我們新建立的 DatabaseSystemV1 組件
+  const renderDatabaseManager = () => (
+    <div className="animate-fade-in">
+        <button 
+            onClick={() => setAdminTab('import')} 
+            className="flex items-center text-slate-500 hover:text-blue-600 mb-4 font-bold"
+        >
+            <ArrowLeft className="mr-2" size={20} /> 返回導入介面
+        </button>
+
+        {/* 呼叫新組件，並將 App 內的資料傳遞給它 */}
+        <DatabaseSystemV1 
+            activities={activities} 
+            onDelete={handleDeleteActivity}
+            onUpdate={saveEditActivity}
+        />
+    </div>
+);
+
+  const renderAdminView = () => (
+      <div className="min-h-screen bg-slate-100 p-6 flex-1">
+        <div className="max-w-7xl mx-auto">
+            <div className="flex justify-between items-center mb-6">
+                <div><h2 className="text-2xl font-bold text-slate-800 flex items-center"><Shield className="mr-2" /> 管理員控制台</h2><p className="text-slate-500 text-sm">數據校對與發布。</p></div>
+                <div className="flex items-center space-x-4"><div className="bg-white px-4 py-2 rounded-lg shadow text-sm font-mono text-slate-600 border border-slate-200">Admin: <span className="font-bold text-blue-600">{user.email}</span></div><button onClick={handleLogout} className="bg-red-50 text-red-500 px-4 py-2 rounded-lg hover:bg-red-100 border border-red-200 flex items-center text-sm font-bold"><LogOut size={16} className="mr-2"/> 登出</button></div>
+            </div>
+            <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleMasterFileChange} />
+            {adminTab === 'manage_db' ? renderDatabaseManager() : adminTab === 'stats' ? (
+                // StatsView Component (Independent)
+                // V3.6.2: Pass queryLogs prop to StatsView
+                <StatsView masterList={masterList} activities={activities} queryLogs={queryLogs} onBack={() => setAdminTab('import')} />
             ) : (
-                <div className="flex flex-col items-center justify-center h-40 mt-8 text-slate-400 bg-slate-200/50 rounded-3xl border border-dashed border-slate-300">
-                    <Calendar size={48} className="mb-2 opacity-50" />
-                    <p className="text-lg font-medium">請輸入班別及學號查詢</p>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 space-y-6">
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                        <div className="flex justify-between items-center mb-4"><div className="flex items-center space-x-3"><h3 className="font-bold text-lg text-green-700 flex items-center"><CheckCircle className="mr-2" size={20} /> 等待發布 ({matched.length})</h3><button onClick={toggleSelectAll} className="text-sm text-slate-500 flex items-center hover:text-slate-800">{selectedMatchIds.size === matched.length ? <CheckSquare size={16} className="mr-1"/> : <Square size={16} className="mr-1"/>}全選/取消</button></div>{matched.length > 0 && (<button onClick={handlePublish} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center shadow-md active:scale-95 transition"><Save size={18} className="mr-2" /> 發布選取項目 ({selectedMatchIds.size})</button>)}</div>
+                        <div className="bg-green-50 rounded-lg border border-green-100 max-h-96 overflow-y-auto"><table className="w-full text-sm"><thead className="bg-green-100/50 text-green-800 sticky top-0 border-b border-green-200"><tr><th className="py-2 px-2 w-8"></th><th className="py-2 px-4 text-left w-1/3">原始 PDF 資料</th><th className="py-2 px-4 text-center w-10"></th><th className="py-2 px-4 text-left w-1/3">Master Data (真理)</th><th className="py-2 px-4 text-right">操作</th></tr></thead><tbody>
+                            {matched.map(m => (<tr key={m.id} className={`border-b border-green-100 last:border-0 hover:bg-green-100/40 transition-colors ${selectedMatchIds.has(m.id) ? 'bg-green-100/20' : 'opacity-50'}`}><td className="py-3 px-2 text-center"><input type="checkbox" checked={selectedMatchIds.has(m.id)} onChange={() => toggleSelectMatch(m.id)} className="w-4 h-4 rounded text-green-600 focus:ring-green-500" /></td><td className="py-3 px-4"><div className="text-slate-500 text-xs uppercase mb-0.5">PDF Source</div><div className="font-medium text-slate-700">{m.rawClass} {m.rawName}</div><div className="text-xs text-red-400 font-mono">{m.rawClassNo === '00' ? '缺學號' : m.rawClassNo}</div>{m.rawPhone && <div className="text-xs text-blue-500 font-mono flex items-center mt-1"><Phone size={10} className="mr-1"/>{m.rawPhone}</div>}</td><td className="py-3 px-2 text-center text-slate-300"><ArrowRight size={16} /></td><td className="py-3 px-4 bg-green-100/30"><div className="text-green-600 text-xs uppercase font-bold flex items-center mb-0.5"><Database size={10} className="mr-1" /> Master Data</div><div className="font-bold text-green-700 text-lg flex items-center"><span className="mr-2">{m.verifiedClass}</span><span className="bg-white text-green-800 border border-green-200 px-1.5 rounded text-sm min-w-[24px] text-center mr-2">{m.verifiedClassNo}</span><span>{m.verifiedName}</span></div></td><td className="py-3 px-4 text-right"><button onClick={() => handleManualConflict(m.id)} className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded hover:bg-red-200 flex items-center ml-auto"><AlertTriangle size={12} className="mr-1" /> 轉為異常</button><div className="text-xs text-slate-400 mt-1">{m.activity}</div>{m.specificDates && m.specificDates.length > 0 && <div className="text-xs bg-blue-100 text-blue-600 px-1 rounded inline-block mt-1">共 {m.specificDates.length} 堂</div>}</td></tr>))}
+                        </tbody></table></div>
+                    </div>
+                    {conflicts.length > 0 && (<div className="bg-white p-6 rounded-xl shadow-md border-l-4 border-red-500 animate-pulse-border"><h3 className="font-bold text-lg text-red-700 flex items-center mb-4"><AlertTriangle className="mr-2" /> 異常資料需修正 ({conflicts.length})</h3><div className="space-y-3">{conflicts.map(item => (<div key={item.id} className="border border-red-100 rounded-lg p-4 bg-red-50/50 flex flex-col md:flex-row items-center justify-between gap-4"><div className="flex-1"><div className="font-bold text-slate-800">{item.rawClass} {item.rawName}</div><div className="text-xs text-slate-500">{item.activity} {item.rawPhone && `| ${item.rawPhone}`}</div>{item.status === 'manual_conflict' && <div className="text-xs text-red-600 font-bold mt-1">* 人手標記異常</div>}</div><ArrowRight className="text-slate-300 md:rotate-0 rotate-90" /><div className="flex-1 w-full"><select className="w-full p-2 border border-slate-300 rounded-lg bg-white text-sm" onChange={(e) => { if(e.target.value) { const student = masterList.find(s => s.key === e.target.value); if(student) handleResolveConflict(item, student); }}} defaultValue=""><option value="" disabled>-- 選擇正確學生 --</option><optgroup label="智能推薦">{masterList.filter(s => s.classCode === item.rawClass || s.chiName.includes(item.rawName[0])).map(s => (<option key={s.key} value={s.key}>{s.classCode} ({s.classNo}) {s.chiName}</option>))}</optgroup><optgroup label="全部名單"><option value="search">...</option></optgroup></select></div><button onClick={() => handleDeleteImport(item.id)} className="p-2 text-red-400 hover:bg-red-100 rounded"><Trash2 size={18} /></button></div>))}</div></div>)}
+                </div>
+                <div className="space-y-6">
+                    <div className="bg-slate-800 text-slate-300 p-6 rounded-xl shadow-md border border-slate-700">
+                        <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-white flex items-center"><Database className="mr-2" size={16}/> 數據庫狀態</h3></div>
+                        <div className="space-y-3"><button onClick={() => setAdminTab('manage_db')} className="w-full bg-slate-700 hover:bg-slate-600 text-white p-3 rounded-lg text-sm font-bold flex items-center justify-between transition"><span>管理活動資料庫</span><span className="bg-blue-600 text-xs px-2 py-1 rounded">{activities.length}</span></button><button onClick={() => setAdminTab('stats')} className="w-full bg-purple-700 hover:bg-purple-600 text-white p-3 rounded-lg text-sm font-bold flex items-center justify-center transition shadow-lg"><BarChart className="mr-2" size={16} /> 查看統計報表</button></div>
+                        <div className="mt-4 pt-4 border-t border-slate-700 text-xs text-slate-500 text-center flex items-center justify-center">
+                            {isMasterLoading ? <RefreshCcw className="animate-spin mr-2"/> : null} 學生總數: {masterList.length}
+                        </div>
+                    </div>
+                    <div className="flex justify-end mb-1"><select className="text-xs p-1 border border-slate-300 rounded bg-white text-slate-600 outline-none focus:ring-1 focus:ring-emerald-500" value={csvEncoding} onChange={(e) => setCsvEncoding(e.target.value)}><option value="Big5">CSV 編碼: Big5 (解決 Excel 亂碼)</option><option value="UTF-8">CSV 編碼: UTF-8 (通用格式)</option></select></div>
+                    <button onClick={handleMasterUploadTrigger} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white p-4 rounded-xl flex items-center justify-center font-bold shadow-md transition"><Cloud className="mr-2" /> 上載真理 Data (雲端版)</button>
+                    <div className="bg-white p-6 rounded-xl shadow-md border-t-4 border-blue-500">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-bold text-lg text-slate-800 flex items-center"><PlusCircle className="mr-2 text-blue-500" /> 新增活動資料</h3>
+                            <div className="text-xs bg-slate-100 px-2 py-1 rounded text-slate-500">
+                                年度: <select className="bg-transparent font-bold outline-none" value={schoolYearStart} onChange={handleSchoolYearChange}><option value={2024}>24-25</option><option value={2025}>25-26</option><option value={2026}>26-27</option></select>
+                            </div>
+                        </div>
+                        <div className="space-y-3 mb-4">
+                            <div><label className="text-xs text-slate-500 font-bold uppercase">活動名稱</label><input type="text" className="w-full p-2 border rounded" value={importActivity} onChange={e => setImportActivity(e.target.value)} /></div>
+                            <div className="grid grid-cols-2 gap-2"><div><label className="text-xs text-slate-500 font-bold uppercase">時間</label><input type="text" className="w-full p-2 border rounded" value={importTime} onChange={e => setImportTime(e.target.value)} /></div><div><label className="text-xs text-slate-500 font-bold uppercase">地點</label><input type="text" className="w-full p-2 border rounded" value={importLocation} onChange={e => setImportLocation(e.target.value)} /></div></div>
+                            <div className="border border-slate-200 rounded p-3 bg-slate-50"><label className="text-xs text-slate-500 font-bold uppercase mb-2 block">選擇日期 (輸入 0209 代表 9月2日)</label><div className="flex gap-2 mb-2"><input type="text" ref={dateInputRef} placeholder="DDMM (如 0209)" className="flex-1 p-2 border rounded text-sm" value={tempDateInput} onChange={(e) => setTempDateInput(e.target.value)} onKeyDown={handleDateInputKeyDown} /><button onClick={handleAddDate} className="bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 flex items-center"><Plus size={16} /></button></div><div className="flex flex-wrap gap-2 mb-2">{importDates.map(date => (<span key={date} className="bg-white border border-blue-200 text-blue-800 text-xs px-2 py-1 rounded-full flex items-center shadow-sm">{formatDisplayDate(date)}<button onClick={() => handleRemoveDate(date)} className="ml-1 text-blue-400 hover:text-red-500"><X size={12} /></button></span>))}</div><div className="flex justify-between items-center text-xs"><span className="font-bold text-slate-600">已選: {importDates.length} 天 (共{importDates.length}堂)</span>{importDates.length > 0 && <button onClick={handleClearDates} className="text-red-400 hover:underline">清空</button>}</div></div>
+                            <div><label className="text-xs text-slate-500 font-bold uppercase">星期 (自動/預設)</label><select className="w-full p-2 border rounded" value={importDayId} onChange={e => setImportDayId(e.target.value)}><option value="1">逢星期一</option><option value="2">逢星期二</option><option value="3">逢星期三</option><option value="4">逢星期四</option><option value="5">逢星期五</option><option value="6">逢星期六</option><option value="0">逢星期日</option></select></div>
+                        </div>
+                        <div className="mb-4"><label className="text-xs text-slate-500 font-bold uppercase flex justify-between"><span>貼上名單 (PDF Copy/Paste)</span><span className="text-blue-500 cursor-pointer flex items-center" title="格式: 4A 蔡舒朗 (可含電話)"><FileText size={12} className="mr-1"/> 說明</span></label><textarea className="w-full h-32 p-2 border rounded bg-slate-50 text-sm font-mono" placeholder={`4A 蔡舒朗 91234567\n2A1 陳嘉瑩`} value={bulkInput} onChange={e => setBulkInput(e.target.value)}></textarea></div>
+                        <button onClick={handleBulkImport} className="w-full py-2 bg-blue-600 text-white font-bold rounded hover:bg-blue-700 transition">識別並載入</button>
+                    </div>
+                </div>
                 </div>
             )}
         </div>
       </div>
+  );
+
+  const renderKioskResultView = () => {
+     const upcomingDays = [];
+     const today = new Date();
+     const weekDayNames = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+     const weekDayEnNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+     for (let i = 0; i < 8; i++) { 
+         const d = new Date(today); d.setDate(today.getDate() + i);
+         const year = d.getFullYear(); const month = String(d.getMonth() + 1).padStart(2, '0'); const day = String(d.getDate()).padStart(2, '0');
+         const localDateString = `${year}-${month}-${day}`; const displayDate = `(${day}/${month}/${year})`;
+         upcomingDays.push({ dayId: d.getDay(), dateString: localDateString, label: i === 0 ? '今天' : weekDayNames[d.getDay()], fullLabel: `${weekDayNames[d.getDay()]} ${weekDayEnNames[d.getDay()]} ${displayDate}` });
+     }
+     const currentStudent = masterList.find(s => s.classCode === selectedClass && s.classNo === selectedClassNo.padStart(2, '0'));
+
+     return (
+        <div className="flex-1 bg-slate-800 flex flex-col font-sans text-white h-screen overflow-hidden">
+            <div className="p-4 flex items-center justify-between bg-slate-900 shadow-md shrink-0"><h2 className="text-xl font-bold text-slate-300">活動日程表</h2><button onClick={() => { setCurrentView('student'); setStudentResult(null); setSelectedClassNo(''); }} className="bg-white/10 px-4 py-2 rounded-full flex items-center text-sm backdrop-blur-md hover:bg-white/20 transition"><ArrowLeft size={20} className="mr-1" /> 返回</button></div>
+            <div className="px-8 pt-6 pb-2 shrink-0"><h1 className="text-4xl font-bold">{selectedClass}班 ({selectedClassNo})號 <span className="text-orange-400">{currentStudent ? currentStudent.chiName : ''}</span></h1><p className="text-slate-400 mt-1">未來一週活動概覽</p></div>
+            <div className="flex-1 px-8 pb-8 overflow-y-auto"><div className="space-y-6 mt-4">{upcomingDays.map((dayItem) => {
+                const dayActivities = studentResult ? studentResult.filter(act => { if (act.specificDates && act.specificDates.length > 0) { return act.specificDates.includes(dayItem.dateString); } return act.dayIds && act.dayIds.includes(dayItem.dayId); }) : [];
+                const isToday = dayItem.label === '今天';
+                return (<div key={dayItem.dateString} className={`rounded-3xl p-6 transition-all ${isToday ? 'bg-slate-700/80 ring-2 ring-green-500 shadow-[0_0_20px_rgba(34,197,94,0.3)]' : 'bg-slate-700/30'}`}><div className="flex items-center mb-4 border-b border-slate-600 pb-2"><div className={`text-2xl font-bold ${isToday ? 'text-green-400' : 'text-slate-200'}`}>{dayItem.fullLabel}</div>{isToday && <span className="ml-3 bg-green-600 text-white text-xs px-2 py-1 rounded-full animate-pulse">Today</span>}</div><div className="space-y-4">{dayActivities.length > 0 ? (dayActivities.map((item, idx) => (<div key={`${item.id}-${idx}`} className="bg-white text-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden"><div className="flex justify-between items-start mb-2"><h3 className="text-2xl font-bold text-slate-900">{item.activity}</h3></div><div className="grid grid-cols-2 gap-4 mt-3"><div className="flex items-center text-slate-600 bg-slate-100 p-2 rounded-lg"><Clock size={20} className="mr-2 text-orange-500" /><span className="font-bold">{item.time}</span></div><div className="flex items-center text-blue-800 bg-blue-50 p-2 rounded-lg"><MapPin size={20} className="mr-2 text-blue-500" /><span className="font-bold">{item.location}</span></div></div></div>))) : (<div className="text-slate-500 text-sm italic py-4 text-center border border-dashed border-slate-600 rounded-xl">沒有安排活動</div>)}</div></div>);
+            })}</div>{(!studentResult) && (<div className="flex flex-col items-center justify-center h-40 mt-8 text-slate-400 bg-slate-700/30 rounded-2xl border border-dashed border-slate-600"><Calendar size={48} className="mb-2 opacity-50" /><p className="text-lg">請輸入班別及學號查詢</p></div>)}</div></div>
+     );
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col font-sans">
+      {renderTopNavBar()}
+      {currentView === 'student' && renderStudentView()}
+      {currentView === 'staff' && renderStaffView()}
+      {currentView === 'admin' && (user ? renderAdminView() : renderLoginView())}
+      {currentView === 'kiosk_result' && renderKioskResultView()}
     </div>
   );
-}
+};
 
 export default App;
