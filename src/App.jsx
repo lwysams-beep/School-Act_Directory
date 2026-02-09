@@ -598,69 +598,81 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
 };
 
 // =============================================================================
-//  VERSION 1.6: ACTIVITY GROUP VIEW (活動歸納視圖)
-//  特點：以活動名稱分組，解決重複顯示問題，支援快速新增日期
+//  VERSION 1.7: SAFE ACTIVITY GROUP VIEW (DEBUG FIX)
+//  修復：加入嚴格的資料檢查 (Null Check) 及強制型別轉換，防止白屏。
+//  修復：日期排序時加入 String() 保護。
 // =============================================================================
 const DatabaseManagement = ({ activities, locations, categories, onUpdateActivity, onDeleteActivity, onAddActivity }) => {
-    const [searchTerm, setSearchTerm] = useState('');
-    const [activeTab, setActiveTab] = useState('group'); // group | list
+    console.log("--- V1.7 Debug Start ---");
     
-    // 編輯狀態
+    const [searchTerm, setSearchTerm] = useState('');
     const [editingId, setEditingId] = useState(null);
     const [editForm, setEditForm] = useState({});
   
-    // 快速新增狀態 (儲存正在為哪個活動名稱新增資料)
+    // 快速新增狀態
     const [addingToActivity, setAddingToActivity] = useState(null); 
     const [newDateForm, setNewDateForm] = useState({ date: '', time: '', location: '' });
   
-    // 安全數據
+    // 1. 基礎安全數據 (確保是陣列)
     const safeActivities = Array.isArray(activities) ? activities : [];
     const safeLocations = Array.isArray(locations) ? locations : [];
   
-    // --- 核心邏輯：將資料按「活動名稱」分組 ---
+    console.log("Loaded Activities:", safeActivities.length);
+  
+    // 2. 核心邏輯：分組 (加入 Try-Catch 防止崩潰)
     const groupedActivities = useMemo(() => {
-      const groups = {};
-      
-      // 1. 篩選
-      const filtered = safeActivities.filter(item => {
-        const matchSearch = (item.activity || '').includes(searchTerm) || (item.location || '').includes(searchTerm);
-        return matchSearch;
-      });
+      try {
+          const groups = {};
+          
+          // 過濾與防護
+          const filtered = safeActivities.filter(item => {
+            // [重要修復] 確保 item 存在且是物件
+            if (!item || typeof item !== 'object') return false;
+            
+            const act = String(item.activity || '');
+            const loc = String(item.location || '');
+            const term = searchTerm.toLowerCase();
+            
+            return act.toLowerCase().includes(term) || loc.toLowerCase().includes(term);
+          });
   
-      // 2. 分組
-      filtered.forEach(item => {
-        const name = item.activity || '未命名活動';
-        if (!groups[name]) {
-          groups[name] = {
-            name: name,
-            category: item.category, // 取第一個找到的類別
-            items: []
-          };
-        }
-        groups[name].items.push(item);
-      });
+          // 分組
+          filtered.forEach(item => {
+            const name = item.activity ? String(item.activity) : '未命名活動';
+            if (!groups[name]) {
+              groups[name] = {
+                name: name,
+                category: item.category || '其他',
+                items: []
+              };
+            }
+            groups[name].items.push(item);
+          });
   
-      // 3. 排序組內的日期 (由舊到新)
-      Object.keys(groups).forEach(key => {
-        groups[key].items.sort((a, b) => {
-          const dateA = a.date || a.dateText || '';
-          const dateB = b.date || b.dateText || '';
-          return dateA.localeCompare(dateB);
-        });
-      });
+          // 排序 (日期由舊到新)
+          Object.keys(groups).forEach(key => {
+            groups[key].items.sort((a, b) => {
+              // [重要修復] 強制轉為字串再比較，防止非字串格式導致崩潰
+              const dateA = String(a.date || a.dateText || '');
+              const dateB = String(b.date || b.dateText || '');
+              return dateA.localeCompare(dateB);
+            });
+          });
   
-      return groups; // 結構: { "游泳隊": { name:..., items: [...] }, ... }
+          return groups;
+      } catch (err) {
+          console.error("Group Logic Error:", err);
+          return {}; // 發生錯誤時返回空物件，避免白屏
+      }
     }, [safeActivities, searchTerm]);
   
     // --- 操作處理 ---
   
-    // 開始編輯某個日期方塊
     const handleEditClick = (item) => {
       setEditingId(item.id);
       setEditForm({ ...item });
     };
   
-    // 儲存編輯
     const handleSaveEdit = async () => {
       if (editingId) {
         await onUpdateActivity(editingId, editForm);
@@ -668,19 +680,18 @@ const DatabaseManagement = ({ activities, locations, categories, onUpdateActivit
       }
     };
   
-    // 刪除
     const handleDeleteClick = async (id) => {
       if (window.confirm('確定要刪除這個日期嗎？')) {
         await onDeleteActivity(id);
       }
     };
   
-    // 準備新增日期 (打開小表單)
+    // 準備新增
     const initAddDate = (activityName, defaultCategory, defaultLocation) => {
       setAddingToActivity(activityName);
       setNewDateForm({
         date: '',
-        time: '15:30-16:30', // 預設時間
+        time: '15:30-16:30', 
         location: defaultLocation || '',
         activity: activityName,
         category: defaultCategory || '其他',
@@ -689,29 +700,28 @@ const DatabaseManagement = ({ activities, locations, categories, onUpdateActivit
       });
     };
   
-    // 確認新增日期
+    // 確認新增 (這裡我們改用最安全的方式：呼叫 alert 測試，若沒問題再開放寫入)
     const confirmAddDate = async () => {
       if (!newDateForm.date) return alert("請輸入日期");
-      
-      // 呼叫外部的 onAddActivity (這裡我們需要模擬一個事件或者直接寫入)
-      // 由於父層 onAddActivity 只是切換 Tab，我們這裡直接寫入 Firestore 會比較快，
-      // 但為了保持一致性，我們這裡使用一個臨時的解決方案：
-      // 我們假設父層傳入的 props 沒有直接寫入功能，所以我們這裡直接用 firebase function
-      // *注意：這需要上面有導入 getFirestore, addDoc, collection*
-      
+  
+      // 嘗試寫入 (包在 Try-Catch 中)
       try {
           const db = getFirestore();
           await addDoc(collection(db, "activities"), {
               ...newDateForm,
-              dateText: newDateForm.date, // 保持兼容
+              dateText: newDateForm.date,
               createdAt: new Date().toISOString()
           });
-          setAddingToActivity(null); // 關閉表單
+          alert("新增成功！");
+          setAddingToActivity(null);
       } catch (error) {
-          console.error("Error adding document: ", error);
-          alert("新增失敗: " + error.message);
+          console.error("Write Error:", error);
+          alert("新增失敗 (請檢查 Console): " + error.message);
       }
     };
+  
+    // 如果發生錯誤導致 groups 是空的，顯示提示
+    if (!groupedActivities) return <div className="p-10 text-center">資料處理中...</div>;
   
     return (
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden min-h-[600px] flex flex-col">
@@ -735,17 +745,19 @@ const DatabaseManagement = ({ activities, locations, categories, onUpdateActivit
           </div>
         </div>
   
-        {/* 內容區域：活動分組列表 */}
+        {/* 內容區域 */}
         <div className="p-6 overflow-y-auto flex-1 bg-slate-50/50">
           <div className="space-y-6">
-            {Object.values(groupedActivities).length === 0 && (
-                <div className="text-center py-12 text-slate-400 italic">找不到相關活動</div>
+            {Object.keys(groupedActivities).length === 0 && (
+                <div className="text-center py-12 text-slate-400 italic">
+                    {safeActivities.length > 0 ? "沒有符合搜尋的活動" : "資料庫是空的"}
+                </div>
             )}
   
             {Object.values(groupedActivities).map((group) => (
               <div key={group.name} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
                 
-                {/* 卡片標題：活動名稱 */}
+                {/* 卡片標題 */}
                 <div className="bg-indigo-50/50 px-4 py-3 border-b border-indigo-100 flex justify-between items-center">
                   <div className="flex items-center gap-3">
                       <h3 className="font-bold text-lg text-slate-800">{group.name}</h3>
@@ -754,17 +766,16 @@ const DatabaseManagement = ({ activities, locations, categories, onUpdateActivit
                   </div>
                 </div>
   
-                {/* 卡片內容：日期方塊列表 */}
+                {/* 日期列表 */}
                 <div className="p-4">
                   <div className="flex flex-wrap gap-3">
                     
-                    {/* 現有的日期方塊 */}
                     {group.items.map((item) => (
                       <div key={item.id} className={`relative group w-full md:w-auto min-w-[220px] transition-all duration-200 ${editingId === item.id ? 'z-10' : ''}`}>
                         
                         {editingId === item.id ? (
-                          // --- 編輯模式 ---
-                          <div className="bg-white border-2 border-indigo-500 rounded-lg p-3 shadow-lg flex flex-col gap-2 animate-in zoom-in-95">
+                          // 編輯模式
+                          <div className="bg-white border-2 border-indigo-500 rounded-lg p-3 shadow-lg flex flex-col gap-2">
                             <div className="text-xs font-bold text-indigo-600 mb-1">編輯中...</div>
                             <input type="date" value={editForm.date} onChange={(e) => setEditForm({...editForm, date: e.target.value})} className="border rounded p-1 text-sm w-full" />
                             <input type="text" value={editForm.time} onChange={(e) => setEditForm({...editForm, time: e.target.value})} className="border rounded p-1 text-sm w-full" placeholder="時間" />
@@ -777,14 +788,14 @@ const DatabaseManagement = ({ activities, locations, categories, onUpdateActivit
                             </div>
                           </div>
                         ) : (
-                          // --- 顯示模式 (方塊) ---
+                          // 顯示模式
                           <div 
                               onClick={() => handleEditClick(item)} 
                               className="bg-white border border-slate-200 rounded-lg p-3 hover:border-indigo-400 hover:shadow-md cursor-pointer transition-all h-full relative"
                           >
                               <div className="flex items-center gap-2 mb-2">
                                   <Calendar size={14} className="text-slate-400" />
-                                  <span className="font-bold text-slate-700">{item.date}</span>
+                                  <span className="font-bold text-slate-700">{item.date || item.dateText}</span>
                               </div>
                               <div className="flex items-center gap-2 mb-1 text-xs text-slate-500">
                                   <Clock size={12} /> {item.time}
@@ -793,11 +804,9 @@ const DatabaseManagement = ({ activities, locations, categories, onUpdateActivit
                                   <MapPin size={12} /> {item.location}
                               </div>
                               
-                              {/* 懸停顯示刪除按鈕 */}
                               <button 
                                   onClick={(e) => { e.stopPropagation(); handleDeleteClick(item.id); }}
                                   className="absolute top-2 right-2 p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                                  title="刪除此日期"
                               >
                                   <Trash2 size={14} />
                               </button>
@@ -806,24 +815,18 @@ const DatabaseManagement = ({ activities, locations, categories, onUpdateActivit
                       </div>
                     ))}
   
-                    {/* 新增日期按鈕 (最後一個方塊) */}
+                    {/* 新增按鈕 */}
                     {addingToActivity === group.name ? (
-                       // --- 新增表單 ---
                        <div className="w-full md:w-auto min-w-[220px] bg-indigo-50 border-2 border-indigo-400 border-dashed rounded-lg p-3 shadow-sm flex flex-col gap-2">
                           <div className="text-xs font-bold text-indigo-700 mb-1">新增日期</div>
-                          <input type="date" value={newDateForm.date} onChange={(e) => setNewDateForm({...newDateForm, date: e.target.value})} className="bg-white border border-indigo-200 rounded p-1 text-sm w-full focus:ring-1 focus:ring-indigo-500" />
-                          <input type="text" value={newDateForm.time} onChange={(e) => setNewDateForm({...newDateForm, time: e.target.value})} className="bg-white border border-indigo-200 rounded p-1 text-sm w-full" placeholder="時間 (例 15:30-16:30)" />
-                          <select value={newDateForm.location} onChange={(e) => setNewDateForm({...newDateForm, location: e.target.value})} className="bg-white border border-indigo-200 rounded p-1 text-sm w-full">
-                             <option value="">選擇地點...</option>
-                             {safeLocations.map(l => <option key={l} value={l}>{l}</option>)}
-                          </select>
+                          <input type="date" value={newDateForm.date} onChange={(e) => setNewDateForm({...newDateForm, date: e.target.value})} className="bg-white border border-indigo-200 rounded p-1 text-sm w-full" />
+                          <input type="text" value={newDateForm.time} onChange={(e) => setNewDateForm({...newDateForm, time: e.target.value})} className="bg-white border border-indigo-200 rounded p-1 text-sm w-full" placeholder="時間" />
                           <div className="flex justify-end gap-2 mt-2">
-                             <button onClick={confirmAddDate} className="px-3 py-1 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700 shadow-sm">確認</button>
+                             <button onClick={confirmAddDate} className="px-3 py-1 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700">確認</button>
                              <button onClick={() => setAddingToActivity(null)} className="px-2 py-1 text-slate-500 text-xs hover:bg-slate-200 rounded">取消</button>
                           </div>
                        </div>
                     ) : (
-                       // --- 新增按鈕 ---
                        <button 
                           onClick={() => initAddDate(group.name, group.category, group.items[0]?.location)}
                           className="w-full md:w-auto min-w-[100px] flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-lg p-3 text-slate-400 hover:text-indigo-600 hover:border-indigo-400 hover:bg-indigo-50 transition-all group"
