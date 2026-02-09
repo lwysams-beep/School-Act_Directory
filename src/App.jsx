@@ -608,6 +608,11 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
 //  VERSION 1.0: DATABASE SYSTEM COMPONENT
 //  功能：整合資料庫列表、批量日期遷移、批量修改
 // =============================================================================
+// =============================================================================
+//  VERSION 1.1: DATABASE SYSTEM COMPONENT (UPDATED)
+//  功能：整合資料庫列表、批量日期遷移、批量修改
+//  V1.1 更新：在日期統計中加入「活動名稱」顯示，讓用戶知道該日期具體有哪些活動。
+// =============================================================================
 const DatabaseSystemV1 = ({ 
     activities, 
     onDelete, 
@@ -644,14 +649,19 @@ const DatabaseSystemV1 = ({
         );
     }, [activities, searchTerm]);
 
-    // 2. 日期統計邏輯 (核心新功能)
-    const dateStats = useMemo(() => {
-        const stats = {};
+    // 2. 日期分組邏輯 (V1.1 改良：儲存活動名稱)
+    const dateGroups = useMemo(() => {
+        const groups = {};
         activities.forEach(act => {
             const d = act.dateText || "未指定日期";
-            stats[d] = (stats[d] || 0) + 1;
+            if (!groups[d]) {
+                groups[d] = [];
+            }
+            // 只加入名稱，並避免重複顯示完全一樣的活動名稱 (視乎需求，這裡我保留重複以顯示真實數量)
+            groups[d].push(act.activity || '(無名稱)');
         });
-        return Object.entries(stats).sort((a, b) => a[0].localeCompare(b[0])); // 排序
+        // 排序日期
+        return Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0])); 
     }, [activities]);
 
     // 操作：切換選取
@@ -702,11 +712,10 @@ const DatabaseSystemV1 = ({
         setSelectedIds(new Set());
     };
 
-    // 操作：批量日期遷移 (新功能)
+    // 操作：批量日期遷移
     const handleDateMigration = async () => {
         if (!migrationSourceDate || !migrationTargetDate) return alert("請選擇原本日期及新日期");
         
-        // 找出所有符合舊日期的活動 (不只是當前頁面，是整個資料庫)
         const targets = activities.filter(a => a.dateText === migrationSourceDate);
         
         if (window.confirm(`【危險操作】\n確定要將所有日期為「${migrationSourceDate}」的活動 (${targets.length} 筆)\n全部遷移至新日期「${migrationTargetDate}」嗎？`)) {
@@ -716,11 +725,9 @@ const DatabaseSystemV1 = ({
                 const batch = writeBatch(db);
                 
                 targets.forEach(act => {
-                    // 同步更新 dateText (顯示用) 和 date (如果存在，格式化用)
-                    // 這裡主要依賴 dateText 因為這是你在表格中顯示的欄位
                     batch.update(doc(db, "activities", act.id), { 
                         dateText: migrationTargetDate,
-                        date: migrationTargetDate // 嘗試同步更新標準日期欄位
+                        date: migrationTargetDate 
                     });
                 });
 
@@ -743,7 +750,7 @@ const DatabaseSystemV1 = ({
                 <div className="flex items-center gap-4">
                     <h2 className="text-2xl font-bold text-slate-800 flex items-center">
                         <Database className="mr-2 text-blue-600" /> 
-                        數據庫管理 (V1.0)
+                        數據庫管理 (V1.1)
                     </h2>
                     <div className="flex bg-slate-100 rounded-lg p-1">
                         <button 
@@ -894,13 +901,13 @@ const DatabaseSystemV1 = ({
 
             {/* VIEW 2: BULK DATE MIGRATION */}
             {viewMode === 'date_migration' && (
-                <div className="animate-in fade-in slide-in-from-right-4 max-w-4xl mx-auto w-full">
+                <div className="animate-in fade-in slide-in-from-right-4 max-w-5xl mx-auto w-full">
                     <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-6 mb-8">
                         <h3 className="font-bold text-indigo-900 text-lg mb-4 flex items-center">
                             <RefreshCcw className="mr-2" size={20}/> 批量日期遷移 (Migration)
                         </h3>
                         <p className="text-indigo-700 text-sm mb-6">
-                            此功能允許您將某一個日期的<span className="font-bold">所有活動</span>一次性移動到新日期。請先在下方選擇舊日期。
+                            請在下方選擇一個「原本日期」，系統會將該日期下的所有活動移動到「新日期」。
                         </p>
 
                         <div className="flex flex-col md:flex-row gap-6 items-end">
@@ -912,8 +919,8 @@ const DatabaseSystemV1 = ({
                                     onChange={(e) => setMigrationSourceDate(e.target.value)}
                                 >
                                     <option value="">-- 請選擇要遷移的舊日期 --</option>
-                                    {dateStats.map(([date, count]) => (
-                                        <option key={date} value={date}>{date} (共 {count} 筆)</option>
+                                    {dateGroups.map(([date, acts]) => (
+                                        <option key={date} value={date}>{date} (共 {acts.length} 筆)</option>
                                     ))}
                                 </select>
                             </div>
@@ -927,7 +934,7 @@ const DatabaseSystemV1 = ({
                                 <input 
                                     type="text" 
                                     className="w-full p-3 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                                    placeholder="輸入新日期 (如: 2024-03-15 或 逢星期五)"
+                                    placeholder="輸入新日期 (如: 2024-03-15)"
                                     value={migrationTargetDate}
                                     onChange={(e) => setMigrationTargetDate(e.target.value)}
                                 />
@@ -943,12 +950,28 @@ const DatabaseSystemV1 = ({
                         </div>
                     </div>
 
-                    <h4 className="font-bold text-slate-700 mb-4">現有日期統計一覽：</h4>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        {dateStats.map(([date, count]) => (
-                            <div key={date} className="bg-white border rounded-lg p-3 flex justify-between items-center shadow-sm">
-                                <span className="font-mono text-sm font-bold text-slate-700">{date}</span>
-                                <span className="bg-slate-100 text-slate-500 text-xs px-2 py-1 rounded-full">{count}</span>
+                    <h4 className="font-bold text-slate-700 mb-4 flex items-center">
+                        <Calendar className="mr-2" size={18} />
+                        現有日期統計一覽 (Version 1.1)
+                    </h4>
+                    {/* V1.1 更新：展示日期內的具體活動 */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {dateGroups.map(([date, acts]) => (
+                            <div key={date} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-all">
+                                <div className="flex justify-between items-center mb-3 border-b border-slate-100 pb-2">
+                                    <span className="font-mono text-base font-bold text-slate-800">{date}</span>
+                                    <span className="bg-indigo-50 text-indigo-600 text-xs font-bold px-2 py-1 rounded-full">
+                                        共 {acts.length} 筆
+                                    </span>
+                                </div>
+                                <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto custom-scrollbar">
+                                    {/* 這裡列出活動名稱 */}
+                                    {acts.map((actName, idx) => (
+                                        <span key={idx} className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded border border-slate-200 truncate max-w-full">
+                                            {actName}
+                                        </span>
+                                    ))}
+                                </div>
                             </div>
                         ))}
                     </div>
