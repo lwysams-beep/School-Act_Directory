@@ -1386,26 +1386,15 @@ const App = () => {
       </div>
   );
 
-// REPLACEMENT FOR RENDER DATABASE MANAGER (UPDATED FOR V1.2)
+// REPLACEMENT: 連接 V1.5 安全版組件
 const renderDatabaseManager = () => (
-    <div className="animate-fade-in">
-        <button 
-            onClick={() => setAdminTab('import')} 
-            className="flex items-center text-slate-500 hover:text-blue-600 mb-4 font-bold"
-        >
-            <ArrowLeft className="mr-2" size={20} /> 返回導入介面
-        </button>
-
-        {/* 重要：這裡將 App 的 saveEditActivity 函數
-          連接到組件的 onUpdateActivity 屬性 
-        */}
-        <DatabaseManagement 
+    <div className="p-4">
+        <h2 className="text-2xl font-bold mb-4">資料庫管理 (安全模式 V1.5)</h2>
+        <DatabaseSystemSafeMode 
             activities={activities} 
-            locations={locations || []}
-            categories={categories || []}
             onUpdateActivity={saveEditActivity} 
-            onDeleteActivity={handleDeleteActivity}
-            onAddActivity={() => setAdminTab('import')} 
+            onDeleteActivity={handleDeleteActivity} 
+            onAddActivity={() => setAdminTab('import')}
         />
     </div>
 );
