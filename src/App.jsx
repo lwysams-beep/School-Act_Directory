@@ -597,389 +597,437 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
     );
 };
 
-// ========== 在這裡插入 DatabaseManagement 代碼 (Version 1.0) ==========
-// Version 1.0: DatabaseManagement Component Update
-// 修改內容：
-// 1. 新增 dateStats (useMemo) 以統計並顯示所有獨特日期及活動數。
-// 2. 在「批量修改」(activeTab === 'bulk') 中新增日期顯示區塊。
-// 3. 新增「批量日期遷移」功能，可指定舊日期全部更新為新日期。
-
 // =============================================================================
-//  VERSION 1.0: DATABASE SYSTEM COMPONENT
-//  功能：整合資料庫列表、批量日期遷移、批量修改
+//  VERSION 1.2: DATABASE MANAGEMENT (USER PREFERRED TAB STYLE)
+//  修改內容：
+//  1. 恢復 Tab 分頁設計 (列表/新增/批量)。
+//  2. 整合批量日期遷移與統計。
 // =============================================================================
-// =============================================================================
-//  VERSION 1.1: DATABASE SYSTEM COMPONENT (UPDATED)
-//  功能：整合資料庫列表、批量日期遷移、批量修改
-//  V1.1 更新：在日期統計中加入「活動名稱」顯示，讓用戶知道該日期具體有哪些活動。
-// =============================================================================
-const DatabaseSystemV1 = ({ 
-    activities, 
-    onDelete, 
-    onUpdate, 
-    categories = [], 
-    locations = [] 
-}) => {
-    const [viewMode, setViewMode] = useState('list'); // 'list' | 'date_migration'
+const DatabaseManagement = ({ activities, locations, categories, onUpdateActivity, onDeleteActivity, onAddActivity }) => {
     const [searchTerm, setSearchTerm] = useState('');
-    const [selectedIds, setSelectedIds] = useState(new Set());
-    
-    // 批量修改 (文字/地點/時間)
-    const [batchEditMode, setBatchEditMode] = useState(false);
-    const [batchForm, setBatchForm] = useState({ activity: '', time: '', location: '', dateText: '' });
-
-    // 單行編輯
+    const [filterDate, setFilterDate] = useState('');
+    const [filterLevel, setFilterLevel] = useState('all');
+    const [activeTab, setActiveTab] = useState('list'); // list, add, bulk
     const [editingId, setEditingId] = useState(null);
+    
+    // Version 1.0: 新增批量修改日期的狀態
+    const [bulkSourceDate, setBulkSourceDate] = useState('');
+    const [bulkTargetDate, setBulkTargetDate] = useState('');
+    const [isBulkUpdating, setIsBulkUpdating] = useState(false);
+  
+    // 用於編輯的臨時狀態
     const [editForm, setEditForm] = useState({});
-
-    // 日期遷移專用狀態
-    const [migrationSourceDate, setMigrationSourceDate] = useState('');
-    const [migrationTargetDate, setMigrationTargetDate] = useState('');
-    const [isMigrating, setIsMigrating] = useState(false);
-
-    // 1. 數據篩選邏輯
-    const filteredData = useMemo(() => {
-        if (!searchTerm) return activities;
-        const lower = searchTerm.toLowerCase();
-        return activities.filter(a => 
-            (a.activity && a.activity.toLowerCase().includes(lower)) || 
-            (a.verifiedName && a.verifiedName.includes(lower)) || 
-            (a.verifiedClass && a.verifiedClass.includes(lower)) ||
-            (a.dateText && a.dateText.includes(lower))
-        );
-    }, [activities, searchTerm]);
-
-    // 2. 日期分組邏輯 (V1.1 改良：儲存活動名稱)
-    const dateGroups = useMemo(() => {
-        const groups = {};
-        activities.forEach(act => {
-            const d = act.dateText || "未指定日期";
-            if (!groups[d]) {
-                groups[d] = [];
-            }
-            // 只加入名稱，並避免重複顯示完全一樣的活動名稱 (視乎需求，這裡我保留重複以顯示真實數量)
-            groups[d].push(act.activity || '(無名稱)');
-        });
-        // 排序日期
-        return Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0])); 
-    }, [activities]);
-
-    // 操作：切換選取
-    const toggleSelect = (id) => {
-        const newSet = new Set(selectedIds);
-        if (newSet.has(id)) newSet.delete(id); else newSet.add(id);
-        setSelectedIds(newSet);
-    };
-
-    const toggleSelectAll = () => {
-        if (selectedIds.size === filteredData.length) setSelectedIds(new Set());
-        else setSelectedIds(new Set(filteredData.map(a => a.id)));
-    };
-
-    // 操作：開始編輯單行
-    const startEdit = (act) => {
-        setEditingId(act.id);
-        setEditForm({ ...act });
-    };
-
-    // 操作：儲存單行
-    const saveEdit = async () => {
-        await onUpdate(editingId, editForm);
-        setEditingId(null);
-    };
-
-    // 操作：批量文字修改
-    const handleBatchTextUpdate = async () => {
-        if (!window.confirm(`確定修改選取的 ${selectedIds.size} 筆資料嗎？`)) return;
-        
-        const updates = {};
-        if (batchForm.activity) updates.activity = batchForm.activity;
-        if (batchForm.time) updates.time = batchForm.time;
-        if (batchForm.location) updates.location = batchForm.location;
-        if (batchForm.dateText) updates.dateText = batchForm.dateText;
-
-        if (Object.keys(updates).length === 0) return alert("請輸入至少一項修改內容");
-
-        const db = getFirestore();
-        const batch = writeBatch(db);
-        selectedIds.forEach(id => {
-            batch.update(doc(db, "activities", id), updates);
-        });
-
-        await batch.commit();
-        alert("批量修改完成");
-        setBatchEditMode(false);
-        setSelectedIds(new Set());
-    };
-
-    // 操作：批量日期遷移
-    const handleDateMigration = async () => {
-        if (!migrationSourceDate || !migrationTargetDate) return alert("請選擇原本日期及新日期");
-        
-        const targets = activities.filter(a => a.dateText === migrationSourceDate);
-        
-        if (window.confirm(`【危險操作】\n確定要將所有日期為「${migrationSourceDate}」的活動 (${targets.length} 筆)\n全部遷移至新日期「${migrationTargetDate}」嗎？`)) {
-            setIsMigrating(true);
-            try {
-                const db = getFirestore();
-                const batch = writeBatch(db);
-                
-                targets.forEach(act => {
-                    batch.update(doc(db, "activities", act.id), { 
-                        dateText: migrationTargetDate,
-                        date: migrationTargetDate 
-                    });
-                });
-
-                await batch.commit();
-                alert(`成功遷移 ${targets.length} 筆資料！`);
-                setMigrationSourceDate('');
-                setMigrationTargetDate('');
-            } catch (e) {
-                alert("遷移失敗：" + e.message);
-            } finally {
-                setIsMigrating(false);
-            }
+  
+    // 篩選邏輯
+    const filteredActivities = useMemo(() => {
+      return activities.filter(item => {
+        const matchSearch = (item.activity && item.activity.includes(searchTerm)) || (item.location && item.location.includes(searchTerm));
+        const matchDate = filterDate ? item.date === filterDate : true;
+        const matchLevel = filterLevel === 'all' ? true : item.level?.includes(filterLevel);
+        return matchSearch && matchDate && matchLevel;
+      });
+    }, [activities, searchTerm, filterDate, filterLevel]);
+  
+    // Version 1.0: 統計所有日期及其活動數量 (用於批量修改介面顯示)
+    const dateStatistics = useMemo(() => {
+      const stats = {};
+      activities.forEach(item => {
+        // 注意：這裡使用 item.date (標準日期格式) 進行統計
+        if (item.date) {
+          stats[item.date] = (stats[item.date] || 0) + 1;
+        } else if (item.dateText) {
+           // Fallback: 如果沒有 standard date, 嘗試用 dateText
+           stats[item.dateText] = (stats[item.dateText] || 0) + 1;
         }
+      });
+      // 排序日期
+      return Object.entries(stats).sort((a, b) => a[0].localeCompare(b[0]));
+    }, [activities]);
+  
+    const handleEditClick = (item) => {
+      setEditingId(item.id);
+      setEditForm({ ...item });
     };
-
+  
+    const handleSaveEdit = async () => {
+      if (editingId) {
+        await onUpdateActivity(editingId, editForm);
+        setEditingId(null);
+      }
+    };
+  
+    const handleDeleteClick = async (id) => {
+      if (window.confirm('確定要刪除此活動嗎？此操作無法復原。')) {
+        await onDeleteActivity(id);
+      }
+    };
+  
+    // Version 1.0: 執行批量日期更改
+    const handleBulkDateUpdate = async () => {
+      if (!bulkSourceDate || !bulkTargetDate) {
+        alert("請選擇原本日期及輸入新日期");
+        return;
+      }
+      
+      if (bulkSourceDate === bulkTargetDate) {
+        alert("新舊日期不能相同");
+        return;
+      }
+  
+      // 這裡同時檢查 date 和 dateText 以確保兼容性
+      const targetActivities = activities.filter(a => a.date === bulkSourceDate || a.dateText === bulkSourceDate);
+      const count = targetActivities.length;
+  
+      if (count === 0) {
+        alert("找不到該日期的活動");
+        return;
+      }
+  
+      if (window.confirm(`確定要將 ${bulkSourceDate} 的 ${count} 個活動全部移動到 ${bulkTargetDate} 嗎？`)) {
+        setIsBulkUpdating(true);
+        try {
+          const db = getFirestore();
+          const batch = writeBatch(db);
+          
+          targetActivities.forEach(activity => {
+            const docRef = doc(db, "activities", activity.id);
+            // 同步更新 date 和 dateText
+            batch.update(docRef, { 
+                date: bulkTargetDate,
+                dateText: bulkTargetDate 
+            });
+          });
+  
+          await batch.commit();
+          alert(`成功更新 ${count} 個活動的日期！`);
+          setBulkSourceDate('');
+          setBulkTargetDate('');
+        } catch (error) {
+          console.error("Batch update error:", error);
+          alert("批量更新失敗，請檢查網絡或權限。");
+        } finally {
+          setIsBulkUpdating(false);
+        }
+      }
+    };
+  
     return (
-        <div className="bg-white p-6 rounded-xl shadow-md min-h-[600px] flex flex-col">
-            {/* Header Area */}
-            <div className="flex justify-between items-center mb-6 border-b pb-4">
-                <div className="flex items-center gap-4">
-                    <h2 className="text-2xl font-bold text-slate-800 flex items-center">
-                        <Database className="mr-2 text-blue-600" /> 
-                        數據庫管理 (V1.1)
-                    </h2>
-                    <div className="flex bg-slate-100 rounded-lg p-1">
-                        <button 
-                            onClick={() => setViewMode('list')}
-                            className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${viewMode === 'list' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                        >
-                            列表管理
-                        </button>
-                        <button 
-                            onClick={() => setViewMode('date_migration')}
-                            className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${viewMode === 'date_migration' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                        >
-                            批量日期遷移
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            {/* VIEW 1: LIST MANAGEMENT */}
-            {viewMode === 'list' && (
-                <div className="animate-in fade-in slide-in-from-bottom-2">
-                    {/* Toolbar */}
-                    <div className="mb-4 space-y-4">
-                        <div className="flex gap-4 items-center">
-                            <div className="flex-1 bg-slate-50 border rounded-lg flex items-center px-3 py-2">
-                                <Search size={18} className="text-slate-400 mr-2" />
-                                <input 
-                                    type="text" 
-                                    placeholder="搜尋學生、活動或日期..." 
-                                    className="bg-transparent outline-none w-full text-sm" 
-                                    value={searchTerm} 
-                                    onChange={(e) => setSearchTerm(e.target.value)} 
-                                />
-                            </div>
-                            {selectedIds.size > 0 && (
-                                <div className="flex items-center gap-2">
-                                    <button onClick={() => setBatchEditMode(!batchEditMode)} className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-bold flex items-center hover:bg-blue-700">
-                                        <Edit2 size={16} className="mr-2" /> 
-                                        批量修改 ({selectedIds.size})
-                                    </button>
-                                    <button 
-                                        onClick={() => {
-                                            if(window.confirm(`確定刪除 ${selectedIds.size} 筆資料？`)) {
-                                                const db = getFirestore();
-                                                const batch = writeBatch(db);
-                                                selectedIds.forEach(id => batch.delete(doc(db, "activities", id)));
-                                                batch.commit().then(() => setSelectedIds(new Set()));
-                                            }
-                                        }} 
-                                        className="bg-red-50 text-red-600 px-3 py-2 rounded-lg text-sm font-bold flex items-center hover:bg-red-100 border border-red-200"
-                                    >
-                                        <Trash2 size={16} className="mr-2" /> 刪除
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Batch Edit Panel */}
-                        {batchEditMode && selectedIds.size > 0 && (
-                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                                <h3 className="font-bold text-blue-800 text-sm mb-3">批量修改內容 (留空不變)</h3>
-                                <div className="grid grid-cols-4 gap-2 mb-3">
-                                    <input className="p-2 border rounded text-sm" placeholder="新活動名稱..." value={batchForm.activity} onChange={e => setBatchForm({...batchForm, activity: e.target.value})} />
-                                    <input className="p-2 border rounded text-sm" placeholder="新時間..." value={batchForm.time} onChange={e => setBatchForm({...batchForm, time: e.target.value})} />
-                                    <input className="p-2 border rounded text-sm" placeholder="新地點..." value={batchForm.location} onChange={e => setBatchForm({...batchForm, location: e.target.value})} />
-                                    <input className="p-2 border rounded text-sm" placeholder="新日期/備註..." value={batchForm.dateText} onChange={e => setBatchForm({...batchForm, dateText: e.target.value})} />
-                                </div>
-                                <div className="flex justify-end gap-2">
-                                    <button onClick={() => setBatchEditMode(false)} className="px-3 py-1 text-slate-500 hover:text-slate-800 text-sm">取消</button>
-                                    <button onClick={handleBatchTextUpdate} className="bg-blue-600 text-white px-4 py-1 rounded text-sm font-bold hover:bg-blue-700">確認修改</button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Table */}
-                    <div className="overflow-x-auto border rounded-xl">
-                        <table className="w-full text-left text-sm border-collapse">
-                            <thead className="bg-slate-100 text-slate-600 uppercase">
-                                <tr>
-                                    <th className="p-3 w-10 text-center">
-                                        <input type="checkbox" checked={filteredData.length > 0 && selectedIds.size === filteredData.length} onChange={toggleSelectAll} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"/>
-                                    </th>
-                                    <th className="p-3">學生</th>
-                                    <th className="p-3">活動名稱</th>
-                                    <th className="p-3">時間/地點</th>
-                                    <th className="p-3">日期/備註</th>
-                                    <th className="p-3 text-right">操作</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredData.map(act => (
-                                    <tr key={act.id} className={`border-b hover:bg-slate-50 ${selectedIds.has(act.id) ? 'bg-blue-50/50' : ''}`}>
-                                        <td className="p-3 text-center">
-                                            <input type="checkbox" checked={selectedIds.has(act.id)} onChange={() => toggleSelect(act.id)} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer" />
-                                        </td>
-                                        
-                                        {editingId === act.id ? (
-                                            // 編輯模式
-                                            <>
-                                                <td className="p-3 text-slate-400 text-xs">不可編輯學生</td>
-                                                <td className="p-3"><input className="w-full p-1 border rounded" value={editForm.activity} onChange={e => setEditForm({...editForm, activity: e.target.value})} /></td>
-                                                <td className="p-3">
-                                                    <input className="w-full p-1 border rounded mb-1" value={editForm.time} onChange={e => setEditForm({...editForm, time: e.target.value})} />
-                                                    <input className="w-full p-1 border rounded" value={editForm.location} onChange={e => setEditForm({...editForm, location: e.target.value})} />
-                                                </td>
-                                                <td className="p-3"><input className="w-full p-1 border rounded" value={editForm.dateText} onChange={e => setEditForm({...editForm, dateText: e.target.value})} /></td>
-                                                <td className="p-3 text-right">
-                                                    <div className="flex justify-end gap-2">
-                                                        <button onClick={saveEdit} className="bg-green-100 text-green-700 p-1.5 rounded hover:bg-green-200"><CheckCircle size={16} /></button>
-                                                        <button onClick={() => setEditingId(null)} className="bg-slate-100 text-slate-600 p-1.5 rounded hover:bg-slate-200"><X size={16} /></button>
-                                                    </div>
-                                                </td>
-                                            </>
-                                        ) : (
-                                            // 顯示模式
-                                            <>
-                                                <td className="p-3">
-                                                    <div className="font-bold text-slate-800">{act.verifiedClass} {act.verifiedClassNo}</div>
-                                                    <div className="text-slate-500 text-xs">{act.verifiedName}</div>
-                                                </td>
-                                                <td className="p-3 font-bold text-blue-700">{act.activity}</td>
-                                                <td className="p-3">
-                                                    <div className="text-slate-800">{act.time}</div>
-                                                    <div className="text-slate-500 text-xs">{act.location}</div>
-                                                </td>
-                                                <td className="p-3">
-                                                    <span className="inline-block bg-slate-100 text-slate-600 px-2 py-1 rounded text-xs font-bold">
-                                                        {act.dateText}
-                                                    </span>
-                                                </td>
-                                                <td className="p-3 text-right">
-                                                    <div className="flex justify-end gap-2">
-                                                        <button onClick={() => startEdit(act)} className="text-blue-500 hover:text-blue-700 p-1"><Edit2 size={16} /></button>
-                                                        <button onClick={() => onDelete(act.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={16} /></button>
-                                                    </div>
-                                                </td>
-                                            </>
-                                        )}
-                                    </tr>
-                                ))}
-                                {filteredData.length === 0 && <tr><td colSpan="6" className="p-8 text-center text-slate-400">沒有符合搜尋的資料。</td></tr>}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            )}
-
-            {/* VIEW 2: BULK DATE MIGRATION */}
-            {viewMode === 'date_migration' && (
-                <div className="animate-in fade-in slide-in-from-right-4 max-w-5xl mx-auto w-full">
-                    <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-6 mb-8">
-                        <h3 className="font-bold text-indigo-900 text-lg mb-4 flex items-center">
-                            <RefreshCcw className="mr-2" size={20}/> 批量日期遷移 (Migration)
-                        </h3>
-                        <p className="text-indigo-700 text-sm mb-6">
-                            請在下方選擇一個「原本日期」，系統會將該日期下的所有活動移動到「新日期」。
-                        </p>
-
-                        <div className="flex flex-col md:flex-row gap-6 items-end">
-                            <div className="flex-1 w-full">
-                                <label className="block text-xs font-bold text-indigo-600 mb-1 uppercase">原本日期 (Source)</label>
-                                <select 
-                                    className="w-full p-3 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
-                                    value={migrationSourceDate}
-                                    onChange={(e) => setMigrationSourceDate(e.target.value)}
-                                >
-                                    <option value="">-- 請選擇要遷移的舊日期 --</option>
-                                    {dateGroups.map(([date, acts]) => (
-                                        <option key={date} value={date}>{date} (共 {acts.length} 筆)</option>
-                                    ))}
-                                </select>
-                            </div>
-                            
-                            <div className="text-indigo-300 pb-3">
-                                <ArrowRight size={24} />
-                            </div>
-
-                            <div className="flex-1 w-full">
-                                <label className="block text-xs font-bold text-indigo-600 mb-1 uppercase">新日期 (Target)</label>
-                                <input 
-                                    type="text" 
-                                    className="w-full p-3 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                                    placeholder="輸入新日期 (如: 2024-03-15)"
-                                    value={migrationTargetDate}
-                                    onChange={(e) => setMigrationTargetDate(e.target.value)}
-                                />
-                            </div>
-
-                            <button 
-                                onClick={handleDateMigration}
-                                disabled={!migrationSourceDate || !migrationTargetDate || isMigrating}
-                                className={`px-6 py-3 rounded-lg font-bold text-white shadow-lg flex items-center ${!migrationSourceDate ? 'bg-slate-300' : 'bg-indigo-600 hover:bg-indigo-700'}`}
-                            >
-                                {isMigrating ? <span className="animate-pulse">處理中...</span> : '確認遷移'}
-                            </button>
-                        </div>
-                    </div>
-
-                    <h4 className="font-bold text-slate-700 mb-4 flex items-center">
-                        <Calendar className="mr-2" size={18} />
-                        現有日期統計一覽 (Version 1.1)
-                    </h4>
-                    {/* V1.1 更新：展示日期內的具體活動 */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {dateGroups.map(([date, acts]) => (
-                            <div key={date} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-all">
-                                <div className="flex justify-between items-center mb-3 border-b border-slate-100 pb-2">
-                                    <span className="font-mono text-base font-bold text-slate-800">{date}</span>
-                                    <span className="bg-indigo-50 text-indigo-600 text-xs font-bold px-2 py-1 rounded-full">
-                                        共 {acts.length} 筆
-                                    </span>
-                                </div>
-                                <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto custom-scrollbar">
-                                    {/* 這裡列出活動名稱 */}
-                                    {acts.map((actName, idx) => (
-                                        <span key={idx} className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded border border-slate-200 truncate max-w-full">
-                                            {actName}
-                                        </span>
-                                    ))}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden min-h-[600px]">
+        {/* Header Tabs */}
+        <div className="flex border-b border-slate-200">
+          <button
+            onClick={() => setActiveTab('list')}
+            className={`flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 ${activeTab === 'list' ? 'bg-indigo-50 text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:bg-slate-50'}`}
+          >
+            <Database size={18} />
+            資料庫列表
+          </button>
+          <button
+            onClick={() => setActiveTab('add')}
+            className={`flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 ${activeTab === 'add' ? 'bg-indigo-50 text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:bg-slate-50'}`}
+          >
+            <PlusCircle size={18} />
+            新增活動
+          </button>
+          <button
+            onClick={() => setActiveTab('bulk')}
+            className={`flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 ${activeTab === 'bulk' ? 'bg-indigo-50 text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:bg-slate-50'}`}
+          >
+            <Layers size={18} />
+            批量修改 (V1.2)
+          </button>
         </div>
+  
+        <div className="p-6">
+          {/* TAB 1: LIST VIEW */}
+          {activeTab === 'list' && (
+            <div className="animate-in fade-in">
+              {/* Filter Bar */}
+              <div className="flex flex-col md:flex-row gap-4 mb-6">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={20} />
+                  <input
+                    type="text"
+                    placeholder="搜尋活動名稱或地點..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                  />
+                </div>
+                <input
+                  type="date"
+                  value={filterDate}
+                  onChange={(e) => setFilterDate(e.target.value)}
+                  className="px-4 py-2 border border-slate-300 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <select
+                  value={filterLevel}
+                  onChange={(e) => setFilterLevel(e.target.value)}
+                  className="px-4 py-2 border border-slate-300 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="all">所有年級</option>
+                  <option value="P1">P1</option>
+                  <option value="P2">P2</option>
+                  <option value="P3">P3</option>
+                  <option value="P4">P4</option>
+                  <option value="P5">P5</option>
+                  <option value="P6">P6</option>
+                </select>
+              </div>
+  
+              {/* Data Table */}
+              <div className="overflow-x-auto rounded-xl border border-slate-200">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-600 text-sm border-b border-slate-200">
+                      <th className="p-4 font-bold">日期/時間</th>
+                      <th className="p-4 font-bold">活動名稱</th>
+                      <th className="p-4 font-bold">地點</th>
+                      <th className="p-4 font-bold">年級/人數</th>
+                      <th className="p-4 font-bold text-center">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-sm">
+                    {filteredActivities.map((item) => (
+                      <tr key={item.id} className="border-b border-slate-100 hover:bg-slate-50 group">
+                        {editingId === item.id ? (
+                          // Edit Mode Row
+                          <>
+                            <td className="p-2">
+                              <input 
+                                type="date" 
+                                value={editForm.date} 
+                                onChange={(e) => setEditForm({...editForm, date: e.target.value})}
+                                className="w-full p-1 border rounded mb-1"
+                              />
+                              <input 
+                                type="text" 
+                                value={editForm.time} 
+                                onChange={(e) => setEditForm({...editForm, time: e.target.value})}
+                                className="w-full p-1 border rounded"
+                              />
+                            </td>
+                            <td className="p-2">
+                              <input 
+                                type="text" 
+                                value={editForm.activity} 
+                                onChange={(e) => setEditForm({...editForm, activity: e.target.value})}
+                                className="w-full p-1 border rounded"
+                              />
+                              <div className="mt-1 flex gap-1">
+                                  {categories.map(cat => (
+                                      <button 
+                                          key={cat}
+                                          onClick={() => setEditForm({...editForm, category: cat})}
+                                          className={`text-xs px-2 py-0.5 rounded-full border ${editForm.category === cat ? 'bg-indigo-100 border-indigo-300 text-indigo-700' : 'bg-white border-slate-200 text-slate-500'}`}
+                                      >
+                                          {cat}
+                                      </button>
+                                  ))}
+                              </div>
+                            </td>
+                            <td className="p-2">
+                              <select 
+                                  value={editForm.location}
+                                  onChange={(e) => setEditForm({...editForm, location: e.target.value})}
+                                  className="w-full p-1 border rounded"
+                              >
+                                  {locations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
+                              </select>
+                            </td>
+                            <td className="p-2">
+                               <span className="text-xs text-slate-400">暫不支援快速編輯年級</span>
+                            </td>
+                            <td className="p-2 text-center">
+                              <div className="flex justify-center gap-2">
+                                  <button onClick={handleSaveEdit} className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200">
+                                      <Save size={16} />
+                                  </button>
+                                  <button onClick={() => setEditingId(null)} className="p-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200">
+                                      <X size={16} />
+                                  </button>
+                              </div>
+                            </td>
+                          </>
+                        ) : (
+                          // View Mode Row
+                          <>
+                            <td className="p-4">
+                              <div className="font-bold text-slate-800">{item.date || item.dateText}</div>
+                              <div className="text-slate-500 text-xs flex items-center mt-1">
+                                  <Clock size={12} className="mr-1"/> {item.time}
+                              </div>
+                            </td>
+                            <td className="p-4">
+                              <div className="font-bold text-slate-900">{item.activity}</div>
+                              <span className="inline-block mt-1 px-2 py-0.5 bg-indigo-50 text-indigo-600 text-xs rounded-md">
+                                  {item.category}
+                              </span>
+                            </td>
+                            <td className="p-4 text-slate-600">
+                              <div className="flex items-center">
+                                  <MapPin size={14} className="mr-1 text-slate-400"/>
+                                  {item.location}
+                              </div>
+                            </td>
+                            <td className="p-4">
+                              <div className="text-xs text-slate-500">
+                                  {item.level?.join(', ')}
+                              </div>
+                              <div className="text-xs font-bold text-slate-700 mt-1">
+                                  上限: {item.quota}
+                              </div>
+                            </td>
+                            <td className="p-4 text-center">
+                              <div className="flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button 
+                                  onClick={() => handleEditClick(item)}
+                                  className="p-2 hover:bg-indigo-50 text-indigo-600 rounded-lg transition-colors"
+                                >
+                                  <Edit2 size={16} />
+                                </button>
+                                <button 
+                                  onClick={() => handleDeleteClick(item.id)}
+                                  className="p-2 hover:bg-red-50 text-red-600 rounded-lg transition-colors"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                            </td>
+                          </>
+                        )}
+                      </tr>
+                    ))}
+                    {filteredActivities.length === 0 && (
+                      <tr>
+                        <td colSpan="5" className="p-8 text-center text-slate-400 italic">
+                          沒有找到符合條件的活動
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+  
+          {/* TAB 2: ADD ACTIVITY */}
+          {activeTab === 'add' && (
+             <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-300 animate-in fade-in">
+               <div className="inline-block p-4 bg-white rounded-full shadow-sm mb-4">
+                  <PlusCircle size={32} className="text-indigo-400" />
+               </div>
+               <p className="text-slate-500 mb-4">要新增活動，請點擊上方的「返回導入介面」，然後使用 CSV 導入或手動輸入功能。</p>
+               <button onClick={() => alert("請返回導入介面進行操作")} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700">
+                  前往導入介面
+               </button>
+             </div>
+          )}
+  
+          {/* TAB 3: BULK EDIT */}
+          {activeTab === 'bulk' && (
+            <div className="space-y-8 animate-in fade-in">
+              
+              {/* 1. Date Distribution Overview */}
+              <div className="bg-slate-50 p-5 rounded-xl border border-slate-200">
+                <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
+                  <Calendar className="mr-2 text-indigo-500" size={20} />
+                  現有活動日期分佈
+                </h3>
+                <p className="text-sm text-slate-500 mb-4">
+                  以下列出資料庫中所有已登記的日期及其活動數量。
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  {dateStatistics.map(([date, count]) => (
+                    <button
+                      key={date}
+                      onClick={() => setBulkSourceDate(date)}
+                      className={`flex items-center px-3 py-1.5 rounded-lg border text-sm transition-all ${bulkSourceDate === date ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400 hover:text-indigo-600'}`}
+                    >
+                      <span className="font-mono font-bold mr-2">{date}</span>
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full ${bulkSourceDate === date ? 'bg-indigo-500 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                          {count}
+                      </span>
+                    </button>
+                  ))}
+                  {dateStatistics.length === 0 && <span className="text-slate-400 italic">暫無數據</span>}
+                </div>
+              </div>
+  
+              {/* 2. Bulk Date Migration Tool */}
+              <div className="bg-white p-6 rounded-xl border border-indigo-100 shadow-sm relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500"></div>
+                  <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center">
+                      <RefreshCcw className="mr-2 text-indigo-500" size={20} />
+                      批量日期遷移
+                  </h3>
+                  
+                  <div className="flex flex-col md:flex-row items-end gap-4">
+                      <div className="flex-1 w-full">
+                          <label className="block text-sm font-bold text-slate-700 mb-2">
+                              原本日期 (Source Date)
+                          </label>
+                          <div className="relative">
+                              <select 
+                                  value={bulkSourceDate}
+                                  onChange={(e) => setBulkSourceDate(e.target.value)}
+                                  className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
+                              >
+                                  <option value="">請選擇日期...</option>
+                                  {dateStatistics.map(([date, count]) => (
+                                      <option key={date} value={date}>
+                                          {date} (共 {count} 個活動)
+                                      </option>
+                                  ))}
+                              </select>
+                              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+                          </div>
+                      </div>
+  
+                      <div className="hidden md:flex items-center justify-center pb-3 text-slate-400">
+                          <ArrowRight size={24} />
+                      </div>
+  
+                      <div className="flex-1 w-full">
+                          <label className="block text-sm font-bold text-slate-700 mb-2">
+                              更改為新日期 (Target Date)
+                          </label>
+                          <input
+                              type="date"
+                              value={bulkTargetDate}
+                              onChange={(e) => setBulkTargetDate(e.target.value)}
+                              className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                          />
+                      </div>
+  
+                      <button 
+                          onClick={handleBulkDateUpdate}
+                          disabled={isBulkUpdating || !bulkSourceDate || !bulkTargetDate}
+                          className={`px-6 py-3 rounded-xl font-bold text-white shadow-lg flex items-center justify-center min-w-[140px] ${isBulkUpdating || !bulkSourceDate || !bulkTargetDate ? 'bg-slate-300 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 hover:shadow-indigo-200'}`}
+                      >
+                          {isBulkUpdating ? (
+                              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          ) : (
+                              <>
+                                  <CheckCircle size={18} className="mr-2" />
+                                  確認更改
+                              </>
+                          )}
+                      </button>
+                  </div>
+  
+                  <div className="mt-4 p-3 bg-blue-50 text-blue-800 text-sm rounded-lg border border-blue-100 flex items-start">
+                      <AlertTriangle size={16} className="mr-2 mt-0.5 flex-shrink-0" />
+                      <p>注意：此操作會將所有屬於「原本日期」的活動直接移動到「新日期」。操作會直接寫入資料庫，請謹慎使用。</p>
+                  </div>
+              </div>
+  
+            </div>
+          )}
+        </div>
+      </div>
     );
-};
+  };
 // ====================================================================
 
 // -----------------------------------------------------------------------------
@@ -1545,9 +1593,8 @@ const App = () => {
       </div>
   );
 
-// REPLACEMENT FOR RENDER DATABASE MANAGER
-  // 此函數負責呼叫我們新建立的 DatabaseSystemV1 組件
-  const renderDatabaseManager = () => (
+// REPLACEMENT FOR RENDER DATABASE MANAGER (UPDATED FOR V1.2)
+const renderDatabaseManager = () => (
     <div className="animate-fade-in">
         <button 
             onClick={() => setAdminTab('import')} 
@@ -1556,11 +1603,16 @@ const App = () => {
             <ArrowLeft className="mr-2" size={20} /> 返回導入介面
         </button>
 
-        {/* 呼叫新組件，並將 App 內的資料傳遞給它 */}
-        <DatabaseSystemV1 
+        {/* 重要：這裡將 App 的 saveEditActivity 函數
+          連接到組件的 onUpdateActivity 屬性 
+        */}
+        <DatabaseManagement 
             activities={activities} 
-            onDelete={handleDeleteActivity}
-            onUpdate={saveEditActivity}
+            locations={locations || []}
+            categories={categories || []}
+            onUpdateActivity={saveEditActivity} 
+            onDeleteActivity={handleDeleteActivity}
+            onAddActivity={() => setAdminTab('import')} 
         />
     </div>
 );
