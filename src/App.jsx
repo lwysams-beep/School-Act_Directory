@@ -140,7 +140,7 @@ const CATEGORY_COLORS = {
     '視藝 (Visual Arts)': '#ec4899',
     '學術/STEM': '#3b82f6',
     '服務/制服 (Service)': '#10b981',
-    '成長/支援 (SEN Service)': '#fffff7',
+    '成長/支援 (SEN Service)': '#6A1D8F',
     '其他 (Others)': '#94a3b8'
 };
 
