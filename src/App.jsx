@@ -491,16 +491,6 @@ const App = () => {
           alert("無法識別。請確認貼上的名單格式是否正確（例如：4A 蔡舒朗）。");
       }
   };
-
-      if (newItems.length > 0) {
-          setPendingImports(prev => [...prev, ...newItems]);
-          setBulkInput('');
-          alert(`成功識別 ${newItems.length} 筆。`);
-      } else {
-          alert("無法識別。");
-      }
-  };
-
   const { matched, conflicts } = useMemo(() => {
     const matched = [];
     const conflicts = [];
@@ -1006,6 +996,6 @@ const App = () => {
       {currentView === 'kiosk_result' && renderKioskResultView()}
     </div>
   );
-
+};
 
 export default App;
