@@ -237,7 +237,7 @@ const App = () => {
   const [importActivity, setImportActivity] = useState('無人機班');
   const [importTime, setImportTime] = useState('15:30-16:30');
   const [importLocation, setImportLocation] = useState('禮堂');
-  const [importDayId, setImportDayId] = useState(1);
+  const [importDayIds, setImportDayIds] = useState([1]);
   const [importDates, setImportDates] = useState([]); 
   const [tempDateInput, setTempDateInput] = useState('');
   const dateInputRef = useRef(null); 
@@ -922,8 +922,33 @@ const App = () => {
                             <div><label className="text-xs text-slate-500 font-bold uppercase">活動名稱</label><input type="text" className="w-full p-2 border rounded" value={importActivity} onChange={e => setImportActivity(e.target.value)} /></div>
                             <div className="grid grid-cols-2 gap-2"><div><label className="text-xs text-slate-500 font-bold uppercase">時間</label><input type="text" className="w-full p-2 border rounded" value={importTime} onChange={e => setImportTime(e.target.value)} /></div><div><label className="text-xs text-slate-500 font-bold uppercase">地點</label><input type="text" className="w-full p-2 border rounded" value={importLocation} onChange={e => setImportLocation(e.target.value)} /></div></div>
                             <div className="border border-slate-200 rounded p-3 bg-slate-50"><label className="text-xs text-slate-500 font-bold uppercase mb-2 block">選擇日期 (輸入 0209 代表 9月2日)</label><div className="flex gap-2 mb-2"><input type="text" ref={dateInputRef} placeholder="DDMM (如 0209)" className="flex-1 p-2 border rounded text-sm" value={tempDateInput} onChange={(e) => setTempDateInput(e.target.value)} onKeyDown={handleDateInputKeyDown} /><button onClick={handleAddDate} className="bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 flex items-center"><Plus size={16} /></button></div><div className="flex flex-wrap gap-2 mb-2">{importDates.map(date => (<span key={date} className="bg-white border border-blue-200 text-blue-800 text-xs px-2 py-1 rounded-full flex items-center shadow-sm">{formatDisplayDate(date)}<button onClick={() => handleRemoveDate(date)} className="ml-1 text-blue-400 hover:text-red-500"><X size={12} /></button></span>))}</div><div className="flex justify-between items-center text-xs"><span className="font-bold text-slate-600">已選: {importDates.length} 天 (共{importDates.length}堂)</span>{importDates.length > 0 && <button onClick={handleClearDates} className="text-red-400 hover:underline">清空</button>}</div></div>
-                            <div><label className="text-xs text-slate-500 font-bold uppercase">星期 (自動/預設)</label><select className="w-full p-2 border rounded" value={importDayId} onChange={e => setImportDayId(e.target.value)}><option value="1">逢星期一</option><option value="2">逢星期二</option><option value="3">逢星期三</option><option value="4">逢星期四</option><option value="5">逢星期五</option><option value="6">逢星期六</option><option value="0">逢星期日</option></select></div>
+                            
+                            {/* 多選星期的 UI 區塊 */}
+                            <div>
+                                <label className="text-xs text-slate-500 font-bold uppercase mb-2 block">星期 (可多選)</label>
+                                <div className="flex gap-2 flex-wrap">
+                                    {[{id:1, label:'一'}, {id:2, label:'二'}, {id:3, label:'三'}, {id:4, label:'四'}, {id:5, label:'五'}, {id:6, label:'六'}, {id:0, label:'日'}].map(day => { 
+                                        const isSelected = importDayIds.includes(day.id); 
+                                        return (
+                                            <button 
+                                                key={day.id} 
+                                                onClick={() => { 
+                                                    if (isSelected) { 
+                                                        setImportDayIds(importDayIds.filter(d => d !== day.id)); 
+                                                    } else { 
+                                                        setImportDayIds([...importDayIds, day.id].sort()); 
+                                                    } 
+                                                }} 
+                                                className={`px-3 py-1.5 rounded text-sm font-bold transition ${isSelected ? 'bg-blue-600 text-white shadow-md' : 'bg-white border border-slate-300 text-slate-600 hover:bg-slate-50'}`}
+                                            >
+                                                {day.label}
+                                            </button>
+                                        ); 
+                                    })}
+                                </div>
+                            </div>
                         </div>
+
                         <div className="mb-4"><label className="text-xs text-slate-500 font-bold uppercase flex justify-between"><span>貼上名單 (PDF Copy/Paste)</span><span className="text-blue-500 cursor-pointer flex items-center" title="格式: 4A 蔡舒朗 (可含電話)"><FileText size={12} className="mr-1"/> 說明</span></label><textarea className="w-full h-32 p-2 border rounded bg-slate-50 text-sm font-mono" placeholder={`4A 蔡舒朗 91234567\n2A1 陳嘉瑩`} value={bulkInput} onChange={e => setBulkInput(e.target.value)}></textarea></div>
                         <button onClick={handleBulkImport} className="w-full py-2 bg-blue-600 text-white font-bold rounded hover:bg-blue-700 transition">識別並載入</button>
                     </div>
