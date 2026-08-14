@@ -447,8 +447,12 @@ const App = () => {
   const handleBulkImport = () => {
       const lines = bulkInput.trim().split('\n');
       const newItems = [];
-      const dayMap = {1:'逢星期一', 2:'逢星期二', 3:'逢星期三', 4:'逢星期四', 5:'逢星期五', 6:'逢星期六', 0:'逢星期日'};
-      let finalDateText = dayMap[importDayId];
+      const dayMap = {1:'一', 2:'二', 3:'三', 4:'四', 5:'五', 6:'六', 0:'日'};
+      
+      // 加入安全檢查，防止變數未定義導致崩潰
+      const currentDayIds = typeof importDayIds !== 'undefined' ? importDayIds : [1];
+      
+      let finalDateText = currentDayIds.length > 0 ? `逢星期${currentDayIds.map(id => dayMap[id]).join(', ')}` : '未指定星期';
       if (importDates.length > 0) finalDateText = `共${importDates.length}堂 (${importDates[0]}起)`;
 
       lines.forEach((line) => {
@@ -472,12 +476,21 @@ const App = () => {
                   time: importTime,
                   location: importLocation,
                   dateText: finalDateText,
-                  dayIds: [parseInt(importDayId)], 
+                  dayIds: currentDayIds, 
                   specificDates: importDates, 
                   forceConflict: false 
               });
           }
       });
+
+      if (newItems.length > 0) {
+          setPendingImports(prev => [...prev, ...newItems]);
+          setBulkInput('');
+          alert(`成功識別 ${newItems.length} 筆資料。`);
+      } else {
+          alert("無法識別。請確認貼上的名單格式是否正確（例如：4A 蔡舒朗）。");
+      }
+  };
 
       if (newItems.length > 0) {
           setPendingImports(prev => [...prev, ...newItems]);
@@ -993,6 +1006,6 @@ const App = () => {
       {currentView === 'kiosk_result' && renderKioskResultView()}
     </div>
   );
-};
+
 
 export default App;
