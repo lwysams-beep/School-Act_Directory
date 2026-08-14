@@ -1,10 +1,16 @@
 // =============================================================================
-//  校園資訊 APP - VERSION 4.4 (整合 v4.2 手動修改版)
-//  功能: 在教職員頁面加入即時點名狀態顯示燈，與點名App數據連動
+//  校園資訊 APP - VERSION 4.5 (按活動班整體改期選單優化版)
+//  優化: 「按活動班整體改期」改為選單模式 Modal，並支援個別日期的新增與刪除
 // =============================================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-// V4.4: 引入 Circle icon
-import { Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, Phone, CheckSquare, Square, RefreshCcw, X, Plus, Edit2, FileSpreadsheet, BarChart, History, TrendingUp, Filter, Cloud, UserX, PieChart, Download, Activity, Save as SaveIcon, Layers, Maximize, Palette, ChevronDown, Circle } from 'lucide-react';
+import { 
+  Search, User, Calendar, MapPin, Clock, Upload, Settings, Monitor, 
+  ArrowLeft, Home, CheckCircle, Trash2, Database, AlertTriangle, Save, 
+  Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, 
+  Phone, CheckSquare, Square, RefreshCcw, X, Plus, Edit2, FileSpreadsheet, 
+  BarChart, History, TrendingUp, Filter, Cloud, UserX, PieChart, Download, 
+  Activity, Save as SaveIcon, Layers, Maximize, Palette, ChevronDown, Circle 
+} from 'lucide-react';
 
 // =============================================================================
 //  FIREBASE IMPORTS & CONFIGURATION
@@ -71,7 +77,6 @@ const parseMasterCSV = (csvText) => {
 // -----------------------------------------------------------------------------
 // 2. HELPER FUNCTIONS
 // -----------------------------------------------------------------------------
-
 const calculateDuration = (timeStr) => {
   if (!timeStr || typeof timeStr !== 'string' || !timeStr.includes('-')) return 1; 
   try {
@@ -107,7 +112,6 @@ const exportToCSV = (data, filename) => {
   document.body.removeChild(link);
 };
 
-// (保留你手動修改的分類)
 const CATEGORY_OPTIONS = [
     '體育 (Sports)',
     '音樂 (Music)',
@@ -144,9 +148,6 @@ const CATEGORY_COLORS = {
     '其他 (Others)': '#94a3b8'
 };
 
-// =============================================================================
-//  V4.4 NEW COMPONENT: StatusIndicator & StatusLegend
-// =============================================================================
 const StatusIndicator = ({ status }) => {
   const statusConfig = {
     present: { color: 'bg-green-500', text: '出席' },
@@ -179,11 +180,10 @@ const StatusLegend = () => (
     </div>
 );
 
-
 // -----------------------------------------------------------------------------
 // 3. STATS VIEW COMPONENT
 // -----------------------------------------------------------------------------
-const StatsView = ({ masterList, activities, queryLogs, onBack }) => { /* ... (no change from your v4.2) ... */ 
+const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
     const [statsViewMode, setStatsViewMode] = useState('dashboard');
     const [selectedActs, setSelectedActs] = useState(new Set());
     const [updatingCategory, setUpdatingCategory] = useState(false);
@@ -202,15 +202,33 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => { /* ... (n
     const exportCategoryStats = () => exportToCSV(categoryStats, 'Category_Distribution_Report');
     const maxGradeHours = useMemo(() => { return Math.max(...gradeDistribution.map(g => g.total)) || 1; }, [gradeDistribution]);
     const getActColorIndex = (name) => { const idx = activityStats.findIndex(x => x.name === name); return idx >= 0 ? idx : 0; };
-    return (<div className="bg-white p-6 rounded-xl shadow-md min-h-[600px] flex flex-col"><div className="flex justify-between items-center mb-6 border-b pb-4"><button onClick={onBack} className="flex items-center text-slate-500 hover:text-blue-600"><ArrowLeft className="mr-2" size={20} /> 返回</button><h2 className="text-2xl font-bold text-slate-800 flex items-center"><BarChart className="mr-2 text-blue-600" /> 校本數據分析中心 (V3.8.1)</h2><div className="w-24"></div></div><div className="flex space-x-2 mb-6 overflow-x-auto pb-2"><button onClick={() => setStatsViewMode('dashboard')} className={`px-4 py-2 rounded-lg flex items-center transition ${statsViewMode === 'dashboard' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}><PieChart size={18} className="mr-2"/> 數據概覽</button><button onClick={() => setStatsViewMode('activities')} className={`px-4 py-2 rounded-lg flex items-center transition ${statsViewMode === 'activities' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}><Activity size={18} className="mr-2"/> 活動列表 ({filteredActivityList.length})</button><button onClick={() => setStatsViewMode('students')} className={`px-4 py-2 rounded-lg flex items-center transition ${statsViewMode === 'students' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}><Users size={18} className="mr-2"/> 學生監測 ({filteredStudentList.length})</button><button onClick={() => setStatsViewMode('logs')} className={`px-4 py-2 rounded-lg flex items-center transition ${statsViewMode === 'logs' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}><History size={18} className="mr-2"/> 系統紀錄</button></div>{selectedActs.size > 0 && (<div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex justify-between items-center animate-in slide-in-from-top-2"><div className="text-sm text-blue-800"><span className="font-bold flex items-center"><Filter size={16} className="mr-1"/> 關注模式: </span>{Array.from(selectedActs).join(', ')}</div><button onClick={clearSelection} className="text-xs bg-white text-slate-500 border px-2 py-1 rounded hover:bg-red-50 hover:text-red-500 transition">清除篩選 (顯示全校)</button></div>)}<div className="flex-1 overflow-y-auto">{statsViewMode === 'dashboard' && (<div className="flex flex-col space-y-12 pb-12"><div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col md:flex-row items-center md:items-start relative min-h-[400px]"><div className="absolute top-4 left-4 z-20"><button onClick={() => exportToCSV(filteredActivityList, 'Activity_Hours_Report')} className="text-xs bg-indigo-600 text-white border px-3 py-1.5 rounded flex items-center hover:bg-indigo-700 shadow-md transition"><Download size={14} className="mr-1"/> 匯出 CSV</button></div><div className="flex-1 flex flex-col items-center justify-center p-4 pt-10"><h3 className="font-bold text-slate-700 mb-6 flex items-center text-lg"><Clock className="mr-2 text-orange-500"/> 活動總時數分佈 (真實比例)</h3><div className="relative w-72 h-72 rounded-full shadow-2xl border-4 border-white transition-all duration-500" style={{ background: `conic-gradient(${ghostPieGradient})` }}><div className="absolute inset-0 m-auto w-36 h-36 bg-slate-50 rounded-full flex flex-col items-center justify-center shadow-inner"><div className="text-xs text-slate-400 mb-1">{selectedActs.size > 0 ? "已選 / 總計" : "總學時"}</div><div className="flex items-baseline">{selectedActs.size > 0 && <span className="text-2xl font-bold text-blue-600 mr-1">{filteredTotalHours.toFixed(0)}</span>}{selectedActs.size > 0 && <span className="text-slate-400">/</span>}<span className={`font-bold text-slate-800 ${selectedActs.size > 0 ? 'text-lg ml-1' : 'text-4xl'}`}>{totalHours.toFixed(0)}</span></div><span className="text-xs text-slate-400">Hours</span></div></div><p className="text-xs text-slate-400 mt-4">點擊右側圖例進行多項對比</p></div><div className="w-full md:w-80 h-96 border-l border-slate-200 pl-0 md:pl-6 overflow-y-auto"><h4 className="text-xs font-bold text-slate-400 uppercase mb-3 sticky top-0 bg-slate-50 py-2 z-10 flex justify-between"><span>圖例 (點選切換)</span>{selectedActs.size > 0 && <span className="text-blue-500">已選 {selectedActs.size} 項</span>}</h4><div className="space-y-1">{activityStats.map((a, i) => { const isSelected = selectedActs.size === 0 || selectedActs.has(a.name); const isDimmed = selectedActs.size > 0 && !isSelected; return (<button key={i} onClick={() => toggleSelection(a.name)} className={`w-full flex items-center justify-between p-2 rounded text-xs transition-all duration-200 ${isSelected ? 'bg-white shadow ring-2 ring-blue-500 scale-[1.02] z-10' : 'hover:bg-white hover:shadow-sm'} ${isDimmed ? 'opacity-40 grayscale' : 'opacity-100'}`}><div className="flex items-center truncate"><span className="w-3 h-3 rounded-full mr-2 flex-shrink-0" style={{backgroundColor: getSafeColor(i)}}></span><span className="truncate max-w-[120px]" title={a.name}>{a.name}</span></div><div className="font-bold text-slate-600">{((a.hours/(totalHours||1))*100).toFixed(1)}%</div></button>) })}</div></div></div><div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col md:flex-row items-center md:items-start relative min-h-[300px]"><div className="absolute top-4 left-4 z-20"><button onClick={exportCategoryStats} className="text-xs bg-indigo-600 text-white border px-3 py-1.5 rounded flex items-center hover:bg-indigo-700 shadow-md transition"><Download size={14} className="mr-1"/> 匯出 CSV</button></div><div className="flex-1 flex flex-col items-center justify-center p-4 pt-10"><h3 className="font-bold text-slate-700 mb-6 flex items-center text-lg"><Palette className="mr-2 text-purple-500"/> 課程範疇分佈 (可手動修正)</h3><div className="relative w-64 h-64 rounded-full shadow-xl border-4 border-white" style={{ background: `conic-gradient(${categoryPieGradient})` }}><div className="absolute inset-0 m-auto w-32 h-32 bg-slate-50 rounded-full flex flex-col items-center justify-center shadow-inner"><span className="text-lg font-bold text-slate-600">分類統計</span></div></div><p className="text-xs text-slate-400 mt-4">前往「活動列表」即可手動更改分類</p></div><div className="w-full md:w-64 p-4"><h4 className="text-xs font-bold text-slate-400 uppercase mb-3">類別圖例</h4><div className="space-y-2">{categoryStats.map((cat, i) => (<div key={i} className="flex items-center justify-between p-2 bg-white rounded shadow-sm"><div className="flex items-center"><span className="w-3 h-3 rounded-full mr-2" style={{backgroundColor: CATEGORY_COLORS[cat.name] || '#94a3b8'}}></span><span className="text-xs font-bold">{cat.name}</span></div><div className="text-xs font-mono">{((cat.hours/(totalHours||1))*100).toFixed(1)}%</div></div>))}</div></div></div><div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 relative flex flex-col h-[600px]"><div className="flex flex-col md:flex-row justify-between items-start mb-6"><div className="flex items-center space-x-4 mb-2 md:mb-0"><button onClick={exportGradeStats} className="text-xs bg-indigo-600 text-white border px-3 py-1.5 rounded flex items-center hover:bg-indigo-700 shadow-md transition"><Download size={14} className="mr-1"/> 匯出 CSV</button></div><div className="text-right"><h3 className="font-bold text-slate-700 text-lg flex items-center justify-end"><TrendingUp className="mr-2 text-green-500"/> 各級總時數分佈 (固定比例)</h3><p className="text-xs text-slate-500 mt-1">{selectedActs.size > 0 ? '灰色: 該級總時數 | 彩色: 所選活動佔比' : '顯示全校所有活動堆疊'}</p></div></div><div className="flex-1 flex items-end justify-between space-x-8 border-b-2 border-slate-300 pb-0 px-4 mx-4 relative">{gradeDistribution.map((g) => { const maxScale = maxGradeHours; const ghostHeightPct = (g.total / (maxScale || 1)) * 100; const activeItems = Object.entries(g.details).filter(([name]) => selectedActs.size === 0 || selectedActs.has(name)).sort((a,b) => b[1] - a[1]); const selectedTotalHours = activeItems.reduce((acc, cur) => acc + cur[1], 0); const activeHeightPct = (selectedTotalHours / (maxScale || 1)) * 100; return (<div key={g.grade} className="flex flex-col items-center flex-1 h-full relative group">{selectedActs.size > 0 && (<div className="w-full absolute bottom-0 bg-slate-200 rounded-t-sm transition-all duration-700 pointer-events-none" style={{height: `${ghostHeightPct}%`}}/>)}<div className={`w-full absolute bottom-0 flex flex-col-reverse rounded-t-sm overflow-hidden transition-all duration-700 ${selectedActs.size > 0 ? 'w-4/5 z-10 shadow-lg left-1/2 -translate-x-1/2' : 'bg-slate-200'}`} style={{height: `${activeHeightPct}%`}}>{activeItems.map(([actName, hrs], idx) => { const colorIdx = getActColorIndex(actName); const color = getSafeColor(colorIdx); const pctOfStack = (hrs / (selectedTotalHours || 1)) * 100; return (<div key={actName} className="w-full relative" style={{height: `${pctOfStack}%`, backgroundColor: color}} />)})}</div><div className="absolute w-full text-center -top-6 transition-all duration-500" style={{bottom: `${Math.max(ghostHeightPct, activeHeightPct) + 2}%`}}><span className="text-xs font-bold text-slate-600 bg-white/80 px-1 rounded">{selectedActs.size > 0 ? selectedTotalHours.toFixed(0) : g.total.toFixed(0)}h</span></div><div className="hidden group-hover:block absolute bottom-1/2 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-xs p-3 rounded-lg shadow-xl z-50 w-48 pointer-events-none"><div className="font-bold border-b border-slate-600 pb-1 mb-1">{g.grade} 統計詳情</div><div className="flex justify-between mb-1"><span>全級總時數:</span> <span className="font-mono">{g.total.toFixed(1)}h</span></div>{selectedActs.size > 0 && (<div className="flex justify-between text-yellow-400"><span>所選活動:</span> <span className="font-mono">{selectedTotalHours.toFixed(1)}h</span></div>)}</div><div className="absolute -bottom-8 w-full text-center"><div className="text-sm font-bold text-slate-700">{g.grade}</div></div></div>) })}<div className="absolute left-0 top-0 h-full border-l border-dashed border-slate-300 pointer-events-none"><span className="absolute top-0 left-1 text-[10px] text-slate-400 bg-slate-50 px-1">Max: {maxGradeHours.toFixed(0)}h</span></div></div></div></div>)}
-{statsViewMode === 'activities' && (<div className="bg-white border rounded-xl overflow-hidden"><div className="p-4 bg-slate-50 border-b flex justify-between items-center"><h3 className="font-bold text-slate-700">活動統計列表 (新算法: 單節 x 節數)</h3><button onClick={() => exportToCSV(filteredActivityList, 'Activity_Report')} className="text-sm bg-white border px-3 py-1 rounded hover:bg-slate-50 flex items-center text-blue-600 border-blue-200"><Download size={14} className="mr-1"/> 匯出 CSV</button></div><table className="w-full text-sm text-left"><thead className="bg-slate-100 text-slate-500 uppercase"><tr><th className="p-3">活動名稱</th><th className="p-3 w-48">類別 (可手動更改)</th><th className="p-3 text-right">總人次</th><th className="p-3 text-right">總學時</th></tr></thead><tbody className="divide-y">{filteredActivityList.map((a, i) => (<tr key={i} className="hover:bg-slate-50"><td className="p-3 font-medium flex items-center"><span className="w-2 h-2 rounded-full mr-2" style={{backgroundColor: getSafeColor(getActColorIndex(a.name))}}></span>{a.name}</td><td className="p-3"><div className="relative group/cat"><select className="w-full text-xs p-1 border rounded bg-slate-50 hover:bg-white focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer" value={a.category} disabled={updatingCategory} onChange={(e) => handleCategoryChange(a.name, e.target.value)}>{CATEGORY_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}</select>{updatingCategory && <span className="absolute right-0 top-0 text-[8px] text-blue-500">更新中...</span>}</div></td><td className="p-3 text-right">{a.count}</td><td className="p-3 text-right font-bold text-blue-600">{a.hours.toFixed(1)}</td></tr>))}</tbody></table></div>)}
-{statsViewMode === 'logs' && (<div className="bg-white border rounded-xl overflow-hidden"><div className="p-4 bg-slate-50 border-b"><h3 className="font-bold text-slate-700">查詢日誌 (Audit Log)</h3></div><table className="w-full text-sm text-left"><thead className="bg-slate-100 text-slate-500"><tr><th className="p-3">日期</th><th className="p-3">時間</th><th className="p-3">查詢班別</th><th className="p-3">學生姓名</th><th className="p-3">結果</th></tr></thead><tbody>{queryLogs.length > 0 ? queryLogs.map((log, i) => (<tr key={i} className="border-b last:border-0 hover:bg-white"><td className="p-3 text-slate-600">{log.dateStr}</td><td className="p-3 font-mono text-slate-500 text-xs">{log.timeStr}</td><td className="p-3 font-bold text-slate-800">{log.class} ({log.classNo})</td><td className="p-3">{log.name}</td><td className="p-3">{log.success ? <span className="text-green-600 text-xs bg-green-100 px-2 py-1 rounded">成功</span> : <span className="text-red-500 text-xs">無記錄</span>}</td></tr>)) : (<tr><td colSpan="5" className="p-8 text-center text-slate-400">暫無查詢紀錄</td></tr>)}</tbody></table></div>)}
-{statsViewMode === 'students' && (<div className="bg-white border rounded-xl overflow-hidden"><div className="p-4 bg-slate-50 border-b flex justify-between items-center"><h3 className="font-bold text-slate-700 flex items-center"><AlertTriangle className="mr-2 text-orange-500" size={18}/> 學生參與度監測</h3><button onClick={() => exportToCSV(filteredStudentList, 'Student_Participation')} className="text-sm bg-white border px-3 py-1 rounded hover:bg-slate-50 flex items-center text-blue-600 border-blue-200"><Download size={14} className="mr-1"/> 匯出 CSV</button></div><div className="max-h-[500px] overflow-y-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-100 text-slate-500 uppercase sticky top-0"><tr><th className="p-3">班別 (學號)</th><th className="p-3">姓名</th><th className="p-3 text-right">參與時數</th><th className="p-3 text-center">狀態</th></tr></thead><tbody className="divide-y">{filteredStudentList.map((s, i) => (<tr key={i} className={`hover:bg-slate-50 ${s.hours === 0 ? 'bg-red-50' : ''}`}><td className="p-3 text-slate-600">{s.classCode} ({s.classNo})</td><td className="p-3 font-bold">{s.chiName}</td><td className="p-3 text-right">{s.hours.toFixed(1)}</td><td className="p-3 text-center">{s.hours === 0 ? <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded font-bold">關注</span> : <span className="text-xs text-green-600">正常</span>}</td></tr>))}</tbody></table></div></div>)}</div></div>);};
+    return (
+        <div className="bg-white p-6 rounded-xl shadow-md min-h-[600px] flex flex-col">
+            <div className="flex justify-between items-center mb-6 border-b pb-4">
+                <button onClick={onBack} className="flex items-center text-slate-500 hover:text-blue-600"><ArrowLeft className="mr-2" size={20} /> 返回</button>
+                <h2 className="text-2xl font-bold text-slate-800 flex items-center"><BarChart className="mr-2 text-blue-600" /> 校本數據分析中心</h2>
+                <div className="w-24"></div>
+            </div>
+            <div className="flex space-x-2 mb-6 overflow-x-auto pb-2">
+                <button onClick={() => setStatsViewMode('dashboard')} className={`px-4 py-2 rounded-lg flex items-center transition ${statsViewMode === 'dashboard' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}><PieChart size={18} className="mr-2"/> 數據概覽</button>
+                <button onClick={() => setStatsViewMode('activities')} className={`px-4 py-2 rounded-lg flex items-center transition ${statsViewMode === 'activities' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}><Activity size={18} className="mr-2"/> 活動列表 ({filteredActivityList.length})</button>
+                <button onClick={() => setStatsViewMode('students')} className={`px-4 py-2 rounded-lg flex items-center transition ${statsViewMode === 'students' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}><Users size={18} className="mr-2"/> 學生監測 ({filteredStudentList.length})</button>
+                <button onClick={() => setStatsViewMode('logs')} className={`px-4 py-2 rounded-lg flex items-center transition ${statsViewMode === 'logs' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}><History size={18} className="mr-2"/> 系統紀錄</button>
+            </div>
+            {selectedActs.size > 0 && (<div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex justify-between items-center animate-in slide-in-from-top-2"><div className="text-sm text-blue-800"><span className="font-bold flex items-center"><Filter size={16} className="mr-1"/> 關注模式: </span>{Array.from(selectedActs).join(', ')}</div><button onClick={clearSelection} className="text-xs bg-white text-slate-500 border px-2 py-1 rounded hover:bg-red-50 hover:text-red-500 transition">清除篩選 (顯示全校)</button></div>)}
+            <div className="flex-1 overflow-y-auto">
+                {statsViewMode === 'dashboard' && (<div className="flex flex-col space-y-12 pb-12"><div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col md:flex-row items-center md:items-start relative min-h-[400px]"><div className="absolute top-4 left-4 z-20"><button onClick={() => exportToCSV(filteredActivityList, 'Activity_Hours_Report')} className="text-xs bg-indigo-600 text-white border px-3 py-1.5 rounded flex items-center hover:bg-indigo-700 shadow-md transition"><Download size={14} className="mr-1"/> 匯出 CSV</button></div><div className="flex-1 flex flex-col items-center justify-center p-4 pt-10"><h3 className="font-bold text-slate-700 mb-6 flex items-center text-lg"><Clock className="mr-2 text-orange-500"/> 活動總時數分佈 (真實比例)</h3><div className="relative w-72 h-72 rounded-full shadow-2xl border-4 border-white transition-all duration-500" style={{ background: `conic-gradient(${ghostPieGradient})` }}><div className="absolute inset-0 m-auto w-36 h-36 bg-slate-50 rounded-full flex flex-col items-center justify-center shadow-inner"><div className="text-xs text-slate-400 mb-1">{selectedActs.size > 0 ? "已選 / 總計" : "總學時"}</div><div className="flex items-baseline">{selectedActs.size > 0 && <span className="text-2xl font-bold text-blue-600 mr-1">{filteredTotalHours.toFixed(0)}</span>}{selectedActs.size > 0 && <span className="text-slate-400">/</span>}<span className={`font-bold text-slate-800 ${selectedActs.size > 0 ? 'text-lg ml-1' : 'text-4xl'}`}>{totalHours.toFixed(0)}</span></div><span className="text-xs text-slate-400">Hours</span></div></div><p className="text-xs text-slate-400 mt-4">點擊右側圖例進行多項對比</p></div><div className="w-full md:w-80 h-96 border-l border-slate-200 pl-0 md:pl-6 overflow-y-auto"><h4 className="text-xs font-bold text-slate-400 uppercase mb-3 sticky top-0 bg-slate-50 py-2 z-10 flex justify-between"><span>圖例 (點選切換)</span>{selectedActs.size > 0 && <span className="text-blue-500">已選 {selectedActs.size} 項</span>}</h4><div className="space-y-1">{activityStats.map((a, i) => { const isSelected = selectedActs.size === 0 || selectedActs.has(a.name); const isDimmed = selectedActs.size > 0 && !isSelected; return (<button key={i} onClick={() => toggleSelection(a.name)} className={`w-full flex items-center justify-between p-2 rounded text-xs transition-all duration-200 ${isSelected ? 'bg-white shadow ring-2 ring-blue-500 scale-[1.02] z-10' : 'hover:bg-white hover:shadow-sm'} ${isDimmed ? 'opacity-40 grayscale' : 'opacity-100'}`}><div className="flex items-center truncate"><span className="w-3 h-3 rounded-full mr-2 flex-shrink-0" style={{backgroundColor: getSafeColor(i)}}></span><span className="truncate max-w-[120px]" title={a.name}>{a.name}</span></div><div className="font-bold text-slate-600">{((a.hours/(totalHours||1))*100).toFixed(1)}%</div></button>) })}</div></div></div><div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col md:flex-row items-center md:items-start relative min-h-[300px]"><div className="absolute top-4 left-4 z-20"><button onClick={exportCategoryStats} className="text-xs bg-indigo-600 text-white border px-3 py-1.5 rounded flex items-center hover:bg-indigo-700 shadow-md transition"><Download size={14} className="mr-1"/> 匯出 CSV</button></div><div className="flex-1 flex flex-col items-center justify-center p-4 pt-10"><h3 className="font-bold text-slate-700 mb-6 flex items-center text-lg"><Palette className="mr-2 text-purple-500"/> 課程範疇分佈 (可手動修正)</h3><div className="relative w-64 h-64 rounded-full shadow-xl border-4 border-white" style={{ background: `conic-gradient(${categoryPieGradient})` }}><div className="absolute inset-0 m-auto w-32 h-32 bg-slate-50 rounded-full flex flex-col items-center justify-center shadow-inner"><span className="text-lg font-bold text-slate-600">分類統計</span></div></div><p className="text-xs text-slate-400 mt-4">前往「活動列表」即可手動更改分類</p></div><div className="w-full md:w-64 p-4"><h4 className="text-xs font-bold text-slate-400 uppercase mb-3">類別圖例</h4><div className="space-y-2">{categoryStats.map((cat, i) => (<div key={i} className="flex items-center justify-between p-2 bg-white rounded shadow-sm"><div className="flex items-center"><span className="w-3 h-3 rounded-full mr-2" style={{backgroundColor: CATEGORY_COLORS[cat.name] || '#94a3b8'}}></span><span className="text-xs font-bold">{cat.name}</span></div><div className="text-xs font-mono">{((cat.hours/(totalHours||1))*100).toFixed(1)}%</div></div>))}</div></div></div><div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 relative flex flex-col h-[600px]"><div className="flex flex-col md:flex-row justify-between items-start mb-6"><div className="flex items-center space-x-4 mb-2 md:mb-0"><button onClick={exportGradeStats} className="text-xs bg-indigo-600 text-white border px-3 py-1.5 rounded flex items-center hover:bg-indigo-700 shadow-md transition"><Download size={14} className="mr-1"/> 匯出 CSV</button></div><div className="text-right"><h3 className="font-bold text-slate-700 text-lg flex items-center justify-end"><TrendingUp className="mr-2 text-green-500"/> 各級總時數分佈 (固定比例)</h3><p className="text-xs text-slate-500 mt-1">{selectedActs.size > 0 ? '灰色: 該級總時數 | 彩色: 所選活動佔比' : '顯示全校所有活動堆疊'}</p></div></div><div className="flex-1 flex items-end justify-between space-x-8 border-b-2 border-slate-300 pb-0 px-4 mx-4 relative">{gradeDistribution.map((g) => { const maxScale = maxGradeHours; const ghostHeightPct = (g.total / (maxScale || 1)) * 100; const activeItems = Object.entries(g.details).filter(([name]) => selectedActs.size === 0 || selectedActs.has(name)).sort((a,b) => b[1] - a[1]); const selectedTotalHours = activeItems.reduce((acc, cur) => acc + cur[1], 0); const activeHeightPct = (selectedTotalHours / (maxScale || 1)) * 100; return (<div key={g.grade} className="flex flex-col items-center flex-1 h-full relative group">{selectedActs.size > 0 && (<div className="w-full absolute bottom-0 bg-slate-200 rounded-t-sm transition-all duration-700 pointer-events-none" style={{height: `${ghostHeightPct}%`}}/>)}<div className={`w-full absolute bottom-0 flex flex-col-reverse rounded-t-sm overflow-hidden transition-all duration-700 ${selectedActs.size > 0 ? 'w-4/5 z-10 shadow-lg left-1/2 -translate-x-1/2' : 'bg-slate-200'}`} style={{height: `${activeHeightPct}%`}}>{activeItems.map(([actName, hrs], idx) => { const colorIdx = getActColorIndex(actName); const color = getSafeColor(colorIdx); const pctOfStack = (hrs / (selectedTotalHours || 1)) * 100; return (<div key={actName} className="w-full relative" style={{height: `${pctOfStack}%`, backgroundColor: color}} />)})}</div><div className="absolute w-full text-center -top-6 transition-all duration-500" style={{bottom: `${Math.max(ghostHeightPct, activeHeightPct) + 2}%`}}><span className="text-xs font-bold text-slate-600 bg-white/80 px-1 rounded">{selectedActs.size > 0 ? selectedTotalHours.toFixed(0) : g.total.toFixed(0)}h</span></div><div className="hidden group-hover:block absolute bottom-1/2 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-xs p-3 rounded-lg shadow-xl z-50 w-48 pointer-events-none"><div className="font-bold border-b border-slate-600 pb-1 mb-1">{g.grade} 統計詳情</div><div className="flex justify-between mb-1"><span>全級總時數:</span> <span className="font-mono">{g.total.toFixed(1)}h</span></div>{selectedActs.size > 0 && (<div className="flex justify-between text-yellow-400"><span>所選活動:</span> <span className="font-mono">{selectedTotalHours.toFixed(1)}h</span></div>)}</div><div className="absolute -bottom-8 w-full text-center"><div className="text-sm font-bold text-slate-700">{g.grade}</div></div></div>) })}<div className="absolute left-0 top-0 h-full border-l border-dashed border-slate-300 pointer-events-none"><span className="absolute top-0 left-1 text-[10px] text-slate-400 bg-slate-50 px-1">Max: {maxGradeHours.toFixed(0)}h</span></div></div></div></div>)}
+                {statsViewMode === 'activities' && (<div className="bg-white border rounded-xl overflow-hidden"><div className="p-4 bg-slate-50 border-b flex justify-between items-center"><h3 className="font-bold text-slate-700">活動統計列表</h3><button onClick={() => exportToCSV(filteredActivityList, 'Activity_Report')} className="text-sm bg-white border px-3 py-1 rounded hover:bg-slate-50 flex items-center text-blue-600 border-blue-200"><Download size={14} className="mr-1"/> 匯出 CSV</button></div><table className="w-full text-sm text-left"><thead className="bg-slate-100 text-slate-500 uppercase"><tr><th className="p-3">活動名稱</th><th className="p-3 w-48">類別 (可手動更改)</th><th className="p-3 text-right">總人次</th><th className="p-3 text-right">總學時</th></tr></thead><tbody className="divide-y">{filteredActivityList.map((a, i) => (<tr key={i} className="hover:bg-slate-50"><td className="p-3 font-medium flex items-center"><span className="w-2 h-2 rounded-full mr-2" style={{backgroundColor: getSafeColor(getActColorIndex(a.name))}}></span>{a.name}</td><td className="p-3"><div className="relative group/cat"><select className="w-full text-xs p-1 border rounded bg-slate-50 hover:bg-white focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer" value={a.category} disabled={updatingCategory} onChange={(e) => handleCategoryChange(a.name, e.target.value)}>{CATEGORY_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}</select>{updatingCategory && <span className="absolute right-0 top-0 text-[8px] text-blue-500">更新中...</span>}</div></td><td className="p-3 text-right">{a.count}</td><td className="p-3 text-right font-bold text-blue-600">{a.hours.toFixed(1)}</td></tr>))}</tbody></table></div>)}
+                {statsViewMode === 'logs' && (<div className="bg-white border rounded-xl overflow-hidden"><div className="p-4 bg-slate-50 border-b"><h3 className="font-bold text-slate-700">查詢日誌 (Audit Log)</h3></div><table className="w-full text-sm text-left"><thead className="bg-slate-100 text-slate-500"><tr><th className="p-3">日期</th><th className="p-3">時間</th><th className="p-3">查詢班別</th><th className="p-3">學生姓名</th><th className="p-3">結果</th></tr></thead><tbody>{queryLogs.length > 0 ? queryLogs.map((log, i) => (<tr key={i} className="border-b last:border-0 hover:bg-white"><td className="p-3 text-slate-600">{log.dateStr}</td><td className="p-3 font-mono text-slate-500 text-xs">{log.timeStr}</td><td className="p-3 font-bold text-slate-800">{log.class} ({log.classNo})</td><td className="p-3">{log.name}</td><td className="p-3">{log.success ? <span className="text-green-600 text-xs bg-green-100 px-2 py-1 rounded">成功</span> : <span className="text-red-500 text-xs">無記錄</span>}</td></tr>)) : (<tr><td colSpan="5" className="p-8 text-center text-slate-400">暫無查詢紀錄</td></tr>)}</tbody></table></div>)}
+                {statsViewMode === 'students' && (<div className="bg-white border rounded-xl overflow-hidden"><div className="p-4 bg-slate-50 border-b flex justify-between items-center"><h3 className="font-bold text-slate-700 flex items-center"><AlertTriangle className="mr-2 text-orange-500" size={18}/> 學生參與度監測</h3><button onClick={() => exportToCSV(filteredStudentList, 'Student_Participation')} className="text-sm bg-white border px-3 py-1 rounded hover:bg-slate-50 flex items-center text-blue-600 border-blue-200"><Download size={14} className="mr-1"/> 匯出 CSV</button></div><div className="max-h-[500px] overflow-y-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-100 text-slate-500 uppercase sticky top-0"><tr><th className="p-3">班別 (學號)</th><th className="p-3">姓名</th><th className="p-3 text-right">參與時數</th><th className="p-3 text-center">狀態</th></tr></thead><tbody className="divide-y">{filteredStudentList.map((s, i) => (<tr key={i} className={`hover:bg-slate-50 ${s.hours === 0 ? 'bg-red-50' : ''}`}><td className="p-3 text-slate-600">{s.classCode} ({s.classNo})</td><td className="p-3 font-bold">{s.chiName}</td><td className="p-3 text-right">{s.hours.toFixed(1)}</td><td className="p-3 text-center">{s.hours === 0 ? <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded font-bold">關注</span> : <span className="text-xs text-green-600">正常</span>}</td></tr>))}</tbody></table></div></div>)}
+            </div>
+        </div>
+    );
+};
 
 // -----------------------------------------------------------------------------
 // MAIN APP COMPONENT
 // -----------------------------------------------------------------------------
-
 const App = () => {
   const [currentView, setCurrentView] = useState('student'); 
   
@@ -229,7 +247,7 @@ const App = () => {
   // Loading States
   const [isMasterLoading, setIsMasterLoading] = useState(false);
 
-  // V2.9: School Year State
+  // School Year State
   const [schoolYearStart, setSchoolYearStart] = useState(2025); 
 
   // Import Form State
@@ -254,16 +272,25 @@ const App = () => {
   const [dbBatchMode, setDbBatchMode] = useState(false);
   const [batchEditForm, setBatchEditForm] = useState({ activity: '', time: '', location: '', dateText: '' });
 
+  // ---------------------------------------------------------------------------
+  // ⭐ [新增/修改] 按活動班整體改期 Modal 狀態
+  // ---------------------------------------------------------------------------
+  const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+  const [groupActivityName, setGroupActivityName] = useState('');
+  const [groupTime, setGroupTime] = useState('');
+  const [groupLocation, setGroupLocation] = useState('');
+  const [groupDates, setGroupDates] = useState([]);
+  const [groupTempDateInput, setGroupTempDateInput] = useState('');
+
   // DB Editing State
   const [editingId, setEditingId] = useState(null);
   const [editFormData, setEditFormData] = useState({});
 
   // Staff View State
   const [staffShowAll, setStaffShowAll] = useState(false);
-  // V4.2: Staff Password Protection
   const [staffUnlocked, setStaffUnlocked] = useState(false);
   const [staffPasswordInput, setStaffPasswordInput] = useState('');
-  const STAFF_PASSWORD = "bcklas_staff"; // Simple hardcoded password
+  const STAFF_PASSWORD = "bcklas_staff";
 
   // Search UI
   const [searchTerm, setSearchTerm] = useState('');
@@ -271,6 +298,12 @@ const App = () => {
   const [selectedClassNo, setSelectedClassNo] = useState('');
   const [studentResult, setStudentResult] = useState(null);
   const [currentDateTime, setCurrentDateTime] = useState(new Date()); 
+
+  // 取得目前所有獨立不重複的活動班名稱
+  const uniqueActivities = useMemo(() => {
+      const set = new Set(activities.map(a => a.activity).filter(Boolean));
+      return Array.from(set);
+  }, [activities]);
 
   // ---------------------------------------------------------------------------
   // FIREBASE LISTENERS
@@ -334,7 +367,6 @@ const App = () => {
       await signOut(auth);
       setUser(null);
       setCurrentView('student');
-      // V4.2: Reset staff lock on logout
       setStaffUnlocked(false);
       setStaffPasswordInput('');
   };
@@ -417,16 +449,12 @@ const App = () => {
           dateString = `${year}-${fMonth}-${fDay}`;
       } else {
           const d = new Date(tempDateInput);
-          if (isNaN(d.getTime())) { alert("日期格式錯誤，請輸入 DDMM"); return; }
+          if (isNaN(d.getTime())) { alert("日期格式錯誤，請輸入 DDMM (如 0209)"); return; }
       }
 
       if (!importDates.includes(dateString)) {
           const newDates = [...importDates, dateString].sort();
           setImportDates(newDates);
-          if (newDates.length === 1) {
-              const d = new Date(dateString);
-              setImportDayId(d.getDay());
-          }
       }
       setTempDateInput(''); 
       if(dateInputRef.current) dateInputRef.current.focus();
@@ -439,8 +467,9 @@ const App = () => {
   const handleRemoveDate = (d) => setImportDates(prev => prev.filter(x => x !== d));
   const handleClearDates = () => setImportDates([]);
   const formatDisplayDate = (isoDate) => {
+      if (!isoDate) return '';
       const parts = isoDate.split('-');
-      if (parts.length === 3) return `${parts[2]}${parts[1]}`; 
+      if (parts.length === 3) return `${parts[1]}/${parts[2]}`; 
       return isoDate;
   };
 
@@ -449,7 +478,6 @@ const App = () => {
       const newItems = [];
       const dayMap = {1:'一', 2:'二', 3:'三', 4:'四', 5:'五', 6:'六', 0:'日'};
       
-      // 加入安全檢查，防止變數未定義導致崩潰
       const currentDayIds = typeof importDayIds !== 'undefined' ? importDayIds : [1];
       
       let finalDateText = currentDayIds.length > 0 ? `逢星期${currentDayIds.map(id => dayMap[id]).join(', ')}` : '未指定星期';
@@ -491,6 +519,7 @@ const App = () => {
           alert("無法識別。請確認貼上的名單格式是否正確（例如：4A 蔡舒朗）。");
       }
   };
+
   const { matched, conflicts } = useMemo(() => {
     const matched = [];
     const conflicts = [];
@@ -542,9 +571,8 @@ const App = () => {
   const handleDeleteImport = (id) => setPendingImports(prev => prev.filter(i => i.id !== id));
 
   // ---------------------------------------------------------------------------
-  // DB MANAGEMENT LOGIC (V3.1)
+  // DB MANAGEMENT LOGIC
   // ---------------------------------------------------------------------------
-  
   const filteredDbActivities = useMemo(() => {
       if (!dbSearchTerm) return activities;
       const lower = dbSearchTerm.toLowerCase();
@@ -585,7 +613,6 @@ const App = () => {
       if (batchEditForm.location) updates.location = batchEditForm.location;
       if (batchEditForm.dateText) updates.dateText = batchEditForm.dateText;
       
-      // 【新增】如果使用者在批量修改的備註欄位輸入了新日期格式，例如 "2024-05-10,2024-05-17"
       if (batchEditForm.dateText && batchEditForm.dateText.includes('202')) {
           const newDates = batchEditForm.dateText.split(',').map(d => d.trim()).filter(d => d.length === 10);
           if (newDates.length > 0) {
@@ -604,6 +631,7 @@ const App = () => {
           alert("活動班批量修改成功！"); 
       } catch (e) { alert("批量修改失敗: " + e.message); }
   };
+
   const handleDeleteActivity = async (id) => {
       if(window.confirm('確定要刪除這筆紀錄嗎？')) {
           try { await deleteDoc(doc(db, "activities", id)); } catch(e) { alert("刪除失敗:" + e.message) }
@@ -611,43 +639,96 @@ const App = () => {
   };
 
   // ---------------------------------------------------------------------------
-  // 💡 【在這裡貼上】活動班整體一鍵改期函數
+  // ⭐ [全新/優化] 「按活動班整體改期」模組選單與邏輯
   // ---------------------------------------------------------------------------
-  const handleRescheduleGroup = async (activityName, newTime, newLocation, newDateText) => {
-    const targetDocs = activities.filter(a => a.activity === activityName);
-    if (targetDocs.length === 0) return alert("找不到此活動班的紀錄");
-
-    if (!window.confirm(`確定要為「${activityName}」（共 ${targetDocs.length} 位學生）統一修改資料嗎？`)) return;
-
-    try {
-      const batch = writeBatch(db);
-      targetDocs.forEach(item => {
-        const docRef = doc(db, "activities", item.id);
-        const updates = {};
-        if (newTime) updates.time = newTime;
-        if (newLocation) updates.location = newLocation;
-        if (newDateText) updates.dateText = newDateText;
-
-        // 若輸入含年份的日期格式，自動解析為 specificDates
-        if (newDateText && newDateText.includes('202')) {
-          const newDates = newDateText.split(',').map(d => d.trim()).filter(d => d.length === 10);
-          if (newDates.length > 0) {
-            updates.specificDates = newDates;
-            updates.dateText = `共${newDates.length}堂 (${newDates[0]}起)`;
-          }
-        }
-
-        batch.update(docRef, updates);
-      });
-
-      await batch.commit();
-      alert(`「${activityName}」更新成功！已同步更新 ${targetDocs.length} 位學生的資料。`);
-    } catch (error) {
-      alert("更新失敗：" + error.message);
-    }
+  const handleOpenGroupRescheduleModal = () => {
+      if (uniqueActivities.length === 0) return alert("資料庫中目前沒有任何活動班資料！");
+      
+      // 預設選擇第一個活動班並帶入其現有資料
+      const initialAct = uniqueActivities[0];
+      handleSelectGroupActivity(initialAct);
+      setIsGroupModalOpen(true);
   };
 
-  // ... (後面接 startEditActivity, handleStudentSearch 等函數)
+  const handleSelectGroupActivity = (actName) => {
+      setGroupActivityName(actName);
+      const matches = activities.filter(a => a.activity === actName);
+      if (matches.length > 0) {
+          const sample = matches[0];
+          setGroupTime(sample.time || '');
+          setGroupLocation(sample.location || '');
+          setGroupDates(sample.specificDates ? [...sample.specificDates] : []);
+      }
+  };
+
+  const handleAddGroupDate = () => {
+      if (!groupTempDateInput) return;
+      let dateString = groupTempDateInput.trim();
+      const ddmmRegex = /^(\d{1,2})(\d{2})$/;
+      const match = groupTempDateInput.match(ddmmRegex);
+
+      if (match) {
+          const day = parseInt(match[1]);
+          const month = parseInt(match[2]);
+          if (month < 1 || month > 12 || day < 1 || day > 31) {
+              alert("無效的日期，請輸入正確的 DDMM 格式（如 0209）");
+              return;
+          }
+          let year = schoolYearStart;
+          if (month >= 1 && month <= 8) year = schoolYearStart + 1;
+          else if (month >= 9 && month <= 12) year = schoolYearStart;
+          dateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      } else {
+          const d = new Date(groupTempDateInput);
+          if (isNaN(d.getTime())) {
+              alert("日期格式錯誤，請輸入 DDMM (如 0209) 或 YYYY-MM-DD");
+              return;
+          }
+      }
+
+      if (!groupDates.includes(dateString)) {
+          setGroupDates(prev => [...prev, dateString].sort());
+      }
+      setGroupTempDateInput('');
+  };
+
+  const handleRemoveGroupDate = (dateToRemove) => {
+      setGroupDates(prev => prev.filter(d => d !== dateToRemove));
+  };
+
+  const handleSaveGroupReschedule = async () => {
+      if (!groupActivityName) return alert("請先選擇活動班");
+      const targetDocs = activities.filter(a => a.activity === groupActivityName);
+      if (targetDocs.length === 0) return alert("找不到此活動班的紀錄");
+
+      if (!window.confirm(`確定要為「${groupActivityName}」（共 ${targetDocs.length} 位學生）統一更新資料嗎？`)) return;
+
+      try {
+          const batch = writeBatch(db);
+          
+          // 自動生成最新的備註文字 dateText
+          let newDateText = targetDocs[0].dateText || '';
+          if (groupDates.length > 0) {
+              newDateText = `共${groupDates.length}堂 (${groupDates[0]}起)`;
+          }
+
+          targetDocs.forEach(item => {
+              const docRef = doc(db, "activities", item.id);
+              batch.update(docRef, {
+                  time: groupTime,
+                  location: groupLocation,
+                  specificDates: groupDates,
+                  dateText: newDateText
+              });
+          });
+
+          await batch.commit();
+          alert(`「${groupActivityName}」更新成功！已同步更新 ${targetDocs.length} 位學生的資料。`);
+          setIsGroupModalOpen(false);
+      } catch (error) {
+          alert("更新失敗：" + error.message);
+      }
+  };
 
   const startEditActivity = (act) => {
       setEditingId(act.id);
@@ -663,18 +744,15 @@ const App = () => {
   const cancelEdit = () => { setEditingId(null); setEditFormData({}); };
 
   const handleQuickAddStudent = (act) => {
-
-      // 複製該活動的所有設定，並跳轉至匯入頁面
       setImportActivity(act.activity);
       setImportTime(act.time);
       setImportLocation(act.location);
       if (act.specificDates) setImportDates(act.specificDates);
-      if (act.dayIds && act.dayIds.length > 0) setImportDayId(act.dayIds[0]);
+      if (act.dayIds && act.dayIds.length > 0) setImportDayIds(act.dayIds);
       setAdminTab('import');
-      setBulkInput(''); // 清空文字方塊等待您貼上新學生
+      setBulkInput(''); 
   };  
 
-// Logic: Search (Updated with enhanced logging)
   const handleStudentSearch = () => {
     const formattedClassNo = selectedClassNo.padStart(2, '0');
     const student = masterList.find(s => s.classCode === selectedClass && s.classNo === formattedClassNo);
@@ -696,7 +774,6 @@ const App = () => {
     setCurrentView('kiosk_result');
   };
 
-  // Staff View Logic
   const filteredActivities = useMemo(() => {
       let result = activities;
       if (!staffShowAll) {
@@ -721,20 +798,17 @@ const App = () => {
       return result;
   }, [activities, searchTerm, staffShowAll]);
 
-  // V4.2: Staff Password Handler
   const handleStaffLogin = () => {
       if (staffPasswordInput === STAFF_PASSWORD) {
           setStaffUnlocked(true);
-          setStaffPasswordInput(''); // Clear password after successful login
+          setStaffPasswordInput(''); 
       } else {
           alert('密碼錯誤 (Password Incorrect)');
           setStaffPasswordInput('');
       }
   };
   
-    // V4.4: Add today's date for attendance check
   const today = useMemo(() => new Date().toLocaleDateString('en-CA'), []);
-
 
   // -------------------------------------------------------------------------
   // VIEWS
@@ -743,7 +817,7 @@ const App = () => {
     <div className="bg-slate-900 text-white p-3 flex justify-between items-center shadow-md sticky top-0 z-50">
         <div className="flex items-center space-x-2 cursor-pointer" onClick={() => { setCurrentView('student'); setStaffUnlocked(false); setStaffPasswordInput(''); }}>
             <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center font-bold text-sm">佛</div>
-            <span className="font-bold text-lg tracking-wide hidden sm:block">佛教正覺蓮社學校</span>
+            <span className="font-bold text-lg tracking-wide hidden sm:block">香海正覺蓮社佛教正覺蓮社學校</span>
         </div>
         
         <div className="hidden md:flex flex-col items-center justify-center text-xs text-slate-400 font-mono">
@@ -804,7 +878,6 @@ const App = () => {
     );
   };
   
-    // V4.4 REVISION: renderStaffView is updated with StatusIndicator
   const renderStaffView = () => (
       <div className="min-h-screen bg-slate-50 p-6 flex-1">
         <div className="max-w-7xl mx-auto">
@@ -821,7 +894,6 @@ const App = () => {
                 </div>
             </div>
             
-            {/* V4.4: Add Status Legend */}
             {!staffShowAll && <StatusLegend />}
 
             <div className="bg-white p-6 rounded-xl shadow-md border-t-4 border-blue-500">
@@ -859,7 +931,6 @@ const App = () => {
       </div>
   );
   
-  // V4.2: Staff Login View
   const renderStaffLoginView = () => (
       <div className="flex-1 flex flex-col items-center justify-center bg-slate-50 p-6">
           <div className="bg-white p-8 rounded-2xl shadow-lg w-full max-w-sm border border-slate-200">
@@ -925,25 +996,15 @@ const App = () => {
                     />
                 </div>
 
-                {/* 💡 【新增】按活動班快速改期按鈕 */}
+                {/* ⭐ [更新] 按活動班整體改期按鈕（觸發選單 Modal） */}
                 <button 
-                    onClick={() => {
-                        const actName = prompt("請輸入要改期的活動完整名稱（例如：無人機班）：");
-                        if (!actName) return;
-                        const newTime = prompt(`修改「${actName}」的時間（留空表示不修改）：`);
-                        const newLocation = prompt(`修改「${actName}」的地點（留空表示不修改）：`);
-                        const newDateText = prompt(`修改「${actName}」的日期或備註（例如: 2026-09-01,2026-09-08，留空不修改）：`);
-                        
-                        if (newTime || newLocation || newDateText) {
-                            handleRescheduleGroup(actName, newTime, newLocation, newDateText);
-                        }
-                    }} 
-                    className="bg-orange-500 text-white px-3 py-2 rounded-lg text-sm font-bold flex items-center hover:bg-orange-600 shadow-sm"
+                    onClick={handleOpenGroupRescheduleModal} 
+                    className="bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center hover:bg-orange-600 shadow-sm transition"
                 >
                     <RefreshCcw size={16} className="mr-2" /> 按活動班整體改期
                 </button>
 
-                {/* 現有的批量修改 / 刪除按鈕 */}
+                {/* 批量修改 / 刪除按鈕 */}
                 {dbSelectedIds.size > 0 && (
                     <div className="flex items-center gap-2">
                         <button onClick={() => setDbBatchMode(!dbBatchMode)} className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-bold flex items-center hover:bg-blue-700">
@@ -956,19 +1017,197 @@ const App = () => {
                 )}
             </div>
             
-            {/* ... 後續表格程式碼保持不變 ... */}
+            {dbBatchMode && dbSelectedIds.size > 0 && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 animate-in slide-in-from-top-2">
+                    <h3 className="font-bold text-blue-800 text-sm mb-3">批量修改選取的 {dbSelectedIds.size} 筆資料 (留空則不修改)</h3>
+                    <div className="grid grid-cols-4 gap-2 mb-3">
+                        <input className="p-2 border rounded text-sm" placeholder="新活動名稱..." value={batchEditForm.activity} onChange={e => setBatchEditForm({...batchEditForm, activity: e.target.value})} />
+                        <input className="p-2 border rounded text-sm" placeholder="新時間..." value={batchEditForm.time} onChange={e => setBatchEditForm({...batchEditForm, time: e.target.value})} />
+                        <input className="p-2 border rounded text-sm" placeholder="新地點..." value={batchEditForm.location} onChange={e => setBatchEditForm({...batchEditForm, location: e.target.value})} />
+                        <input className="p-2 border rounded text-sm" placeholder="新備註/日期..." value={batchEditForm.dateText} onChange={e => setBatchEditForm({...batchEditForm, dateText: e.target.value})} />
+                    </div>
+                    <div className="flex justify-end gap-2">
+                        <button onClick={() => setDbBatchMode(false)} className="px-3 py-1 text-slate-500 hover:text-slate-800 text-sm">取消</button>
+                        <button onClick={handleBatchEdit} className="bg-blue-600 text-white px-4 py-1 rounded text-sm font-bold hover:bg-blue-700">確認修改</button>
+                    </div>
+                </div>
+            )}
+        </div>
 
-              {dbBatchMode && dbSelectedIds.size > 0 && (<div className="bg-blue-50 border border-blue-200 rounded-lg p-4 animate-in slide-in-from-top-2"><h3 className="font-bold text-blue-800 text-sm mb-3">批量修改選取的 {dbSelectedIds.size} 筆資料 (留空則不修改)</h3><div className="grid grid-cols-4 gap-2 mb-3"><input className="p-2 border rounded text-sm" placeholder="新活動名稱..." value={batchEditForm.activity} onChange={e => setBatchEditForm({...batchEditForm, activity: e.target.value})} /><input className="p-2 border rounded text-sm" placeholder="新時間..." value={batchEditForm.time} onChange={e => setBatchEditForm({...batchEditForm, time: e.target.value})} /><input className="p-2 border rounded text-sm" placeholder="新地點..." value={batchEditForm.location} onChange={e => setBatchEditForm({...batchEditForm, location: e.target.value})} /><input className="p-2 border rounded text-sm" placeholder="新備註/日期..." value={batchEditForm.dateText} onChange={e => setBatchEditForm({...batchEditForm, dateText: e.target.value})} /></div><div className="flex justify-end gap-2"><button onClick={() => setDbBatchMode(false)} className="px-3 py-1 text-slate-500 hover:text-slate-800 text-sm">取消</button><button onClick={handleBatchEdit} className="bg-blue-600 text-white px-4 py-1 rounded text-sm font-bold hover:bg-blue-700">確認修改</button></div></div>)}
-          </div>
-          <div className="overflow-x-auto"><table className="w-full text-left text-sm border-collapse"><thead className="bg-slate-100 text-slate-600 uppercase"><tr><th className="p-3 w-10 text-center"><input type="checkbox" checked={filteredDbActivities.length > 0 && dbSelectedIds.size === filteredDbActivities.length} onChange={toggleDbSelectAll} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"/></th><th className="p-3">學生</th><th className="p-3">活動名稱</th><th className="p-3">時間</th><th className="p-3">地點</th><th className="p-3">日期/備註</th><th className="p-3 text-right">操作</th></tr></thead><tbody>
-              {filteredDbActivities.map(act => (<tr key={act.id} className={`border-b hover:bg-slate-50 ${dbSelectedIds.has(act.id) ? 'bg-blue-50/50' : ''}`}>
-                  <td className="p-3 text-center"><input type="checkbox" checked={dbSelectedIds.has(act.id)} onChange={() => toggleDbSelect(act.id)} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer" /></td>
-                  <td className="p-3"><div className="font-bold text-slate-800">{act.verifiedClass} ({act.verifiedClassNo})</div><div className="text-slate-500">{act.verifiedName}</div></td>
-                  {editingId === act.id ? (<><td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.activity} onChange={e => setEditFormData({...editFormData, activity: e.target.value})} /></td><td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.time} onChange={e => setEditFormData({...editFormData, time: e.target.value})} /></td><td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.location} onChange={e => setEditFormData({...editFormData, location: e.target.value})} /></td><td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.dateText} onChange={e => setEditFormData({...editFormData, dateText: e.target.value})} /></td><td className="p-3 text-right"><div className="flex justify-end gap-2"><button onClick={() => saveEditActivity(act.id)} className="bg-green-100 text-green-700 p-1 rounded hover:bg-green-200"><CheckCircle size={18} /></button><button onClick={cancelEdit} className="bg-slate-100 text-slate-600 p-1 rounded hover:bg-slate-200"><X size={18} /></button></div></td></>) : (<><td className="p-3 font-bold text-blue-700">{act.activity}</td><td className="p-3">{act.time}</td><td className="p-3">{act.location}</td><td className="p-3 text-slate-500">{act.dateText}</td><td className="p-3 text-right"><div className="flex justify-end gap-2"><button title="加入學生至此活動" onClick={() => handleQuickAddStudent(act)} className="text-green-500 hover:text-green-700 p-1 mr-1"><PlusCircle size={18} /></button><button title="編輯" onClick={() => startEditActivity(act)} className="text-blue-500 hover:text-blue-700 p-1"><Edit2 size={18} /></button><button title="刪除" onClick={() => handleDeleteActivity(act.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={18} /></button></div></td></>)}
-              </tr>))}
-              {filteredDbActivities.length === 0 && <tr><td colSpan="7" className="p-8 text-center text-slate-400">沒有符合搜尋的資料。</td></tr>}
-          </tbody></table></div>
-      </div>
+        <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm border-collapse">
+                <thead className="bg-slate-100 text-slate-600 uppercase">
+                    <tr>
+                        <th className="p-3 w-10 text-center"><input type="checkbox" checked={filteredDbActivities.length > 0 && dbSelectedIds.size === filteredDbActivities.length} onChange={toggleDbSelectAll} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"/></th>
+                        <th className="p-3">學生</th>
+                        <th className="p-3">活動名稱</th>
+                        <th className="p-3">時間</th>
+                        <th className="p-3">地點</th>
+                        <th className="p-3">日期/備註</th>
+                        <th className="p-3 text-right">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {filteredDbActivities.map(act => (
+                        <tr key={act.id} className={`border-b hover:bg-slate-50 ${dbSelectedIds.has(act.id) ? 'bg-blue-50/50' : ''}`}>
+                            <td className="p-3 text-center"><input type="checkbox" checked={dbSelectedIds.has(act.id)} onChange={() => toggleDbSelect(act.id)} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer" /></td>
+                            <td className="p-3"><div className="font-bold text-slate-800">{act.verifiedClass} ({act.verifiedClassNo})</div><div className="text-slate-500">{act.verifiedName}</div></td>
+                            {editingId === act.id ? (
+                                <>
+                                    <td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.activity} onChange={e => setEditFormData({...editFormData, activity: e.target.value})} /></td>
+                                    <td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.time} onChange={e => setEditFormData({...editFormData, time: e.target.value})} /></td>
+                                    <td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.location} onChange={e => setEditFormData({...editFormData, location: e.target.value})} /></td>
+                                    <td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.dateText} onChange={e => setEditFormData({...editFormData, dateText: e.target.value})} /></td>
+                                    <td className="p-3 text-right">
+                                        <div className="flex justify-end gap-2">
+                                            <button onClick={() => saveEditActivity(act.id)} className="bg-green-100 text-green-700 p-1 rounded hover:bg-green-200"><CheckCircle size={18} /></button>
+                                            <button onClick={cancelEdit} className="bg-slate-100 text-slate-600 p-1 rounded hover:bg-slate-200"><X size={18} /></button>
+                                        </div>
+                                    </td>
+                                </>
+                            ) : (
+                                <>
+                                    <td className="p-3 font-bold text-blue-700">{act.activity}</td>
+                                    <td className="p-3">{act.time}</td>
+                                    <td className="p-3">{act.location}</td>
+                                    <td className="p-3 text-slate-500">{act.dateText}</td>
+                                    <td className="p-3 text-right">
+                                        <div className="flex justify-end gap-2">
+                                            <button title="加入學生至此活動" onClick={() => handleQuickAddStudent(act)} className="text-green-500 hover:text-green-700 p-1 mr-1"><PlusCircle size={18} /></button>
+                                            <button title="編輯" onClick={() => startEditActivity(act)} className="text-blue-500 hover:text-blue-700 p-1"><Edit2 size={18} /></button>
+                                            <button title="刪除" onClick={() => handleDeleteActivity(act.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={18} /></button>
+                                        </div>
+                                    </td>
+                                </>
+                            )}
+                        </tr>
+                    ))}
+                    {filteredDbActivities.length === 0 && <tr><td colSpan="7" className="p-8 text-center text-slate-400">沒有符合搜尋的資料。</td></tr>}
+                </tbody>
+            </table>
+        </div>
+
+        {/* ⭐ [新增] 按活動班整體改期 - 選單與日期管理彈窗 Modal */}
+        {isGroupModalOpen && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div className="bg-white rounded-2xl p-6 max-w-lg w-full shadow-2xl border border-slate-200 animate-in zoom-in-95">
+                    <div className="flex justify-between items-center mb-4 border-b pb-3">
+                        <h3 className="text-lg font-bold text-slate-800 flex items-center">
+                            <RefreshCcw size={20} className="mr-2 text-orange-500" />
+                            按活動班整體改期 (選單模式)
+                        </h3>
+                        <button onClick={() => setIsGroupModalOpen(false)} className="text-slate-400 hover:text-slate-600 rounded-lg p-1 hover:bg-slate-100">
+                            <X size={20} />
+                        </button>
+                    </div>
+
+                    <div className="space-y-4">
+                        {/* 1. 選單模式選取活動班 */}
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">選擇活動班</label>
+                            <select 
+                                className="w-full p-2.5 border rounded-lg bg-slate-50 font-bold text-slate-800 focus:ring-2 focus:ring-orange-500 outline-none cursor-pointer"
+                                value={groupActivityName}
+                                onChange={(e) => handleSelectGroupActivity(e.target.value)}
+                            >
+                                {uniqueActivities.map(act => (
+                                    <option key={act} value={act}>{act}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* 2. 上課時間與地點修改 */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">上課時間</label>
+                                <input 
+                                    type="text" 
+                                    className="w-full p-2 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500 outline-none"
+                                    value={groupTime}
+                                    onChange={(e) => setGroupTime(e.target.value)}
+                                    placeholder="例如: 15:30-16:30"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">地點</label>
+                                <input 
+                                    type="text" 
+                                    className="w-full p-2 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500 outline-none"
+                                    value={groupLocation}
+                                    onChange={(e) => setGroupLocation(e.target.value)}
+                                    placeholder="例如: 禮堂"
+                                />
+                            </div>
+                        </div>
+
+                        {/* 3. 個別日期管理區塊 (新增與刪除) */}
+                        <div className="border border-slate-200 rounded-lg p-3 bg-slate-50">
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">
+                                日期管理 (可個別新增或刪除)
+                            </label>
+                            
+                            <div className="flex gap-2 mb-3">
+                                <input 
+                                    type="text" 
+                                    placeholder="DDMM (如 0209) 或 YYYY-MM-DD" 
+                                    className="flex-1 p-2 border rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-orange-500"
+                                    value={groupTempDateInput}
+                                    onChange={(e) => setGroupTempDateInput(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddGroupDate(); } }}
+                                />
+                                <button 
+                                    onClick={handleAddGroupDate}
+                                    className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-2 rounded-lg font-bold text-sm flex items-center transition shadow-sm"
+                                >
+                                    <Plus size={16} className="mr-1" /> 新增日期
+                                </button>
+                            </div>
+
+                            {/* 日期標籤展示區 (可點擊 X 刪除) */}
+                            <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto p-1 bg-white border border-slate-200 rounded-lg min-h-[60px]">
+                                {groupDates.length > 0 ? groupDates.map(d => (
+                                    <span key={d} className="bg-orange-100 text-orange-900 border border-orange-200 text-xs px-2.5 py-1 rounded-full flex items-center font-bold shadow-sm">
+                                        {formatDisplayDate(d)} ({d})
+                                        <button 
+                                            onClick={() => handleRemoveGroupDate(d)} 
+                                            className="ml-1.5 text-orange-400 hover:text-red-600 transition"
+                                            title="刪除此日期"
+                                        >
+                                            <X size={12} />
+                                        </button>
+                                    </span>
+                                )) : (
+                                    <div className="w-full text-center text-xs text-slate-400 py-3 italic">尚無設定任何特定日期</div>
+                                )}
+                            </div>
+
+                            <div className="mt-2 text-xs text-slate-500 font-bold flex justify-between items-center">
+                                <span>堂數統計: 共 {groupDates.length} 堂</span>
+                                {groupDates.length > 0 && (
+                                    <button onClick={() => setGroupDates([])} className="text-red-500 hover:underline">清空所有日期</button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="mt-6 flex justify-end gap-3 pt-3 border-t">
+                        <button 
+                            onClick={() => setIsGroupModalOpen(false)}
+                            className="px-4 py-2 border rounded-lg text-slate-600 hover:bg-slate-100 text-sm font-bold transition"
+                        >
+                            取消
+                        </button>
+                        <button 
+                            onClick={handleSaveGroupReschedule}
+                            className="px-5 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm font-bold shadow-md transition"
+                        >
+                            儲存並同步更新全班
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+    </div>
   );
 
   const renderAdminView = () => (
@@ -980,15 +1219,13 @@ const App = () => {
             </div>
             <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleMasterFileChange} />
             {adminTab === 'manage_db' ? renderDatabaseManager() : adminTab === 'stats' ? (
-                // StatsView Component (Independent)
-                // V3.6.2: Pass queryLogs prop to StatsView
                 <StatsView masterList={masterList} activities={activities} queryLogs={queryLogs} onBack={() => setAdminTab('import')} />
             ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 space-y-6">
                     <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                         <div className="flex justify-between items-center mb-4"><div className="flex items-center space-x-3"><h3 className="font-bold text-lg text-green-700 flex items-center"><CheckCircle className="mr-2" size={20} /> 等待發布 ({matched.length})</h3><button onClick={toggleSelectAll} className="text-sm text-slate-500 flex items-center hover:text-slate-800">{selectedMatchIds.size === matched.length ? <CheckSquare size={16} className="mr-1"/> : <Square size={16} className="mr-1"/>}全選/取消</button></div>{matched.length > 0 && (<button onClick={handlePublish} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center shadow-md active:scale-95 transition"><Save size={18} className="mr-2" /> 發布選取項目 ({selectedMatchIds.size})</button>)}</div>
-                        <div className="bg-green-50 rounded-lg border border-green-100 max-h-96 overflow-y-auto"><table className="w-full text-sm"><thead className="bg-green-100/50 text-green-800 sticky top-0 border-b border-green-200"><tr><th className="py-2 px-2 w-8"></th><th className="py-2 px-4 text-left w-1/3">原始 PDF 資料</th><th className="py-2 px-4 text-center w-10"></th><th className="py-2 px-4 text-left w-1/3">學生資料</th><th className="py-2 px-4 text-right">操作</th></tr></thead><tbody>
+                        <div className="bg-green-50 rounded-lg border border-green-100 max-h-96 overflow-y-auto"><table className="w-full text-sm"><thead className="bg-green-100/50 text-green-800 sticky top-0 border-b border-green-200"><tr><th className="py-2 px-2 w-8"></th><th className="py-2 px-4 text-left w-1/3">PDF Source</th><th className="py-2 px-4 text-center w-10"></th><th className="py-2 px-4 text-left w-1/3">學生資料</th><th className="py-2 px-4 text-right">操作</th></tr></thead><tbody>
                             {matched.map(m => (<tr key={m.id} className={`border-b border-green-100 last:border-0 hover:bg-green-100/40 transition-colors ${selectedMatchIds.has(m.id) ? 'bg-green-100/20' : 'opacity-50'}`}><td className="py-3 px-2 text-center"><input type="checkbox" checked={selectedMatchIds.has(m.id)} onChange={() => toggleSelectMatch(m.id)} className="w-4 h-4 rounded text-green-600 focus:ring-green-500" /></td><td className="py-3 px-4"><div className="text-slate-500 text-xs uppercase mb-0.5">PDF Source</div><div className="font-medium text-slate-700">{m.rawClass} {m.rawName}</div><div className="text-xs text-red-400 font-mono">{m.rawClassNo === '00' ? '缺學號' : m.rawClassNo}</div>{m.rawPhone && <div className="text-xs text-blue-500 font-mono flex items-center mt-1"><Phone size={10} className="mr-1"/>{m.rawPhone}</div>}</td><td className="py-3 px-2 text-center text-slate-300"><ArrowRight size={16} /></td><td className="py-3 px-4 bg-green-100/30"><div className="text-green-600 text-xs uppercase font-bold flex items-center mb-0.5"><Database size={10} className="mr-1" /> Master Data</div><div className="font-bold text-green-700 text-lg flex items-center"><span className="mr-2">{m.verifiedClass}</span><span className="bg-white text-green-800 border border-green-200 px-1.5 rounded text-sm min-w-[24px] text-center mr-2">{m.verifiedClassNo}</span><span>{m.verifiedName}</span></div></td><td className="py-3 px-4 text-right"><button onClick={() => handleManualConflict(m.id)} className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded hover:bg-red-200 flex items-center ml-auto"><AlertTriangle size={12} className="mr-1" /> 轉為異常</button><div className="text-xs text-slate-400 mt-1">{m.activity}</div>{m.specificDates && m.specificDates.length > 0 && <div className="text-xs bg-blue-100 text-blue-600 px-1 rounded inline-block mt-1">共 {m.specificDates.length} 堂</div>}</td></tr>))}
                         </tbody></table></div>
                     </div>
@@ -1016,7 +1253,6 @@ const App = () => {
                             <div className="grid grid-cols-2 gap-2"><div><label className="text-xs text-slate-500 font-bold uppercase">時間</label><input type="text" className="w-full p-2 border rounded" value={importTime} onChange={e => setImportTime(e.target.value)} /></div><div><label className="text-xs text-slate-500 font-bold uppercase">地點</label><input type="text" className="w-full p-2 border rounded" value={importLocation} onChange={e => setImportLocation(e.target.value)} /></div></div>
                             <div className="border border-slate-200 rounded p-3 bg-slate-50"><label className="text-xs text-slate-500 font-bold uppercase mb-2 block">選擇日期 (輸入 0209 代表 9月2日)</label><div className="flex gap-2 mb-2"><input type="text" ref={dateInputRef} placeholder="DDMM (如 0209)" className="flex-1 p-2 border rounded text-sm" value={tempDateInput} onChange={(e) => setTempDateInput(e.target.value)} onKeyDown={handleDateInputKeyDown} /><button onClick={handleAddDate} className="bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 flex items-center"><Plus size={16} /></button></div><div className="flex flex-wrap gap-2 mb-2">{importDates.map(date => (<span key={date} className="bg-white border border-blue-200 text-blue-800 text-xs px-2 py-1 rounded-full flex items-center shadow-sm">{formatDisplayDate(date)}<button onClick={() => handleRemoveDate(date)} className="ml-1 text-blue-400 hover:text-red-500"><X size={12} /></button></span>))}</div><div className="flex justify-between items-center text-xs"><span className="font-bold text-slate-600">已選: {importDates.length} 天 (共{importDates.length}堂)</span>{importDates.length > 0 && <button onClick={handleClearDates} className="text-red-400 hover:underline">清空</button>}</div></div>
                             
-                            {/* 多選星期的 UI 區塊 */}
                             <div>
                                 <label className="text-xs text-slate-500 font-bold uppercase mb-2 block">星期 (可多選)</label>
                                 <div className="flex gap-2 flex-wrap">
