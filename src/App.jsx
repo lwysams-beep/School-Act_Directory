@@ -610,6 +610,45 @@ const App = () => {
       }
   };
 
+  // ---------------------------------------------------------------------------
+  // 💡 【在這裡貼上】活動班整體一鍵改期函數
+  // ---------------------------------------------------------------------------
+  const handleRescheduleGroup = async (activityName, newTime, newLocation, newDateText) => {
+    const targetDocs = activities.filter(a => a.activity === activityName);
+    if (targetDocs.length === 0) return alert("找不到此活動班的紀錄");
+
+    if (!window.confirm(`確定要為「${activityName}」（共 ${targetDocs.length} 位學生）統一修改資料嗎？`)) return;
+
+    try {
+      const batch = writeBatch(db);
+      targetDocs.forEach(item => {
+        const docRef = doc(db, "activities", item.id);
+        const updates = {};
+        if (newTime) updates.time = newTime;
+        if (newLocation) updates.location = newLocation;
+        if (newDateText) updates.dateText = newDateText;
+
+        // 若輸入含年份的日期格式，自動解析為 specificDates
+        if (newDateText && newDateText.includes('202')) {
+          const newDates = newDateText.split(',').map(d => d.trim()).filter(d => d.length === 10);
+          if (newDates.length > 0) {
+            updates.specificDates = newDates;
+            updates.dateText = `共${newDates.length}堂 (${newDates[0]}起)`;
+          }
+        }
+
+        batch.update(docRef, updates);
+      });
+
+      await batch.commit();
+      alert(`「${activityName}」更新成功！已同步更新 ${targetDocs.length} 位學生的資料。`);
+    } catch (error) {
+      alert("更新失敗：" + error.message);
+    }
+  };
+
+  // ... (後面接 startEditActivity, handleStudentSearch 等函數)
+
   const startEditActivity = (act) => {
       setEditingId(act.id);
       setEditFormData({ activity: act.activity, time: act.time, location: act.location, dateText: act.dateText });
@@ -861,13 +900,64 @@ const App = () => {
   );
 
   const renderDatabaseManager = () => (
-      <div className="bg-white p-6 rounded-xl shadow-md min-h-[500px]">
-          <div className="flex justify-between items-center mb-6"><button onClick={() => setAdminTab('import')} className="flex items-center text-slate-500 hover:text-blue-600"><ArrowLeft className="mr-2" size={20} /> 返回導入介面</button><h2 className="text-2xl font-bold text-slate-800 flex items-center"><Database className="mr-2 text-blue-600" /> 數據庫管理</h2><div className="w-24"></div></div>
-          <div className="mb-4 space-y-4">
-              <div className="flex gap-4 items-center">
-                  <div className="flex-1 bg-slate-50 border rounded-lg flex items-center px-3 py-2"><Search size={18} className="text-slate-400 mr-2" /><input type="text" placeholder="搜尋學生、活動或日期..." className="bg-transparent outline-none w-full text-sm" value={dbSearchTerm} onChange={(e) => setDbSearchTerm(e.target.value)} /></div>
-                  {dbSelectedIds.size > 0 && (<div className="flex items-center gap-2"><button onClick={() => setDbBatchMode(!dbBatchMode)} className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-bold flex items-center hover:bg-blue-700"><Edit2 size={16} className="mr-2" /> 批量修改 ({dbSelectedIds.size})</button><button onClick={handleBatchDelete} className="bg-red-50 text-red-600 px-3 py-2 rounded-lg text-sm font-bold flex items-center hover:bg-red-100 border border-red-200"><Trash2 size={16} className="mr-2" /> 刪除</button></div>)}
-              </div>
+    <div className="bg-white p-6 rounded-xl shadow-md min-h-[500px]">
+        <div className="flex justify-between items-center mb-6">
+            <button onClick={() => setAdminTab('import')} className="flex items-center text-slate-500 hover:text-blue-600">
+                <ArrowLeft className="mr-2" size={20} /> 返回導入介面
+            </button>
+            <h2 className="text-2xl font-bold text-slate-800 flex items-center">
+                <Database className="mr-2 text-blue-600" /> 數據庫管理
+            </h2>
+            <div className="w-24"></div>
+        </div>
+
+        <div className="mb-4 space-y-4">
+            <div className="flex gap-4 items-center">
+                {/* 搜尋框 */}
+                <div className="flex-1 bg-slate-50 border rounded-lg flex items-center px-3 py-2">
+                    <Search size={18} className="text-slate-400 mr-2" />
+                    <input 
+                        type="text" 
+                        placeholder="搜尋學生、活動或日期..." 
+                        className="bg-transparent outline-none w-full text-sm" 
+                        value={dbSearchTerm} 
+                        onChange={(e) => setDbSearchTerm(e.target.value)} 
+                    />
+                </div>
+
+                {/* 💡 【新增】按活動班快速改期按鈕 */}
+                <button 
+                    onClick={() => {
+                        const actName = prompt("請輸入要改期的活動完整名稱（例如：無人機班）：");
+                        if (!actName) return;
+                        const newTime = prompt(`修改「${actName}」的時間（留空表示不修改）：`);
+                        const newLocation = prompt(`修改「${actName}」的地點（留空表示不修改）：`);
+                        const newDateText = prompt(`修改「${actName}」的日期或備註（例如: 2026-09-01,2026-09-08，留空不修改）：`);
+                        
+                        if (newTime || newLocation || newDateText) {
+                            handleRescheduleGroup(actName, newTime, newLocation, newDateText);
+                        }
+                    }} 
+                    className="bg-orange-500 text-white px-3 py-2 rounded-lg text-sm font-bold flex items-center hover:bg-orange-600 shadow-sm"
+                >
+                    <RefreshCcw size={16} className="mr-2" /> 按活動班整體改期
+                </button>
+
+                {/* 現有的批量修改 / 刪除按鈕 */}
+                {dbSelectedIds.size > 0 && (
+                    <div className="flex items-center gap-2">
+                        <button onClick={() => setDbBatchMode(!dbBatchMode)} className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-bold flex items-center hover:bg-blue-700">
+                            <Edit2 size={16} className="mr-2" /> 批量修改 ({dbSelectedIds.size})
+                        </button>
+                        <button onClick={handleBatchDelete} className="bg-red-50 text-red-600 px-3 py-2 rounded-lg text-sm font-bold flex items-center hover:bg-red-100 border border-red-200">
+                            <Trash2 size={16} className="mr-2" /> 刪除
+                        </button>
+                    </div>
+                )}
+            </div>
+            
+            {/* ... 後續表格程式碼保持不變 ... */}
+
               {dbBatchMode && dbSelectedIds.size > 0 && (<div className="bg-blue-50 border border-blue-200 rounded-lg p-4 animate-in slide-in-from-top-2"><h3 className="font-bold text-blue-800 text-sm mb-3">批量修改選取的 {dbSelectedIds.size} 筆資料 (留空則不修改)</h3><div className="grid grid-cols-4 gap-2 mb-3"><input className="p-2 border rounded text-sm" placeholder="新活動名稱..." value={batchEditForm.activity} onChange={e => setBatchEditForm({...batchEditForm, activity: e.target.value})} /><input className="p-2 border rounded text-sm" placeholder="新時間..." value={batchEditForm.time} onChange={e => setBatchEditForm({...batchEditForm, time: e.target.value})} /><input className="p-2 border rounded text-sm" placeholder="新地點..." value={batchEditForm.location} onChange={e => setBatchEditForm({...batchEditForm, location: e.target.value})} /><input className="p-2 border rounded text-sm" placeholder="新備註/日期..." value={batchEditForm.dateText} onChange={e => setBatchEditForm({...batchEditForm, dateText: e.target.value})} /></div><div className="flex justify-end gap-2"><button onClick={() => setDbBatchMode(false)} className="px-3 py-1 text-slate-500 hover:text-slate-800 text-sm">取消</button><button onClick={handleBatchEdit} className="bg-blue-600 text-white px-4 py-1 rounded text-sm font-bold hover:bg-blue-700">確認修改</button></div></div>)}
           </div>
           <div className="overflow-x-auto"><table className="w-full text-left text-sm border-collapse"><thead className="bg-slate-100 text-slate-600 uppercase"><tr><th className="p-3 w-10 text-center"><input type="checkbox" checked={filteredDbActivities.length > 0 && dbSelectedIds.size === filteredDbActivities.length} onChange={toggleDbSelectAll} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"/></th><th className="p-3">學生</th><th className="p-3">活動名稱</th><th className="p-3">時間</th><th className="p-3">地點</th><th className="p-3">日期/備註</th><th className="p-3 text-right">操作</th></tr></thead><tbody>
