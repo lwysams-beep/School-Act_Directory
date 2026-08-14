@@ -581,11 +581,26 @@ const App = () => {
       if (batchEditForm.time) updates.time = batchEditForm.time;
       if (batchEditForm.location) updates.location = batchEditForm.location;
       if (batchEditForm.dateText) updates.dateText = batchEditForm.dateText;
+      
+      // 【新增】如果使用者在批量修改的備註欄位輸入了新日期格式，例如 "2024-05-10,2024-05-17"
+      if (batchEditForm.dateText && batchEditForm.dateText.includes('202')) {
+          const newDates = batchEditForm.dateText.split(',').map(d => d.trim()).filter(d => d.length === 10);
+          if (newDates.length > 0) {
+              updates.specificDates = newDates;
+              updates.dateText = `共${newDates.length}堂 (${newDates[0]}起)`;
+          }
+      }
+
       if (Object.keys(updates).length === 0) return alert("請輸入要修改的內容");
       dbSelectedIds.forEach(id => { const ref = doc(db, "activities", id); batch.update(ref, updates); });
-      try { await batch.commit(); setDbSelectedIds(new Set()); setDbBatchMode(false); setBatchEditForm({ activity: '', time: '', location: '', dateText: '' }); alert("批量修改成功！"); } catch (e) { alert("批量修改失敗: " + e.message); }
+      try { 
+          await batch.commit(); 
+          setDbSelectedIds(new Set()); 
+          setDbBatchMode(false); 
+          setBatchEditForm({ activity: '', time: '', location: '', dateText: '' }); 
+          alert("活動班批量修改成功！"); 
+      } catch (e) { alert("批量修改失敗: " + e.message); }
   };
-
   const handleDeleteActivity = async (id) => {
       if(window.confirm('確定要刪除這筆紀錄嗎？')) {
           try { await deleteDoc(doc(db, "activities", id)); } catch(e) { alert("刪除失敗:" + e.message) }
@@ -605,7 +620,19 @@ const App = () => {
   };
   const cancelEdit = () => { setEditingId(null); setEditFormData({}); };
 
-  // Logic: Search (Updated with enhanced logging)
+  const handleQuickAddStudent = (act) => {
+
+      // 複製該活動的所有設定，並跳轉至匯入頁面
+      setImportActivity(act.activity);
+      setImportTime(act.time);
+      setImportLocation(act.location);
+      if (act.specificDates) setImportDates(act.specificDates);
+      if (act.dayIds && act.dayIds.length > 0) setImportDayId(act.dayIds[0]);
+      setAdminTab('import');
+      setBulkInput(''); // 清空文字方塊等待您貼上新學生
+  };  
+
+// Logic: Search (Updated with enhanced logging)
   const handleStudentSearch = () => {
     const formattedClassNo = selectedClassNo.padStart(2, '0');
     const student = masterList.find(s => s.classCode === selectedClass && s.classNo === formattedClassNo);
@@ -844,7 +871,7 @@ const App = () => {
               {filteredDbActivities.map(act => (<tr key={act.id} className={`border-b hover:bg-slate-50 ${dbSelectedIds.has(act.id) ? 'bg-blue-50/50' : ''}`}>
                   <td className="p-3 text-center"><input type="checkbox" checked={dbSelectedIds.has(act.id)} onChange={() => toggleDbSelect(act.id)} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer" /></td>
                   <td className="p-3"><div className="font-bold text-slate-800">{act.verifiedClass} ({act.verifiedClassNo})</div><div className="text-slate-500">{act.verifiedName}</div></td>
-                  {editingId === act.id ? (<><td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.activity} onChange={e => setEditFormData({...editFormData, activity: e.target.value})} /></td><td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.time} onChange={e => setEditFormData({...editFormData, time: e.target.value})} /></td><td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.location} onChange={e => setEditFormData({...editFormData, location: e.target.value})} /></td><td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.dateText} onChange={e => setEditFormData({...editFormData, dateText: e.target.value})} /></td><td className="p-3 text-right"><div className="flex justify-end gap-2"><button onClick={() => saveEditActivity(act.id)} className="bg-green-100 text-green-700 p-1 rounded hover:bg-green-200"><CheckCircle size={18} /></button><button onClick={cancelEdit} className="bg-slate-100 text-slate-600 p-1 rounded hover:bg-slate-200"><X size={18} /></button></div></td></>) : (<><td className="p-3 font-bold text-blue-700">{act.activity}</td><td className="p-3">{act.time}</td><td className="p-3">{act.location}</td><td className="p-3 text-slate-500">{act.dateText}</td><td className="p-3 text-right"><div className="flex justify-end gap-2"><button onClick={() => startEditActivity(act)} className="text-blue-500 hover:text-blue-700 p-1"><Edit2 size={18} /></button><button onClick={() => handleDeleteActivity(act.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={18} /></button></div></td></>)}
+                  {editingId === act.id ? (<><td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.activity} onChange={e => setEditFormData({...editFormData, activity: e.target.value})} /></td><td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.time} onChange={e => setEditFormData({...editFormData, time: e.target.value})} /></td><td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.location} onChange={e => setEditFormData({...editFormData, location: e.target.value})} /></td><td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.dateText} onChange={e => setEditFormData({...editFormData, dateText: e.target.value})} /></td><td className="p-3 text-right"><div className="flex justify-end gap-2"><button onClick={() => saveEditActivity(act.id)} className="bg-green-100 text-green-700 p-1 rounded hover:bg-green-200"><CheckCircle size={18} /></button><button onClick={cancelEdit} className="bg-slate-100 text-slate-600 p-1 rounded hover:bg-slate-200"><X size={18} /></button></div></td></>) : (<><td className="p-3 font-bold text-blue-700">{act.activity}</td><td className="p-3">{act.time}</td><td className="p-3">{act.location}</td><td className="p-3 text-slate-500">{act.dateText}</td><td className="p-3 text-right"><div className="flex justify-end gap-2"><button title="加入學生至此活動" onClick={() => handleQuickAddStudent(act)} className="text-green-500 hover:text-green-700 p-1 mr-1"><PlusCircle size={18} /></button><button title="編輯" onClick={() => startEditActivity(act)} className="text-blue-500 hover:text-blue-700 p-1"><Edit2 size={18} /></button><button title="刪除" onClick={() => handleDeleteActivity(act.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={18} /></button>div></td></>)}
               </tr>))}
               {filteredDbActivities.length === 0 && <tr><td colSpan="7" className="p-8 text-center text-slate-400">沒有符合搜尋的資料。</td></tr>}
           </tbody></table></div>
