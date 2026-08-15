@@ -314,6 +314,18 @@ const App = () => {
   // 版本 1.0: 新增活動班篩選 State 及 Firebase 點名更新函式
   const [staffActivityFilter, setStaffActivityFilter] = useState('');
   
+  // ==========================================
+  // 版本 1.3: 新增日期篩選 State (預設為當天)
+  const getTodayString = () => {
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+  };
+  const [staffDateFilter, setStaffDateFilter] = useState(getTodayString());
+  // ==========================================
+
   const handleAttendanceChange = async (id, newStatus) => {
       try {
           // 即時更新 Firebase 中的 attendanceStatus 欄位
@@ -914,10 +926,26 @@ const App = () => {
 
     // 版本 1.0: 增加活動班篩選條件
     const matchesActivity = !staffActivityFilter || item.activity === staffActivityFilter;
-
-    // 版本 1.0: 將 matchesActivity 加入最終 return
-    return matchesSearch && matchesClass && matchesDismissal && matchesActivity;
-});
+            // ==========================================
+            // 版本 1.3: 增加日期篩選條件
+            let matchesDate = true;
+            if (staffDateFilter) {
+                // 如果該活動有設定特定日期 (specificDates)
+                if (item.specificDates && item.specificDates.length > 0) {
+                    matchesDate = item.specificDates.includes(staffDateFilter);
+                } 
+                // 否則，檢查該活動的星期幾 (dayIds) 是否符合選擇的日期
+                else if (item.dayIds && item.dayIds.length > 0) {
+                    const filterDateObj = new Date(staffDateFilter);
+                    const filterDayOfWeek = filterDateObj.getDay(); // 0(日) 到 6(六)
+                    matchesDate = item.dayIds.includes(filterDayOfWeek);
+                }
+            }
+            
+            // 版本 1.3: 將 matchesDate 加入最終 return
+            return matchesSearch && matchesClass && matchesDismissal && matchesActivity && matchesDate;
+            // ==========================================
+        });
 
 
     const totalCount = filteredList.length;
@@ -986,18 +1014,53 @@ const App = () => {
                         <option value="家">👨‍👩‍👧 家長接送 (家)</option>
                         </select>
 
-                    {/* 版本 1.0: 新增活動班下拉式選單 */}
-                    <select
+                        <select
                         value={staffActivityFilter}
                         onChange={(e) => setStaffActivityFilter(e.target.value)}
-                       className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700"
+                        className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700"
                     >
-                       <option value="">全部活動班</option>
-                       {uniqueActivities.map(act => (
-                       <option key={act} value={act}>{act}</option>
-                      ))}
+                        <option value="">全部活動班</option>
+                        {uniqueActivities.map(act => (
+                            <option key={act} value={act}>{act}</option>
+                        ))}
                     </select>
-                </div>
+
+                    {/* ========================================================= */}
+                    {/* 版本 1.3: 在這裡插入日期篩選器 (在 select 和 div 之間) */}
+                    <div className="flex items-center">
+                        <input
+                            type="date"
+                            value={staffDateFilter}
+                            onChange={(e) => setStaffDateFilter(e.target.value)}
+                            className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700"
+                        />
+                        <button 
+                            onClick={() => setStaffDateFilter(getTodayString())}
+                            className="ml-2 text-xs bg-orange-100 text-orange-700 border border-orange-200 px-2 py-1.5 rounded hover:bg-orange-200 transition whitespace-nowrap"
+                        >
+                            今天
+                        </button>
+                    </div>
+                    {/* ========================================================= */}
+
+                </div> {/* <---- 原本的 </div> 保持在這裡 */}
+
+                {/* 這裡也別忘了在 onClick 裡加上 setStaffDateFilter(''); */}
+                {(staffSearchTerm || staffClassFilter || staffDismissalFilter || staffActivityFilter || staffDateFilter) && (
+                    <button
+                        onClick={() => {
+                            setStaffSearchTerm('');
+                            setStaffClassFilter('');
+                            setStaffDismissalFilter('');
+                            setStaffActivityFilter('');
+                            setStaffDateFilter(''); // 點擊清除所有篩選時，清空日期
+                        }}
+                        className="text-xs text-slate-500 hover:text-slate-700 underline"
+                    >
+                        清除所有篩選
+                    </button>
+                )}
+
 
 {(staffSearchTerm || staffClassFilter || staffDismissalFilter || staffActivityFilter) && (
 <button
@@ -1011,7 +1074,9 @@ const App = () => {
 >
     清除所有篩選
 </button>
+
 )}
+
 
             </div>
 
