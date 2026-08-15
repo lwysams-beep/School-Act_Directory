@@ -1047,10 +1047,6 @@ const App = () => {
                                         <td className="p-3.5 text-center text-slate-500 font-mono">
                                             {act.verifiedClassNo || act.rawClassNo || '-'}
                                         </td>
-
-                                        <td className="p-3.5 font-bold text-slate-800">
-                                            {act.verifiedName || act.rawName || '未命名'}
-                                        </td>
                                         <td className="p-3.5 font-bold text-slate-800">
                                             {act.verifiedName || act.rawName || '未命名'}
                                         </td>
