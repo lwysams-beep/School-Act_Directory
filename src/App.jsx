@@ -88,6 +88,14 @@ const processBulkText = (text, actName, actTime, actLoc, actDateText, dayIds, da
         const nameMatch = cleanLine.match(nameRegex);
         const phoneMatch = cleanLine.match(phoneRegex);
 
+        // ⭐ 新增：識別放學方式 (「自行回家」寫入 "自"，「家長接送」寫入 "家")
+        let dismissalMethod = '';
+        if (cleanLine.includes('自行回家') || cleanLine.includes('自行')) {
+            dismissalMethod = '自';
+        } else if (cleanLine.includes('家長接送') || cleanLine.includes('家長')) {
+            dismissalMethod = '家';
+        }
+
         if (classMatch && nameMatch) {
             newItems.push({
                 id: Date.now() + Math.random(),
@@ -95,6 +103,7 @@ const processBulkText = (text, actName, actTime, actLoc, actDateText, dayIds, da
                 rawClass: classMatch[1],
                 rawClassNo: classMatch[2] ? classMatch[2].padStart(2, '0') : '00', 
                 rawPhone: phoneMatch ? phoneMatch[0] : '', 
+                dismissalMethod: dismissalMethod, // ⭐ 寫入 Firebase 資料庫的放學方式欄位 ('自' 或 '家')
                 activity: actName,
                 time: actTime,
                 location: actLoc,
@@ -978,31 +987,219 @@ const App = () => {
       </div>
   );
   
-  const renderStaffLoginView = () => (
-      <div className="flex-1 flex flex-col items-center justify-center bg-slate-50 p-6">
-          <div className="bg-white p-8 rounded-2xl shadow-lg w-full max-w-sm border border-slate-200">
-              <div className="text-center mb-8">
-                  <div className="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-4 text-white"><Key size={32} /></div>
-                  <h2 className="text-2xl font-bold text-slate-800">教職員專用通道</h2>
-                  <p className="text-slate-500 text-sm">請輸入密碼以存取資料</p>
-              </div>
-              <div className="space-y-4">
-                  <input
-                      type="password"
-                      className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition text-center"
-                      placeholder="••••••••"
-                      value={staffPasswordInput}
-                      onChange={(e) => setStaffPasswordInput(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleStaffLogin(); }}
-                      autoFocus
-                  />
-                  <button onClick={handleStaffLogin} className="w-full py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition flex items-center justify-center">
-                      <ArrowRight size={20} className="mr-2"/> 進入
-                  </button>
-              </div>
-          </div>
-      </div>
-  );
+  const renderStaffView = () => {
+    // 1. 篩選後得出的資料清單 (會自動讀取每筆資料的 dismissalMethod)
+    const filteredList = (publishedData || []).filter(item => {
+        const matchesSearch = !staffSearchTerm || 
+            item.rawName?.includes(staffSearchTerm) || 
+            item.rawClass?.toLowerCase().includes(staffSearchTerm.toLowerCase()) ||
+            item.activity?.includes(staffSearchTerm);
+            
+        const matchesClass = !staffClassFilter || item.rawClass === staffClassFilter;
+        
+        // 放學方式篩選
+        const matchesDismissal = !staffDismissalFilter || 
+            (staffDismissalFilter === '自' && item.dismissalMethod === '自') ||
+            (staffDismissalFilter === '家' && item.dismissalMethod === '家');
+
+        return matchesSearch && matchesClass && matchesDismissal;
+    });
+
+    // 2. 人數統計數據
+    const totalCount = filteredList.length;
+    const selfCount = filteredList.filter(i => i.dismissalMethod === '自').length;
+    const parentCount = filteredList.filter(i => i.dismissalMethod === '家').length;
+
+    return (
+        <div className="space-y-6 p-4 max-w-7xl mx-auto">
+            {/* 頁面標題與人數統計卡片 */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <div>
+                    <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                        <span>📋</span> 教職員查詢與名單管理
+                    </h2>
+                    <p className="text-slate-500 text-sm mt-1">
+                        檢視學生放學活動安排及放學方式統計
+                    </p>
+                </div>
+
+                {/* 頂部快速統計卡片 */}
+                <div className="flex items-center gap-3">
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-center">
+                        <div className="text-xs text-slate-500">總人次</div>
+                        <div className="text-lg font-bold text-slate-700">{totalCount}</div>
+                    </div>
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-2 text-center">
+                        <div className="text-xs text-emerald-600 font-medium">自行回家 (自)</div>
+                        <div className="text-lg font-bold text-emerald-700">{selfCount}</div>
+                    </div>
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-center">
+                        <div className="text-xs text-amber-600 font-medium">家長接送 (家)</div>
+                        <div className="text-lg font-bold text-amber-700">{parentCount}</div>
+                    </div>
+                </div>
+            </div>
+
+            {/* 控制與篩選列 */}
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-wrap gap-4 items-center justify-between">
+                <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                    {/* 關鍵字搜尋 */}
+                    <div className="relative flex-1 md:w-64">
+                        <input
+                            type="text"
+                            placeholder="搜尋學生姓名 / 班別 / 活動..."
+                            value={staffSearchTerm || ''}
+                            onChange={(e) => setStaffSearchTerm && setStaffSearchTerm(e.target.value)}
+                            className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <span className="absolute left-3 top-2.5 text-slate-400">🔍</span>
+                    </div>
+
+                    {/* 班別篩選 */}
+                    <select
+                        value={staffClassFilter || ''}
+                        onChange={(e) => setStaffClassFilter && setStaffClassFilter(e.target.value)}
+                        className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                        <option value="">全部班別</option>
+                        {['1A','1B','1C','1D','2A','2B','2C','2D','3A','3B','3C','3D','4A','4B','4C','4D','5A','5B','5C','5D','6A','6B','6C','6D'].map(cls => (
+                            <option key={cls} value={cls}>{cls}</option>
+                        ))}
+                    </select>
+
+                    {/* 放學方式篩選 */}
+                    <select
+                        value={staffDismissalFilter || ''}
+                        onChange={(e) => setStaffDismissalFilter && setStaffDismissalFilter(e.target.value)}
+                        className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700"
+                    >
+                        <option value="">全部放學方式</option>
+                        <option value="自">🚶‍♂️ 自行回家 (自)</option>
+                        <option value="家">👨‍👩‍👧 家長接送 (家)</option>
+                    </select>
+                </div>
+
+                {/* 清除篩選按鈕 */}
+                {(staffSearchTerm || staffClassFilter || staffDismissalFilter) && (
+                    <button
+                        onClick={() => {
+                            setStaffSearchTerm && setStaffSearchTerm('');
+                            setStaffClassFilter && setStaffClassFilter('');
+                            setStaffDismissalFilter && setStaffDismissalFilter('');
+                        }}
+                        className="text-xs text-slate-500 hover:text-slate-700 underline"
+                    >
+                        清除所有篩選
+                    </button>
+                )}
+            </div>
+
+            {/* 資料表格 */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-sm">
+                        <thead>
+                            <tr className="bg-slate-100 text-slate-700 border-b border-slate-200">
+                                <th className="p-3.5 font-semibold text-center w-20">班別</th>
+                                <th className="p-3.5 font-semibold text-center w-16">座號</th>
+                                <th className="p-3.5 font-semibold">學生姓名</th>
+                                {/* ⭐ 放學方式欄位 */}
+                                <th className="p-3.5 font-semibold text-center w-32">放學方式</th>
+                                <th className="p-3.5 font-semibold">活動名稱</th>
+                                <th className="p-3.5 font-semibold">時間 / 日期</th>
+                                <th className="p-3.5 font-semibold">地點</th>
+                                <th className="p-3.5 font-semibold">聯絡電話</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {filteredList.length > 0 ? (
+                                filteredList.map((act, index) => (
+                                    <tr 
+                                        key={act.id || index} 
+                                        className="hover:bg-slate-50/80 transition-colors"
+                                    >
+                                        {/* 班別 */}
+                                        <td className="p-3.5 text-center font-bold text-slate-700">
+                                            <span className="bg-slate-100 px-2 py-1 rounded border border-slate-200">
+                                                {act.rawClass || '-'}
+                                            </span>
+                                        </td>
+
+                                        {/* 座號 */}
+                                        <td className="p-3.5 text-center text-slate-500 font-mono">
+                                            {act.rawClassNo || '-'}
+                                        </td>
+
+                                        {/* 姓名 */}
+                                        <td className="p-3.5 font-bold text-slate-800">
+                                            {act.rawName || '未命名'}
+                                        </td>
+
+                                        {/* ⭐ 放學方式顯示 (綠色標籤代表自行回家，黃色標籤代表家長接送) */}
+                                        <td className="p-3.5 text-center">
+                                            {act.dismissalMethod === '自' && (
+                                                <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-300 text-xs px-2.5 py-1 rounded-full font-bold">
+                                                    <span>🚶‍♂️</span> 自行回家
+                                                </span>
+                                            )}
+                                            {act.dismissalMethod === '家' && (
+                                                <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 border border-amber-300 text-xs px-2.5 py-1 rounded-full font-bold">
+                                                    <span>👨‍👩‍👧</span> 家長接送
+                                                </span>
+                                            )}
+                                            {!act.dismissalMethod && (
+                                                <span className="text-slate-300 font-bold">-</span>
+                                            )}
+                                        </td>
+
+                                        {/* 活動名稱 */}
+                                        <td className="p-3.5 font-medium text-blue-700">
+                                            {act.activity || '-'}
+                                        </td>
+
+                                        {/* 時間與日期 */}
+                                        <td className="p-3.5 text-slate-600 text-xs space-y-0.5">
+                                            <div>{act.dateText || '-'}</div>
+                                            <div className="text-slate-400">{act.time || ''}</div>
+                                        </td>
+
+                                        {/* 地點 */}
+                                        <td className="p-3.5 text-slate-600">
+                                            {act.location || '-'}
+                                        </td>
+
+                                        {/* 電話 */}
+                                        <td className="p-3.5 text-slate-600 font-mono text-xs">
+                                            {act.rawPhone ? (
+                                                <a href={`tel:${act.rawPhone}`} className="text-slate-600 hover:text-blue-600 underline">
+                                                    {act.rawPhone}
+                                                </a>
+                                            ) : '-'}
+                                        </td>
+                                    </tr>
+                                ))
+                            ) : (
+                                <tr>
+                                    <td colSpan="8" className="p-12 text-center text-slate-400">
+                                        <div className="text-4xl mb-2">🔍</div>
+                                        <div className="text-base font-medium">沒有找到符合條件的名單資料</div>
+                                        <div className="text-xs text-slate-400 mt-1">請嘗試調整搜尋關鍵字或篩選條件</div>
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+
+                {/* 表格底部說明 */}
+                <div className="bg-slate-50 p-3 border-t border-slate-200 text-xs text-slate-500 flex justify-between items-center px-4">
+                    <span>顯示 {filteredList.length} 筆資料</span>
+                    <span>標示說明：<span className="text-emerald-700 font-bold">自</span> = 自行回家 | <span className="text-amber-700 font-bold">家</span> = 家長接送</span>
+                </div>
+            </div>
+        </div>
+    );
+};
 
   const renderLoginView = () => (
       <div className="flex-1 flex flex-col items-center justify-center bg-slate-100 p-6">
