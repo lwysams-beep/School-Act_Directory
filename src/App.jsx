@@ -1,5 +1,5 @@
 // =============================================================================
-//  校園資訊 APP - VERSION 4.5 (放學方式修復 + 教職員介面優化版)
+//  校園資訊 APP - VERSION 4.6 (放學方式修復 + 教職員介面優化版)
 // =============================================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
@@ -873,7 +873,7 @@ const App = () => {
                 </div>
 
                 <div className="mt-4 text-center text-xs text-slate-400 font-mono tracking-wider">
-                    Version 4.5
+                    Version 4.6
                 </div>
             </div>
         </div>
