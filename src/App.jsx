@@ -338,7 +338,7 @@ const App = () => {
             }
         } catch (error) {
             console.error("Error fetching master list:", error);
-        } fontally {
+        } finally {
             setIsMasterLoading(false);
         }
     };
