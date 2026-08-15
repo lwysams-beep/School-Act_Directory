@@ -842,6 +842,7 @@ const App = () => {
   const renderTopNavBar = () => (
     <div className="bg-slate-900 text-white p-3 flex justify-between items-center shadow-md sticky top-0 z-50">
         <div className="flex items-center space-x-2 cursor-pointer" onClick={() => { setCurrentView('student'); setStaffUnlocked(false); setStaffPasswordInput(''); }}>
+            <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center font-bold text-sm">佛</div>
             <span className="font-bold text-lg tracking-wide hidden sm:block">香海正覺蓮社佛教正覺蓮社學校</span>
         </div>
         
@@ -852,13 +853,19 @@ const App = () => {
 
         <div className="flex space-x-1">
             <button onClick={() => { setCurrentView('student'); setStaffUnlocked(false); setStaffPasswordInput(''); }} className={`px-4 py-2 rounded-lg flex items-center text-sm transition-all ${currentView === 'student' || currentView === 'kiosk_result' ? 'bg-orange-600 text-white font-bold shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}><User size={16} className="mr-2" /> 學生</button>
-            <button onClick={() => setCurrentView('staff')} className={`px-4 py-2 rounded-lg flex items-center text-sm transition-all ${currentView === 'staff' ? 'bg-blue-600 text-white font-bold shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}><Users size={16} className="mr-2" /> 教職員</button>
+            
+            {/* 版本 1.4: 教職員按鈕僅在 user 存在 (Admin 登入後) 顯示 */}
+            {user && (
+                <button onClick={() => setCurrentView('staff')} className={`px-4 py-2 rounded-lg flex items-center text-sm transition-all ${currentView === 'staff' ? 'bg-blue-600 text-white font-bold shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}><Users size={16} className="mr-2" /> 教職員名單管理</button>
+            )}
+
             <button onClick={() => { setCurrentView('admin'); setStaffUnlocked(false); setStaffPasswordInput(''); }} className={`px-4 py-2 rounded-lg flex items-center text-sm transition-all ${currentView === 'admin' ? 'bg-slate-700 text-white font-bold shadow-lg ring-1 ring-slate-500' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
-                {user ? <Shield size={16} className="mr-2 text-green-400" /> : <Lock size={16} className="mr-2" />} 管理員
+                {user ? <Shield size={16} className="mr-2 text-green-400" /> : <Lock size={16} className="mr-2" />} {user ? '管理員控制台' : '管理員登入'}
             </button>
         </div>
     </div>
   );
+
 
   const renderStudentView = () => {
     const allClasses = [
@@ -1633,7 +1640,7 @@ const App = () => {
       {renderTopNavBar()}
       {currentView === 'student' && renderStudentView()}
       {currentView === 'kiosk_result' && renderKioskResultView()}
-      {currentView === 'staff' && renderStaffView()}
+      {currentView === 'staff' && (user ? renderStaffView() : renderLoginView())}
       {currentView === 'admin' && (user ? renderAdminView() : renderLoginView())}
     </div>
   );
