@@ -1,6 +1,5 @@
 // =============================================================================
-//  校園資訊 APP - VERSION 4.5 (按活動班整體改期選單優化版)
-//  優化: 「按活動班整體改期」改為選單模式 Modal，並支援個別日期的新增與刪除
+//  校園資訊 APP - VERSION 4.5 (按活動班整體改期選單優化版 + 學生名單樣式更新)
 // =============================================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
@@ -72,6 +71,41 @@ const parseMasterCSV = (csvText) => {
       key: `${cols[0].trim()}-${cols[3].trim()}` 
     };
   }).filter(item => item !== null);
+};
+
+// 通用名單解析函式 (支援 "3B 20 温小文 自行回家 91400040" 樣式)
+const processBulkText = (text, actName, actTime, actLoc, actDateText, dayIds, dates) => {
+    const lines = text.trim().split('\n');
+    const newItems = [];
+    const mixedClassRegex = /([1-6][A-E])\s*(\d{1,2})?/; 
+    const nameRegex = /[\u4e00-\u9fa5]{2,}/; 
+    const phoneRegex = /[569]\d{7}/; 
+
+    lines.forEach((line) => {
+        const cleanLine = line.trim().replace(/['"]/g, ''); 
+        if(!cleanLine) return;
+        const classMatch = cleanLine.match(mixedClassRegex);
+        const nameMatch = cleanLine.match(nameRegex);
+        const phoneMatch = cleanLine.match(phoneRegex);
+
+        if (classMatch && nameMatch) {
+            newItems.push({
+                id: Date.now() + Math.random(),
+                rawName: nameMatch[0],
+                rawClass: classMatch[1],
+                rawClassNo: classMatch[2] ? classMatch[2].padStart(2, '0') : '00', 
+                rawPhone: phoneMatch ? phoneMatch[0] : '', 
+                activity: actName,
+                time: actTime,
+                location: actLoc,
+                dateText: actDateText,
+                dayIds: dayIds || [1], 
+                specificDates: dates || [], 
+                forceConflict: false 
+            });
+        }
+    });
+    return newItems;
 };
 
 // -----------------------------------------------------------------------------
@@ -272,15 +306,18 @@ const App = () => {
   const [dbBatchMode, setDbBatchMode] = useState(false);
   const [batchEditForm, setBatchEditForm] = useState({ activity: '', time: '', location: '', dateText: '' });
 
-  // ---------------------------------------------------------------------------
-  // ⭐ [新增/修改] 按活動班整體改期 Modal 狀態
-  // ---------------------------------------------------------------------------
+  // ⭐ 按活動班整體改期 Modal 狀態
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
   const [groupActivityName, setGroupActivityName] = useState('');
   const [groupTime, setGroupTime] = useState('');
   const [groupLocation, setGroupLocation] = useState('');
   const [groupDates, setGroupDates] = useState([]);
   const [groupTempDateInput, setGroupTempDateInput] = useState('');
+
+  // ⭐ 新增學生名單 Modal 狀態
+  const [isAddStudentModalOpen, setIsAddStudentModalOpen] = useState(false);
+  const [targetActivityForAdd, setTargetActivityForAdd] = useState(null);
+  const [addStudentBulkInput, setAddStudentBulkInput] = useState('');
 
   // DB Editing State
   const [editingId, setEditingId] = useState(null);
@@ -474,49 +511,28 @@ const App = () => {
   };
 
   const handleBulkImport = () => {
-      const lines = bulkInput.trim().split('\n');
-      const newItems = [];
       const dayMap = {1:'一', 2:'二', 3:'三', 4:'四', 5:'五', 6:'六', 0:'日'};
-      
       const currentDayIds = typeof importDayIds !== 'undefined' ? importDayIds : [1];
       
       let finalDateText = currentDayIds.length > 0 ? `逢星期${currentDayIds.map(id => dayMap[id]).join(', ')}` : '未指定星期';
       if (importDates.length > 0) finalDateText = `共${importDates.length}堂 (${importDates[0]}起)`;
 
-      lines.forEach((line) => {
-          const cleanLine = line.trim().replace(/['"]/g, ''); 
-          if(!cleanLine) return;
-          const mixedClassRegex = /([1-6][A-E])(\d{0,2})/; 
-          const nameRegex = /[\u4e00-\u9fa5]{2,}/; 
-          const phoneRegex = /[569]\d{7}/; 
-          const classMatch = cleanLine.match(mixedClassRegex);
-          const nameMatch = cleanLine.match(nameRegex);
-          const phoneMatch = cleanLine.match(phoneRegex);
-
-          if (classMatch && nameMatch) {
-              newItems.push({
-                  id: Date.now() + Math.random(),
-                  rawName: nameMatch[0],
-                  rawClass: classMatch[1],
-                  rawClassNo: classMatch[2] ? classMatch[2].padStart(2, '0') : '00', 
-                  rawPhone: phoneMatch ? phoneMatch[0] : '', 
-                  activity: importActivity,
-                  time: importTime,
-                  location: importLocation,
-                  dateText: finalDateText,
-                  dayIds: currentDayIds, 
-                  specificDates: importDates, 
-                  forceConflict: false 
-              });
-          }
-      });
+      const newItems = processBulkText(
+          bulkInput,
+          importActivity,
+          importTime,
+          importLocation,
+          finalDateText,
+          currentDayIds,
+          importDates
+      );
 
       if (newItems.length > 0) {
           setPendingImports(prev => [...prev, ...newItems]);
           setBulkInput('');
           alert(`成功識別 ${newItems.length} 筆資料。`);
       } else {
-          alert("無法識別。請確認貼上的名單格式是否正確（例如：5A 張小明 91234567 家長）。");
+          alert("無法識別。請確認貼上的名單格式是否正確（例如：3B 20 温小文 自行回家 91400040）。");
       }
   };
 
@@ -639,12 +655,11 @@ const App = () => {
   };
 
   // ---------------------------------------------------------------------------
-  // ⭐ [全新/優化] 「按活動班整體改期」模組選單與邏輯
+  // 「按活動班整體改期」模組選單與邏輯
   // ---------------------------------------------------------------------------
   const handleOpenGroupRescheduleModal = () => {
       if (uniqueActivities.length === 0) return alert("資料庫中目前沒有任何活動班資料！");
       
-      // 預設選擇第一個活動班並帶入其現有資料
       const initialAct = uniqueActivities[0];
       handleSelectGroupActivity(initialAct);
       setIsGroupModalOpen(true);
@@ -706,7 +721,6 @@ const App = () => {
       try {
           const batch = writeBatch(db);
           
-          // 自動生成最新的備註文字 dateText
           let newDateText = targetDocs[0].dateText || '';
           if (groupDates.length > 0) {
               newDateText = `共${groupDates.length}堂 (${groupDates[0]}起)`;
@@ -730,6 +744,44 @@ const App = () => {
       }
   };
 
+  // ---------------------------------------------------------------------------
+  // ⭐ 「新增學生名單」Pop-up Window 邏輯
+  // ---------------------------------------------------------------------------
+  const handleOpenAddStudentModal = (act) => {
+      setTargetActivityForAdd(act);
+      setAddStudentBulkInput('');
+      setIsAddStudentModalOpen(true);
+  };
+
+  const handleConfirmAddStudentModal = () => {
+      if (!targetActivityForAdd) return;
+      
+      let finalDateText = targetActivityForAdd.dateText || '';
+      if (targetActivityForAdd.specificDates && targetActivityForAdd.specificDates.length > 0) {
+          finalDateText = `共${targetActivityForAdd.specificDates.length}堂 (${targetActivityForAdd.specificDates[0]}起)`;
+      }
+
+      const newItems = processBulkText(
+          addStudentBulkInput,
+          targetActivityForAdd.activity,
+          targetActivityForAdd.time,
+          targetActivityForAdd.location,
+          finalDateText,
+          targetActivityForAdd.dayIds || [1],
+          targetActivityForAdd.specificDates || []
+      );
+
+      if (newItems.length > 0) {
+          setPendingImports(prev => [...prev, ...newItems]);
+          setAddStudentBulkInput('');
+          setIsAddStudentModalOpen(false);
+          setAdminTab('import');
+          alert(`成功識別 ${newItems.length} 筆學生資料，已載入至待發布列表。`);
+      } else {
+          alert("無法識別。請確認貼上的名單格式（例如：3B 20 温小文 自行回家 91400040）。");
+      }
+  };
+
   const startEditActivity = (act) => {
       setEditingId(act.id);
       setEditFormData({ activity: act.activity, time: act.time, location: act.location, dateText: act.dateText });
@@ -742,16 +794,6 @@ const App = () => {
       } catch(e) { alert("更新失敗:" + e.message) }
   };
   const cancelEdit = () => { setEditingId(null); setEditFormData({}); };
-
-  const handleQuickAddStudent = (act) => {
-      setImportActivity(act.activity);
-      setImportTime(act.time);
-      setImportLocation(act.location);
-      if (act.specificDates) setImportDates(act.specificDates);
-      if (act.dayIds && act.dayIds.length > 0) setImportDayIds(act.dayIds);
-      setAdminTab('import');
-      setBulkInput(''); 
-  };  
 
   const handleStudentSearch = () => {
     const formattedClassNo = selectedClassNo.padStart(2, '0');
@@ -848,31 +890,36 @@ const App = () => {
     return (
         <div className="flex-1 flex flex-col bg-gradient-to-b from-orange-50 to-white">
             <div className="flex-1 flex flex-col items-center justify-center p-4">
-            <div className="w-full max-w-4xl bg-white p-8 rounded-3xl shadow-xl border border-orange-100">
-                <div className="text-center mb-6"><h1 className="text-2xl font-bold text-slate-800">課外活動查詢</h1><p className="text-slate-500">請輸入你的班別及學號</p></div>
-                
-                <div className="mb-6">
-                    <label className="block text-slate-400 text-sm mb-2 font-bold uppercase tracking-wider">班別 Class</label>
-                    <div className="grid grid-cols-5 md:grid-cols-10 gap-2">
-                        {allClasses.map((cls) => (
-                            <button key={cls} onClick={() => setSelectedClass(cls)} className={`py-2 rounded-lg font-bold text-lg transition-colors ${selectedClass === cls ? 'bg-orange-500 text-white shadow-lg scale-105' : 'bg-slate-100 text-slate-600 hover:bg-orange-100'}`}>
-                                {cls}
-                            </button>
-                        ))}
+                <div className="w-full max-w-4xl bg-white p-8 rounded-3xl shadow-xl border border-orange-100">
+                    <div className="text-center mb-6"><h1 className="text-2xl font-bold text-slate-800">課外活動查詢</h1><p className="text-slate-500">請輸入你的班別及學號</p></div>
+                    
+                    <div className="mb-6">
+                        <label className="block text-slate-400 text-sm mb-2 font-bold uppercase tracking-wider">班別 Class</label>
+                        <div className="grid grid-cols-5 md:grid-cols-10 gap-2">
+                            {allClasses.map((cls) => (
+                                <button key={cls} onClick={() => setSelectedClass(cls)} className={`py-2 rounded-lg font-bold text-lg transition-colors ${selectedClass === cls ? 'bg-orange-500 text-white shadow-lg scale-105' : 'bg-slate-100 text-slate-600 hover:bg-orange-100'}`}>
+                                    {cls}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    
+                    <div className="flex flex-col md:flex-row gap-8">
+                        <div className="flex-1">
+                            <label className="block text-slate-400 text-sm mb-2 font-bold uppercase tracking-wider">學號 Class No.</label>
+                            <div className="flex items-center justify-center mb-4"><div className="h-20 w-32 bg-slate-100 rounded-2xl flex items-center justify-center text-5xl font-bold tracking-widest text-slate-800 border-2 border-orange-200 shadow-inner">{selectedClassNo || <span className="text-slate-300 text-3xl">--</span>}</div></div>
+                            <div className="grid grid-cols-3 gap-3">{[1,2,3,4,5,6,7,8,9].map((num) => (<button key={num} onClick={() => { if (selectedClassNo.length < 2) setSelectedClassNo(prev => prev + num); }} className="h-14 bg-white border border-slate-200 rounded-xl text-2xl font-bold text-slate-700 active:bg-orange-100 active:border-orange-500 shadow-sm transition-all">{num}</button>))}<button onClick={() => setSelectedClassNo('')} className="h-14 bg-red-50 text-red-500 rounded-xl font-bold border border-red-100">清除</button><button onClick={() => { if (selectedClassNo.length < 2) setSelectedClassNo(prev => prev + 0); }} className="h-14 bg-white border border-slate-200 rounded-xl text-2xl font-bold text-slate-700 active:bg-orange-100 shadow-sm">0</button><button onClick={() => setSelectedClassNo(prev => prev.slice(0, -1))} className="h-14 bg-slate-100 text-slate-500 rounded-xl font-bold">←</button></div>
+                        </div>
+                        <div className="flex items-center justify-center md:w-1/3">
+                            <button onClick={handleStudentSearch} disabled={selectedClassNo.length === 0} className={`w-full py-8 rounded-2xl text-3xl font-bold text-white shadow-xl transition-all flex items-center justify-center ${selectedClassNo.length > 0 ? 'bg-orange-600 hover:bg-orange-700 transform hover:scale-[1.02]' : 'bg-slate-300 cursor-not-allowed'}`}><Search className="mr-3" size={32} strokeWidth={3} /> 查詢</button>
+                        </div>
                     </div>
                 </div>
-                
-                <div className="flex flex-col md:flex-row gap-8">
-                    <div className="flex-1">
-                        <label className="block text-slate-400 text-sm mb-2 font-bold uppercase tracking-wider">學號 Class No.</label>
-                        <div className="flex items-center justify-center mb-4"><div className="h-20 w-32 bg-slate-100 rounded-2xl flex items-center justify-center text-5xl font-bold tracking-widest text-slate-800 border-2 border-orange-200 shadow-inner">{selectedClassNo || <span className="text-slate-300 text-3xl">--</span>}</div></div>
-                        <div className="grid grid-cols-3 gap-3">{[1,2,3,4,5,6,7,8,9].map((num) => (<button key={num} onClick={() => { if (selectedClassNo.length < 2) setSelectedClassNo(prev => prev + num); }} className="h-14 bg-white border border-slate-200 rounded-xl text-2xl font-bold text-slate-700 active:bg-orange-100 active:border-orange-500 shadow-sm transition-all">{num}</button>))}<button onClick={() => setSelectedClassNo('')} className="h-14 bg-red-50 text-red-500 rounded-xl font-bold border border-red-100">清除</button><button onClick={() => { if (selectedClassNo.length < 2) setSelectedClassNo(prev => prev + 0); }} className="h-14 bg-white border border-slate-200 rounded-xl text-2xl font-bold text-slate-700 active:bg-orange-100 shadow-sm">0</button><button onClick={() => setSelectedClassNo(prev => prev.slice(0, -1))} className="h-14 bg-slate-100 text-slate-500 rounded-xl font-bold">←</button></div>
-                    </div>
-                    <div className="flex items-center justify-center md:w-1/3">
-                         <button onClick={handleStudentSearch} disabled={selectedClassNo.length === 0} className={`w-full py-8 rounded-2xl text-3xl font-bold text-white shadow-xl transition-all flex items-center justify-center ${selectedClassNo.length > 0 ? 'bg-orange-600 hover:bg-orange-700 transform hover:scale-[1.02]' : 'bg-slate-300 cursor-not-allowed'}`}><Search className="mr-3" size={32} strokeWidth={3} /> 查詢</button>
-                    </div>
+
+                {/* ⭐ 主頁底部 Version 顯示 (細字) */}
+                <div className="mt-4 text-center text-xs text-slate-400 font-mono tracking-wider">
+                    Version 4.5
                 </div>
-            </div>
             </div>
         </div>
     );
@@ -984,7 +1031,6 @@ const App = () => {
 
         <div className="mb-4 space-y-4">
             <div className="flex gap-4 items-center">
-                {/* 搜尋框 */}
                 <div className="flex-1 bg-slate-50 border rounded-lg flex items-center px-3 py-2">
                     <Search size={18} className="text-slate-400 mr-2" />
                     <input 
@@ -996,7 +1042,6 @@ const App = () => {
                     />
                 </div>
 
-                {/* ⭐ 按活動班整體改期按鈕（觸發選單 Modal） */}
                 <button 
                     onClick={handleOpenGroupRescheduleModal} 
                     className="bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center hover:bg-orange-600 shadow-sm transition"
@@ -1004,7 +1049,6 @@ const App = () => {
                     <RefreshCcw size={16} className="mr-2" /> 按活動班整體改期
                 </button>
 
-                {/* 批量修改 / 刪除按鈕 */}
                 {dbSelectedIds.size > 0 && (
                     <div className="flex items-center gap-2">
                         <button onClick={() => setDbBatchMode(!dbBatchMode)} className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-bold flex items-center hover:bg-blue-700">
@@ -1072,8 +1116,16 @@ const App = () => {
                                     <td className="p-3">{act.location}</td>
                                     <td className="p-3 text-slate-500">{act.dateText}</td>
                                     <td className="p-3 text-right">
-                                        <div className="flex justify-end gap-2">
-                                            <button title="加入學生至此活動" onClick={() => handleQuickAddStudent(act)} className="text-green-500 hover:text-green-700 p-1 mr-1"><PlusCircle size={18} /></button>
+                                        <div className="flex justify-end gap-2 items-center">
+                                            {/* ⭐ [更新] 「新增學生名單」按鈕，觸發 Pop-up 彈窗 */}
+                                            <button 
+                                                title="新增學生名單" 
+                                                onClick={() => handleOpenAddStudentModal(act)} 
+                                                className="text-green-600 hover:text-green-800 p-1 flex items-center gap-1 text-xs font-bold bg-green-50 hover:bg-green-100 px-2 py-1 rounded transition border border-green-200 mr-1"
+                                            >
+                                                <PlusCircle size={14} />
+                                                <span>新增學生名單</span>
+                                            </button>
                                             <button title="編輯" onClick={() => startEditActivity(act)} className="text-blue-500 hover:text-blue-700 p-1"><Edit2 size={18} /></button>
                                             <button title="刪除" onClick={() => handleDeleteActivity(act.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={18} /></button>
                                         </div>
@@ -1087,7 +1139,62 @@ const App = () => {
             </table>
         </div>
 
-        {/* 按活動班整體改期 - 選單與日期管理彈窗 Modal */}
+        {/* ⭐ 「新增學生名單」 - Pop-up Window 彈窗 */}
+        {isAddStudentModalOpen && targetActivityForAdd && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div className="bg-white rounded-2xl p-6 max-w-lg w-full shadow-2xl border border-slate-200 animate-in zoom-in-95">
+                    <div className="flex justify-between items-center mb-4 border-b pb-3">
+                        <h3 className="text-lg font-bold text-slate-800 flex items-center">
+                            <PlusCircle size={20} className="mr-2 text-green-600" />
+                            新增學生名單 - {targetActivityForAdd.activity}
+                        </h3>
+                        <button onClick={() => setIsAddStudentModalOpen(false)} className="text-slate-400 hover:text-slate-600 rounded-lg p-1 hover:bg-slate-100">
+                            <X size={20} />
+                        </button>
+                    </div>
+
+                    <div className="space-y-4">
+                        <div className="bg-slate-50 p-3 rounded-lg text-xs space-y-1 text-slate-600 border">
+                            <div><span className="font-bold">時間：</span>{targetActivityForAdd.time || '未定'}</div>
+                            <div><span className="font-bold">地點：</span>{targetActivityForAdd.location || '未定'}</div>
+                            <div><span className="font-bold">備註/日期：</span>{targetActivityForAdd.dateText || '未定'}</div>
+                        </div>
+
+                        <div>
+                            <label className="text-xs text-slate-500 font-bold uppercase flex justify-between mb-1">
+                                <span>貼上學生名單</span>
+                                <span className="text-blue-500 flex items-center" title="格式: 3B 20 温小文 自行回家 91400040">
+                                    <FileText size={12} className="mr-1"/> 格式範例
+                                </span>
+                            </label>
+                            <textarea 
+                                className="w-full h-36 p-2 border rounded-lg bg-slate-50 text-sm font-mono focus:ring-2 focus:ring-green-500 outline-none" 
+                                placeholder={`3B 20 温小文 自行回家 91400040\n4A 05 蔡舒朗 自行回家 91234567`} 
+                                value={addStudentBulkInput} 
+                                onChange={e => setAddStudentBulkInput(e.target.value)}
+                            ></textarea>
+                        </div>
+                    </div>
+
+                    <div className="mt-6 flex justify-end gap-3 pt-3 border-t">
+                        <button 
+                            onClick={() => setIsAddStudentModalOpen(false)}
+                            className="px-4 py-2 border rounded-lg text-slate-600 hover:bg-slate-100 text-sm font-bold transition"
+                        >
+                            取消
+                        </button>
+                        <button 
+                            onClick={handleConfirmAddStudentModal}
+                            className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-bold shadow-md transition"
+                        >
+                            識別並載入
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* 按活動班整體改期 Modal */}
         {isGroupModalOpen && (
             <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                 <div className="bg-white rounded-2xl p-6 max-w-lg w-full shadow-2xl border border-slate-200 animate-in zoom-in-95">
@@ -1102,7 +1209,6 @@ const App = () => {
                     </div>
 
                     <div className="space-y-4">
-                        {/* 1. 選單模式選取活動班 */}
                         <div>
                             <label className="block text-xs font-bold text-slate-500 uppercase mb-1">選擇活動班</label>
                             <select 
@@ -1116,7 +1222,6 @@ const App = () => {
                             </select>
                         </div>
 
-                        {/* 2. 上課時間與地點修改 */}
                         <div className="grid grid-cols-2 gap-3">
                             <div>
                                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">上課時間</label>
@@ -1140,7 +1245,6 @@ const App = () => {
                             </div>
                         </div>
 
-                        {/* 3. 個別日期管理區塊 (新增與刪除) */}
                         <div className="border border-slate-200 rounded-lg p-3 bg-slate-50">
                             <label className="block text-xs font-bold text-slate-500 uppercase mb-2">
                                 日期管理 (可個別新增或刪除)
@@ -1163,7 +1267,6 @@ const App = () => {
                                 </button>
                             </div>
 
-                            {/* 日期標籤展示區 (可點擊 X 刪除) */}
                             <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto p-1 bg-white border border-slate-200 rounded-lg min-h-[60px]">
                                 {groupDates.length > 0 ? groupDates.map(d => (
                                     <span key={d} className="bg-orange-100 text-orange-900 border border-orange-200 text-xs px-2.5 py-1 rounded-full flex items-center font-bold shadow-sm">
@@ -1278,16 +1381,17 @@ const App = () => {
                             </div>
                         </div>
 
+                        {/* ⭐ [更新] 新增活動資料 - 名單樣式改為 "3B 20 温小文 自行回家 91400040" */}
                         <div className="mb-4">
                             <label className="text-xs text-slate-500 font-bold uppercase flex justify-between">
                                 <span>貼上名單 (PDF Copy/Paste)</span>
-                                <span className="text-blue-500 cursor-pointer flex items-center" title="格式: 5A 張小明 91234567 家長">
+                                <span className="text-blue-500 cursor-pointer flex items-center" title="格式: 3B 20 温小文 自行回家 91400040">
                                     <FileText size={12} className="mr-1"/> 說明
                                 </span>
                             </label>
                             <textarea 
                                 className="w-full h-32 p-2 border rounded bg-slate-50 text-sm font-mono" 
-                                placeholder={`5A 張小明 91234567 家長`} 
+                                placeholder={`3B 20 温小文 自行回家 91400040\n4A 05 蔡舒朗 自行回家 91234567`} 
                                 value={bulkInput} 
                                 onChange={e => setBulkInput(e.target.value)}
                             ></textarea>
