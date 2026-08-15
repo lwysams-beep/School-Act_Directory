@@ -1202,6 +1202,58 @@ const App = () => {
     );
   };
 
+  // ==========================================================
+  // 修復：加回丟失的學生查詢結果頁面 (renderKioskResultView)
+  const renderKioskResultView = () => (
+    <div className="flex-1 flex flex-col bg-gradient-to-b from-orange-50 to-white p-6">
+        <div className="w-full max-w-4xl mx-auto bg-white p-8 rounded-3xl shadow-xl border border-orange-100">
+            <div className="flex justify-between items-center mb-6 border-b pb-4">
+                <h2 className="text-2xl font-bold text-slate-800">
+                    查詢結果：{selectedClass}班 {selectedClassNo}號
+                </h2>
+                <button onClick={() => setCurrentView('student')} className="flex items-center text-orange-600 hover:text-orange-800 font-bold transition">
+                    <ArrowLeft className="mr-2" size={20} /> 返回重新查詢
+                </button>
+            </div>
+
+            {studentResult && studentResult.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {studentResult.map((act, i) => (
+                        <div key={i} className="bg-slate-50 border border-slate-200 p-5 rounded-2xl shadow-sm hover:shadow-md transition">
+                            <h3 className="font-bold text-xl text-blue-700 mb-3">{act.activity}</h3>
+                            <div className="space-y-2 text-sm text-slate-600">
+                                <div className="flex items-center"><Calendar size={16} className="mr-2 text-slate-400"/> {act.dateText}</div>
+                                <div className="flex items-center"><Clock size={16} className="mr-2 text-slate-400"/> {act.time}</div>
+                                <div className="flex items-center"><MapPin size={16} className="mr-2 text-slate-400"/> {act.location}</div>
+                                <div className="mt-3 pt-3 border-t flex items-center">
+                                    <span className="font-bold mr-2 text-slate-500">放學方式:</span>
+                                    {act.dismissalMethod === '自' ? (
+                                        <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full font-bold text-xs">🚶‍♂️ 自行回家</span>
+                                    ) : act.dismissalMethod === '家' ? (
+                                        <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full font-bold text-xs">👨‍👩‍👧 家長接送</span>
+                                    ) : (
+                                        <span className="bg-slate-100 text-slate-500 px-3 py-1 rounded-full font-bold text-xs">未設定</span>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            ) : (
+                <div className="text-center py-16">
+                    <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Search size={40} className="text-slate-400" />
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-700 mb-2">今天沒有找到活動紀錄</h3>
+                    <p className="text-slate-500">請確認班別與學號是否正確，或向負責老師查詢。</p>
+                </div>
+            )}
+        </div>
+    </div>
+);
+// ==========================================================
+
+
   const renderLoginView = () => (
       <div className="flex-1 flex flex-col items-center justify-center bg-slate-100 p-6">
           <div className="bg-white p-8 rounded-2xl shadow-lg w-full max-w-md border border-slate-200">
@@ -1606,6 +1658,7 @@ const App = () => {
     <div className="min-h-screen flex flex-col bg-slate-100 font-sans">
       {renderTopNavBar()}
       {currentView === 'student' && renderStudentView()}
+      {currentView === 'kiosk_result' && renderKioskResultView()}
       {currentView === 'staff' && renderStaffView()}
       {currentView === 'admin' && (user ? renderAdminView() : renderLoginView())}
     </div>
