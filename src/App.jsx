@@ -1055,30 +1055,31 @@ const App = () => {
                                             {act.verifiedName || act.rawName || '未命名'}
                                         </td>
 
-                                        {/* 版本 1.0: 實時點名狀態切換 */}
-                                        <td className="p-3.5 text-center">
+                                          {/* 版本 1.1: 實時點名狀態 (被動式實時讀取 Firebase，並使用英文鍵值) */}
+                                         <td className="p-3.5 text-center">
                                             <select
-                                                value={act.attendanceStatus || '未點名'}
+                                                value={act.attendanceStatus || 'unmarked'}
                                                 onChange={(e) => handleAttendanceChange(act.id, e.target.value)}
-                                                className={`border rounded-lg px-2 py-1 text-xs font-bold focus:outline-none cursor-pointer ${
-                                                    act.attendanceStatus === '出席' ? 'bg-green-100 text-green-800 border-green-300' :
-                                                    act.attendanceStatus === '遲到' ? 'bg-blue-100 text-blue-800 border-blue-300' :
-                                                    act.attendanceStatus === '無故缺席' ? 'bg-red-100 text-red-800 border-red-300' :
-                                                    act.attendanceStatus === '病假' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
-                                                    act.attendanceStatus === '事假' ? 'bg-purple-100 text-purple-800 border-purple-300' :
-                                                    act.attendanceStatus === '未知' ? 'bg-slate-200 text-slate-800 border-slate-300' :
+                                                className={`border rounded-lg px-2 py-1 text-xs font-bold focus:outline-none cursor-pointer transition-colors ${
+                                                    act.attendanceStatus === 'present' ? 'bg-green-100 text-green-800 border-green-300' :
+                                                    act.attendanceStatus === 'late' ? 'bg-blue-100 text-blue-800 border-blue-300' :
+                                                    act.attendanceStatus === 'absent' ? 'bg-red-100 text-red-800 border-red-300' :
+                                                    act.attendanceStatus === 'sick' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
+                                                    act.attendanceStatus === 'leave' ? 'bg-purple-100 text-purple-800 border-purple-300' :
+                                                    act.attendanceStatus === 'unknown' ? 'bg-slate-200 text-slate-800 border-slate-300' :
                                                     'bg-white text-slate-600 border-slate-300'
                                                 }`}
                                             >
-                                                <option value="未點名">⚫ 未點名</option>
-                                                <option value="出席">🟢 出席</option>
-                                                <option value="遲到">🔵 遲到</option>
-                                                <option value="無故缺席">🔴 無缺</option>
-                                                <option value="病假">🟡 病假</option>
-                                                <option value="事假">🟣 事假</option>
-                                                <option value="未知">⚪ 未知</option>
+                                                <option value="unmarked">⚫ 未點名</option>
+                                                <option value="present">🟢 出席</option>
+                                                <option value="late">🔵 遲到</option>
+                                                <option value="absent">🔴 無故缺席</option>
+                                                <option value="sick">🟡 病假</option>
+                                                <option value="leave">🟣 事假</option>
+                                                <option value="unknown">⚪ 未知</option>
                                             </select>
                                         </td>
+
 
                                         <td className="p-3.5 text-center">
                                             {act.dismissalMethod === '自' && (
