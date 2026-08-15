@@ -309,6 +309,22 @@ const App = () => {
   const [staffSearchTerm, setStaffSearchTerm] = useState('');
   const [staffClassFilter, setStaffClassFilter] = useState('');
   const [staffDismissalFilter, setStaffDismissalFilter] = useState('');
+  const [staffDismissalFilter, setStaffDismissalFilter] = useState('');
+  // ==========================================
+  // 版本 1.0: 新增活動班篩選 State 及 Firebase 點名更新函式
+  const [staffActivityFilter, setStaffActivityFilter] = useState('');
+  
+  const handleAttendanceChange = async (id, newStatus) => {
+      try {
+          // 即時更新 Firebase 中的 attendanceStatus 欄位
+          await updateDoc(doc(db, "activities", id), { attendanceStatus: newStatus });
+      } catch (error) {
+          alert("更新點名狀態失敗: " + error.message);
+      }
+  };
+  // ==========================================
+  const STAFF_PASSWORD = "bcklas_staff";
+
   const STAFF_PASSWORD = "bcklas_staff";
 
   // Search UI
@@ -893,11 +909,16 @@ const App = () => {
         const matchesClass = !staffClassFilter || item.verifiedClass === staffClassFilter || item.rawClass === staffClassFilter;
         
         const matchesDismissal = !staffDismissalFilter || 
-            (staffDismissalFilter === '自' && item.dismissalMethod === '自') ||
-            (staffDismissalFilter === '家' && item.dismissalMethod === '家');
+        (staffDismissalFilter === '自' && item.dismissalMethod === '自') ||
+        (staffDismissalFilter === '家' && item.dismissalMethod === '家');
 
-        return matchesSearch && matchesClass && matchesDismissal;
-    });
+    // 版本 1.0: 增加活動班篩選條件
+    const matchesActivity = !staffActivityFilter || item.activity === staffActivityFilter;
+
+    // 版本 1.0: 將 matchesActivity 加入最終 return
+    return matchesSearch && matchesClass && matchesDismissal && matchesActivity;
+});
+
 
     const totalCount = filteredList.length;
     const selfCount = filteredList.filter(i => i.dismissalMethod === '自').length;
@@ -963,21 +984,35 @@ const App = () => {
                         <option value="">全部放學方式</option>
                         <option value="自">🚶‍♂️ 自行回家 (自)</option>
                         <option value="家">👨‍👩‍👧 家長接送 (家)</option>
-                    </select>
-                </div>
+                        </select>
 
-                {(staffSearchTerm || staffClassFilter || staffDismissalFilter) && (
-                    <button
-                        onClick={() => {
-                            setStaffSearchTerm('');
-                            setStaffClassFilter('');
-                            setStaffDismissalFilter('');
-                        }}
-                        className="text-xs text-slate-500 hover:text-slate-700 underline"
-                    >
-                        清除所有篩選
-                    </button>
-                )}
+{/* 版本 1.0: 新增活動班下拉式選單 */}
+<select
+    value={staffActivityFilter}
+    onChange={(e) => setStaffActivityFilter(e.target.value)}
+    className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700"
+>
+    <option value="">全部活動班</option>
+    {uniqueActivities.map(act => (
+        <option key={act} value={act}>{act}</option>
+    ))}
+</select>
+</div>
+
+{(staffSearchTerm || staffClassFilter || staffDismissalFilter || staffActivityFilter) && (
+<button
+    onClick={() => {
+        setStaffSearchTerm('');
+        setStaffClassFilter('');
+        setStaffDismissalFilter('');
+        setStaffActivityFilter(''); // 版本 1.0: 清除活動班篩選
+    }}
+    className="text-xs text-slate-500 hover:text-slate-700 underline"
+>
+    清除所有篩選
+</button>
+)}
+
             </div>
 
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
