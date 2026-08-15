@@ -1,6 +1,6 @@
 // =============================================================================
-//  校園資訊 APP - VERSION 4.6 (數據庫管理：新增學生至活動班功能優化版)
-//  新增: 「新增學生名單」按鈕，支援搜尋學生 (班別 學號 姓名) 並將其加入現有活動班
+//  校園資訊 APP - VERSION 4.5 (按活動班整體改期選單優化版)
+//  優化: 「按活動班整體改期」改為選單模式 Modal，並支援個別日期的新增與刪除
 // =============================================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
@@ -9,8 +9,7 @@ import {
   Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, 
   Phone, CheckSquare, Square, RefreshCcw, X, Plus, Edit2, FileSpreadsheet, 
   BarChart, History, TrendingUp, Filter, Cloud, UserX, PieChart, Download, 
-  Activity, Save as SaveIcon, Layers, Maximize, Palette, ChevronDown, Circle,
-  UserPlus
+  Activity, Save as SaveIcon, Layers, Maximize, Palette, ChevronDown, Circle 
 } from 'lucide-react';
 
 // =============================================================================
@@ -274,7 +273,7 @@ const App = () => {
   const [batchEditForm, setBatchEditForm] = useState({ activity: '', time: '', location: '', dateText: '' });
 
   // ---------------------------------------------------------------------------
-  // ⭐ 按活動班整體改期 Modal 狀態
+  // ⭐ [新增/修改] 按活動班整體改期 Modal 狀態
   // ---------------------------------------------------------------------------
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
   const [groupActivityName, setGroupActivityName] = useState('');
@@ -282,14 +281,6 @@ const App = () => {
   const [groupLocation, setGroupLocation] = useState('');
   const [groupDates, setGroupDates] = useState([]);
   const [groupTempDateInput, setGroupTempDateInput] = useState('');
-
-  // ---------------------------------------------------------------------------
-  // ⭐ [新增] 「新增學生名單」Modal 狀態與邏輯
-  // ---------------------------------------------------------------------------
-  const [isAddStudentModalOpen, setIsAddStudentModalOpen] = useState(false);
-  const [addStudentSearchInput, setAddStudentSearchInput] = useState('');
-  const [selectedStudentForAdd, setSelectedStudentForAdd] = useState(null);
-  const [selectedTargetActivity, setSelectedTargetActivity] = useState('');
 
   // DB Editing State
   const [editingId, setEditingId] = useState(null);
@@ -347,7 +338,7 @@ const App = () => {
             }
         } catch (error) {
             console.error("Error fetching master list:", error);
-        } finally {
+        } fontally {
             setIsMasterLoading(false);
         }
     };
@@ -525,7 +516,7 @@ const App = () => {
           setBulkInput('');
           alert(`成功識別 ${newItems.length} 筆資料。`);
       } else {
-          alert("無法識別。請確認貼上的名單格式是否正確（例如：4A 蔡舒朗）。");
+          alert("無法識別。請確認貼上的名單格式是否正確（例如：5A 張小明 91234567 家長）。");
       }
   };
 
@@ -648,89 +639,12 @@ const App = () => {
   };
 
   // ---------------------------------------------------------------------------
-  // ⭐ [新增] 「新增學生名單」Modal 邏輯
-  // ---------------------------------------------------------------------------
-  const handleOpenAddStudentModal = () => {
-      setIsAddStudentModalOpen(true);
-      setAddStudentSearchInput('');
-      setSelectedStudentForAdd(null);
-      if (uniqueActivities.length > 0) {
-          setSelectedTargetActivity(uniqueActivities[0]);
-      } else {
-          setSelectedTargetActivity('');
-      }
-  };
-
-  // 自動彈出建議選項（格式: 班別 學號 姓名）
-  const filteredStudentSuggestions = useMemo(() => {
-      if (!addStudentSearchInput.trim()) return [];
-      const term = addStudentSearchInput.trim().toLowerCase();
-      return masterList.filter(s => 
-          s.chiName.toLowerCase().includes(term) ||
-          s.classCode.toLowerCase().includes(term) ||
-          s.classNo.includes(term) ||
-          `${s.classCode}${s.classNo}`.toLowerCase().includes(term)
-      ).slice(0, 10); // 限制最多顯示 10 筆
-  }, [masterList, addStudentSearchInput]);
-
-  const handleSelectStudentFromSuggestion = (student) => {
-      setSelectedStudentForAdd(student);
-      setAddStudentSearchInput(`${student.classCode} ${student.classNo}號 ${student.chiName}`);
-  };
-
-  const handleSaveAddStudentToActivity = async () => {
-      if (!selectedStudentForAdd) {
-          return alert("請先輸入並選擇一位學生！");
-      }
-      if (!selectedTargetActivity) {
-          return alert("請選擇一個現有的活動班！");
-      }
-
-      // 檢查學生是否已經存在於該活動班中
-      const existing = activities.find(a => 
-          a.activity === selectedTargetActivity &&
-          a.verifiedClass === selectedStudentForAdd.classCode &&
-          a.verifiedClassNo === selectedStudentForAdd.classNo
-      );
-
-      if (existing) {
-          if (!window.confirm(`「${selectedStudentForAdd.chiName}」已經在「${selectedTargetActivity}」中，確定要重複新增嗎？`)) {
-              return;
-          }
-      }
-
-      // 抓取現有活動班的預設資訊 (時間, 地點, 日期等)
-      const sampleAct = activities.find(a => a.activity === selectedTargetActivity) || {};
-
-      try {
-          await addDoc(collection(db, "activities"), {
-              verifiedClass: selectedStudentForAdd.classCode,
-              verifiedClassNo: selectedStudentForAdd.classNo,
-              verifiedName: selectedStudentForAdd.chiName,
-              activity: selectedTargetActivity,
-              time: sampleAct.time || '',
-              location: sampleAct.location || '',
-              dateText: sampleAct.dateText || '',
-              specificDates: sampleAct.specificDates || [],
-              dayIds: sampleAct.dayIds || [],
-              createdAt: new Date().toISOString()
-          });
-
-          alert(`成功將學生「(${selectedStudentForAdd.classCode} ${selectedStudentForAdd.classNo}號 ${selectedStudentForAdd.chiName})」加入「${selectedTargetActivity}」！`);
-          setIsAddStudentModalOpen(false);
-          setAddStudentSearchInput('');
-          setSelectedStudentForAdd(null);
-      } catch (error) {
-          alert("新增學生失敗：" + error.message);
-      }
-  };
-
-  // ---------------------------------------------------------------------------
-  // ⭐ 「按活動班整體改期」模組選單與邏輯
+  // ⭐ [全新/優化] 「按活動班整體改期」模組選單與邏輯
   // ---------------------------------------------------------------------------
   const handleOpenGroupRescheduleModal = () => {
       if (uniqueActivities.length === 0) return alert("資料庫中目前沒有任何活動班資料！");
       
+      // 預設選擇第一個活動班並帶入其現有資料
       const initialAct = uniqueActivities[0];
       handleSelectGroupActivity(initialAct);
       setIsGroupModalOpen(true);
@@ -792,6 +706,7 @@ const App = () => {
       try {
           const batch = writeBatch(db);
           
+          // 自動生成最新的備註文字 dateText
           let newDateText = targetDocs[0].dateText || '';
           if (groupDates.length > 0) {
               newDateText = `共${groupDates.length}堂 (${groupDates[0]}起)`;
@@ -1068,9 +983,9 @@ const App = () => {
         </div>
 
         <div className="mb-4 space-y-4">
-            <div className="flex gap-4 items-center flex-wrap sm:flex-nowrap">
+            <div className="flex gap-4 items-center">
                 {/* 搜尋框 */}
-                <div className="flex-1 bg-slate-50 border rounded-lg flex items-center px-3 py-2 min-w-[200px]">
+                <div className="flex-1 bg-slate-50 border rounded-lg flex items-center px-3 py-2">
                     <Search size={18} className="text-slate-400 mr-2" />
                     <input 
                         type="text" 
@@ -1081,18 +996,10 @@ const App = () => {
                     />
                 </div>
 
-                {/* ⭐ [新增] 新增學生名單按鈕 */}
-                <button 
-                    onClick={handleOpenAddStudentModal} 
-                    className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center hover:bg-green-700 shadow-sm transition whitespace-nowrap"
-                >
-                    <UserPlus size={16} className="mr-2" /> 新增學生名單
-                </button>
-
-                {/* ⭐ 按活動班整體改期按鈕（並排） */}
+                {/* ⭐ 按活動班整體改期按鈕（觸發選單 Modal） */}
                 <button 
                     onClick={handleOpenGroupRescheduleModal} 
-                    className="bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center hover:bg-orange-600 shadow-sm transition whitespace-nowrap"
+                    className="bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center hover:bg-orange-600 shadow-sm transition"
                 >
                     <RefreshCcw size={16} className="mr-2" /> 按活動班整體改期
                 </button>
@@ -1180,127 +1087,7 @@ const App = () => {
             </table>
         </div>
 
-        {/* ⭐ [新增] 新增學生名單 Modal */}
-        {isAddStudentModalOpen && (
-            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                <div className="bg-white rounded-2xl p-6 max-w-lg w-full shadow-2xl border border-slate-200 animate-in zoom-in-95">
-                    <div className="flex justify-between items-center mb-4 border-b pb-3">
-                        <h3 className="text-lg font-bold text-slate-800 flex items-center">
-                            <UserPlus size={20} className="mr-2 text-green-600" />
-                            新增學生至活動班
-                        </h3>
-                        <button onClick={() => setIsAddStudentModalOpen(false)} className="text-slate-400 hover:text-slate-600 rounded-lg p-1 hover:bg-slate-100">
-                            <X size={20} />
-                        </button>
-                    </div>
-
-                    <div className="space-y-4">
-                        {/* 1. 選擇學生 (自動彈出選項) */}
-                        <div className="relative">
-                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
-                                搜尋學生 (輸入姓名或班別)
-                            </label>
-                            <input 
-                                type="text" 
-                                className="w-full p-2.5 border rounded-lg bg-slate-50 text-sm font-bold text-slate-800 focus:ring-2 focus:ring-green-500 outline-none"
-                                placeholder="例如: 張小明 / 1A..."
-                                value={addStudentSearchInput}
-                                onChange={(e) => {
-                                    setAddStudentSearchInput(e.target.value);
-                                    setSelectedStudentForAdd(null);
-                                }}
-                            />
-
-                            {/* 自動彈出選項列表 (顯示: 班別 學號 姓名) */}
-                            {addStudentSearchInput.trim() && !selectedStudentForAdd && (
-                                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl z-20 max-h-48 overflow-y-auto divide-y">
-                                    {filteredStudentSuggestions.length > 0 ? (
-                                        filteredStudentSuggestions.map((s) => (
-                                            <button
-                                                key={s.key}
-                                                type="button"
-                                                onClick={() => handleSelectStudentFromSuggestion(s)}
-                                                className="w-full p-2.5 text-left text-sm hover:bg-green-50 flex items-center justify-between transition cursor-pointer"
-                                            >
-                                                <span className="font-bold text-slate-700">
-                                                    ({s.classCode} {s.classNo}號 {s.chiName})
-                                                </span>
-                                                <span className="text-xs text-slate-400 font-mono">
-                                                    {s.engName || ''}
-                                                </span>
-                                            </button>
-                                        ))
-                                    ) : (
-                                        <div className="p-3 text-xs text-slate-400 text-center">
-                                            查無相符學生資料
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {selectedStudentForAdd && (
-                                <div className="mt-2 text-xs text-green-700 bg-green-50 p-2 rounded border border-green-200 flex items-center justify-between">
-                                    <span>已選擇學生：<strong>({selectedStudentForAdd.classCode} {selectedStudentForAdd.classNo}號 {selectedStudentForAdd.chiName})</strong></span>
-                                    <button 
-                                        onClick={() => {
-                                            setSelectedStudentForAdd(null);
-                                            setAddStudentSearchInput('');
-                                        }}
-                                        className="text-red-500 hover:underline font-bold"
-                                    >
-                                        重新選擇
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* 2. 選擇一個現有的活動班 */}
-                        <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
-                                選擇加入的現有活動班
-                            </label>
-                            {uniqueActivities.length > 0 ? (
-                                <select 
-                                    className="w-full p-2.5 border rounded-lg bg-slate-50 font-bold text-slate-800 focus:ring-2 focus:ring-green-500 outline-none cursor-pointer"
-                                    value={selectedTargetActivity}
-                                    onChange={(e) => setSelectedTargetActivity(e.target.value)}
-                                >
-                                    {uniqueActivities.map(act => (
-                                        <option key={act} value={act}>{act}</option>
-                                    ))}
-                                </select>
-                            ) : (
-                                <div className="p-3 text-xs text-red-500 bg-red-50 rounded border border-red-200">
-                                    目前資料庫中沒有任何現有的活動班，請先在「新增活動資料」中建立活動班。
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    <div className="mt-6 flex justify-end gap-3 pt-3 border-t">
-                        <button 
-                            onClick={() => setIsAddStudentModalOpen(false)}
-                            className="px-4 py-2 border rounded-lg text-slate-600 hover:bg-slate-100 text-sm font-bold transition"
-                        >
-                            取消
-                        </button>
-                        <button 
-                            onClick={handleSaveAddStudentToActivity}
-                            disabled={!selectedStudentForAdd || !selectedTargetActivity}
-                            className={`px-5 py-2 text-white rounded-lg text-sm font-bold shadow-md transition ${
-                                selectedStudentForAdd && selectedTargetActivity
-                                    ? 'bg-green-600 hover:bg-green-700'
-                                    : 'bg-slate-300 cursor-not-allowed'
-                            }`}
-                        >
-                            確認加入學生
-                        </button>
-                    </div>
-                </div>
-            </div>
-        )}
-
-        {/* ⭐ 按活動班整體改期 - 選單與日期管理彈窗 Modal */}
+        {/* 按活動班整體改期 - 選單與日期管理彈窗 Modal */}
         {isGroupModalOpen && (
             <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                 <div className="bg-white rounded-2xl p-6 max-w-lg w-full shadow-2xl border border-slate-200 animate-in zoom-in-95">
@@ -1491,7 +1278,20 @@ const App = () => {
                             </div>
                         </div>
 
-                        <div className="mb-4"><label className="text-xs text-slate-500 font-bold uppercase flex justify-between"><span>貼上名單 (PDF Copy/Paste)</span><span className="text-blue-500 cursor-pointer flex items-center" title="格式: 4A 蔡舒朗 (可含電話)"><FileText size={12} className="mr-1"/> 說明</span></label><textarea className="w-full h-32 p-2 border rounded bg-slate-50 text-sm font-mono" placeholder={`4A 蔡舒朗 91234567\n2A1 陳嘉瑩`} value={bulkInput} onChange={e => setBulkInput(e.target.value)}></textarea></div>
+                        <div className="mb-4">
+                            <label className="text-xs text-slate-500 font-bold uppercase flex justify-between">
+                                <span>貼上名單 (PDF Copy/Paste)</span>
+                                <span className="text-blue-500 cursor-pointer flex items-center" title="格式: 5A 張小明 91234567 家長">
+                                    <FileText size={12} className="mr-1"/> 說明
+                                </span>
+                            </label>
+                            <textarea 
+                                className="w-full h-32 p-2 border rounded bg-slate-50 text-sm font-mono" 
+                                placeholder={`5A 張小明 91234567 家長`} 
+                                value={bulkInput} 
+                                onChange={e => setBulkInput(e.target.value)}
+                            ></textarea>
+                        </div>
                         <button onClick={handleBulkImport} className="w-full py-2 bg-blue-600 text-white font-bold rounded hover:bg-blue-700 transition">識別並載入</button>
                     </div>
                 </div>
