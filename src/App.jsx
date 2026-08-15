@@ -1,5 +1,5 @@
 // =============================================================================
-//  校園資訊 APP - VERSION 4.5 (按活動班整體改期選單優化版 + 學生名單樣式更新)
+//  校園資訊 APP - VERSION 4.5 (放學方式修復 + 教職員介面優化版)
 // =============================================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
@@ -73,28 +73,30 @@ const parseMasterCSV = (csvText) => {
   }).filter(item => item !== null);
 };
 
-// 通用名單解析函式 (支援 "3B 20 温小文 自行回家 91400040" 樣式)
+// 通用名單解析函式 (支援 "3B 20 温小文 自行回家 91400040" 或 "3B 20 温小文 自 91400040")
 const processBulkText = (text, actName, actTime, actLoc, actDateText, dayIds, dates) => {
     const lines = text.trim().split('\n');
     const newItems = [];
     const mixedClassRegex = /([1-6][A-E])\s*(\d{1,2})?/; 
-    const nameRegex = /[\u4e00-\u9fa5]{2,}/; 
     const phoneRegex = /[569]\d{7}/; 
 
     lines.forEach((line) => {
         const cleanLine = line.trim().replace(/['"]/g, ''); 
         if(!cleanLine) return;
-        const classMatch = cleanLine.match(mixedClassRegex);
-        const nameMatch = cleanLine.match(nameRegex);
-        const phoneMatch = cleanLine.match(phoneRegex);
 
-        // ⭐ 新增：識別放學方式 (「自行回家」寫入 "自"，「家長接送」寫入 "家")
+        // ⭐ 修復 1：更靈活的放學方式識別 (支援：'自'/'自行'/'自行回家' 以及 '家'/'家長'/'家長接送')
         let dismissalMethod = '';
-        if (cleanLine.includes('自行回家') || cleanLine.includes('自行')) {
+        if (cleanLine.includes('自行回家') || cleanLine.includes('自行') || /\b自\b|\s自\s|\s自$|^自\s/.test(cleanLine)) {
             dismissalMethod = '自';
-        } else if (cleanLine.includes('家長接送') || cleanLine.includes('家長')) {
+        } else if (cleanLine.includes('家長接送') || cleanLine.includes('家長') || /\b家\b|\s家\s|\s家$|^家\s/.test(cleanLine)) {
             dismissalMethod = '家';
         }
+
+        // ⭐ 修復 2：先剔除放學關鍵字，避免姓名匹配器把 "自行回家" 誤認為學生名字
+        const lineWithoutDismissal = cleanLine.replace(/自行回家|家長接送|自行|家長/g, '');
+        const classMatch = cleanLine.match(mixedClassRegex);
+        const nameMatch = lineWithoutDismissal.match(/[\u4e00-\u9fa5]{2,}/) || cleanLine.match(/[\u4e00-\u9fa5]{2,}/);
+        const phoneMatch = cleanLine.match(phoneRegex);
 
         if (classMatch && nameMatch) {
             newItems.push({
@@ -103,7 +105,7 @@ const processBulkText = (text, actName, actTime, actLoc, actDateText, dayIds, da
                 rawClass: classMatch[1],
                 rawClassNo: classMatch[2] ? classMatch[2].padStart(2, '0') : '00', 
                 rawPhone: phoneMatch ? phoneMatch[0] : '', 
-                dismissalMethod: dismissalMethod, // ⭐ 寫入 Firebase 資料庫的放學方式欄位 ('自' 或 '家')
+                dismissalMethod: dismissalMethod, // 寫入 Firebase 資料庫欄位 ('自' 或 '家')
                 activity: actName,
                 time: actTime,
                 location: actLoc,
@@ -190,38 +192,6 @@ const CATEGORY_COLORS = {
     '成長/支援 (SEN Service)': '#6A1D8F',
     '其他 (Others)': '#94a3b8'
 };
-
-const StatusIndicator = ({ status }) => {
-  const statusConfig = {
-    present: { color: 'bg-green-500', text: '出席' },
-    late:    { color: 'bg-blue-500', text: '遲到' },
-    sick:    { color: 'bg-orange-500', text: '病假' },
-    leave:   { color: 'bg-yellow-500', text: '事假' },
-    unknown: { color: 'bg-gray-700', text: '未知' },
-    default: { color: 'bg-slate-300', text: '未點名' },
-  };
-
-  const { color, text } = statusConfig[status] || statusConfig.default;
-
-  return (
-    <div className="flex items-center gap-2">
-      <div className={`w-3 h-3 rounded-full ${color}`}></div>
-      <span className="text-xs font-semibold">{text}</span>
-    </div>
-  );
-};
-
-const StatusLegend = () => (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-4 text-xs text-slate-600 bg-slate-100 p-2 rounded-lg">
-        <span className="font-bold">今日狀態圖例:</span>
-        <div className="flex items-center gap-1.5"><Circle size={10} className="text-green-500" fill="currentColor"/>出席</div>
-        <div className="flex items-center gap-1.5"><Circle size={10} className="text-blue-500" fill="currentColor"/>遲到</div>
-        <div className="flex items-center gap-1.5"><Circle size={10} className="text-orange-500" fill="currentColor"/>病假</div>
-        <div className="flex items-center gap-1.5"><Circle size={10} className="text-yellow-500" fill="currentColor"/>事假</div>
-        <div className="flex items-center gap-1.5"><Circle size={10} className="text-gray-700" fill="currentColor"/>未知</div>
-        <div className="flex items-center gap-1.5"><Circle size={10} className="text-slate-300" fill="currentColor"/>未點名</div>
-    </div>
-);
 
 // -----------------------------------------------------------------------------
 // 3. STATS VIEW COMPONENT
@@ -315,7 +285,7 @@ const App = () => {
   const [dbBatchMode, setDbBatchMode] = useState(false);
   const [batchEditForm, setBatchEditForm] = useState({ activity: '', time: '', location: '', dateText: '' });
 
-  // ⭐ 按活動班整體改期 Modal 狀態
+  // 按活動班整體改期 Modal 狀態
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
   const [groupActivityName, setGroupActivityName] = useState('');
   const [groupTime, setGroupTime] = useState('');
@@ -323,7 +293,7 @@ const App = () => {
   const [groupDates, setGroupDates] = useState([]);
   const [groupTempDateInput, setGroupTempDateInput] = useState('');
 
-  // ⭐ 新增學生名單 Modal 狀態
+  // 新增學生名單 Modal 狀態
   const [isAddStudentModalOpen, setIsAddStudentModalOpen] = useState(false);
   const [targetActivityForAdd, setTargetActivityForAdd] = useState(null);
   const [addStudentBulkInput, setAddStudentBulkInput] = useState('');
@@ -332,10 +302,13 @@ const App = () => {
   const [editingId, setEditingId] = useState(null);
   const [editFormData, setEditFormData] = useState({});
 
-  // Staff View State
+  // ⭐ 修復 3：補全 Staff View 篩選 State，供教職員介面完整過濾與顯示
   const [staffShowAll, setStaffShowAll] = useState(false);
   const [staffUnlocked, setStaffUnlocked] = useState(false);
   const [staffPasswordInput, setStaffPasswordInput] = useState('');
+  const [staffSearchTerm, setStaffSearchTerm] = useState('');
+  const [staffClassFilter, setStaffClassFilter] = useState('');
+  const [staffDismissalFilter, setStaffDismissalFilter] = useState('');
   const STAFF_PASSWORD = "bcklas_staff";
 
   // Search UI
@@ -754,7 +727,7 @@ const App = () => {
   };
 
   // ---------------------------------------------------------------------------
-  // ⭐ 「新增學生名單」Pop-up Window 邏輯
+  // 「新增學生名單」Pop-up Window 邏輯
   // ---------------------------------------------------------------------------
   const handleOpenAddStudentModal = (act) => {
       setTargetActivityForAdd(act);
@@ -825,30 +798,6 @@ const App = () => {
     setCurrentView('kiosk_result');
   };
 
-  const filteredActivities = useMemo(() => {
-      let result = activities;
-      if (!staffShowAll) {
-          const d = new Date();
-          const todayString = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-          const currentDayId = d.getDay();
-          result = result.filter(act => {
-              if (act.specificDates && act.specificDates.length > 0) {
-                  return act.specificDates.includes(todayString);
-              }
-              return act.dayIds && act.dayIds.includes(currentDayId);
-          });
-      }
-      if (searchTerm) {
-          const lower = searchTerm.toLowerCase();
-          result = result.filter(item => 
-            item.verifiedName?.includes(lower) || 
-            item.verifiedClass?.includes(lower) || 
-            item.activity?.includes(lower)
-          );
-      }
-      return result;
-  }, [activities, searchTerm, staffShowAll]);
-
   const handleStaffLogin = () => {
       if (staffPasswordInput === STAFF_PASSWORD) {
           setStaffUnlocked(true);
@@ -858,8 +807,6 @@ const App = () => {
           setStaffPasswordInput('');
       }
   };
-  
-  const today = useMemo(() => new Date().toLocaleDateString('en-CA'), []);
 
   // -------------------------------------------------------------------------
   // VIEWS
@@ -925,7 +872,6 @@ const App = () => {
                     </div>
                 </div>
 
-                {/* ⭐ 主頁底部 Version 顯示 (細字) */}
                 <div className="mt-4 text-center text-xs text-slate-400 font-mono tracking-wider">
                     Version 4.5
                 </div>
@@ -934,70 +880,18 @@ const App = () => {
     );
   };
   
-  const renderStaffView = () => (
-      <div className="min-h-screen bg-slate-50 p-6 flex-1">
-        <div className="max-w-7xl mx-auto">
-            <div className="mb-6 flex flex-col sm:flex-row justify-between sm:items-end">
-                <div>
-                    <h2 className="text-2xl font-bold text-blue-900 flex items-center"><Users className="mr-2" /> 教職員查詢通道</h2>
-                    <p className="text-slate-500 text-sm mt-1">
-                        {staffShowAll ? '顯示所有活動紀錄' : '僅顯示今天 (Today) 的活動，如需查看其他日期請切換。'}
-                    </p>
-                </div>
-                <div className="flex bg-white rounded-lg border border-slate-200 p-1 mt-2 sm:mt-0">
-                    <button onClick={() => setStaffShowAll(false)} className={`px-4 py-1 text-sm rounded-md font-bold transition ${!staffShowAll ? 'bg-blue-100 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}>今天</button>
-                    <button onClick={() => setStaffShowAll(true)} className={`px-4 py-1 text-sm rounded-md font-bold transition ${staffShowAll ? 'bg-blue-100 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}>全部</button>
-                </div>
-            </div>
-            
-            {!staffShowAll && <StatusLegend />}
-
-            <div className="bg-white p-6 rounded-xl shadow-md border-t-4 border-blue-500">
-              <div className="flex items-center space-x-2 mb-4 bg-slate-100 p-3 rounded-lg"><Search className="text-slate-400" /><input type="text" placeholder="輸入搜尋 (姓名/班別/活動)..." className="bg-transparent w-full outline-none text-lg" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
-              <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead className="bg-slate-50 sticky top-0 z-10"><tr className="text-slate-600 text-sm uppercase tracking-wider border-b">
-                    <th className="p-3">姓名</th>
-                    <th className="p-3">班別 (學號)</th>
-                    <th className="p-3">活動名稱</th>
-                    <th className="p-3">時間</th>
-                    <th className="p-3">地點</th>
-                    {!staffShowAll && <th className="p-3">今日狀態</th>}
-                    <th className="p-3 text-blue-600">聯絡電話</th>
-                  </tr></thead>
-                  <tbody className="text-slate-700">
-                      {filteredActivities.length > 0 ? filteredActivities.map((act) => (
-                          <tr key={act.id} className="border-b hover:bg-blue-50 transition-colors">
-                              <td className="p-3 font-medium">{act.verifiedName}</td>
-                              <td className="p-3"><span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-bold">{act.verifiedClass} ({act.verifiedClassNo})</span></td>
-                              <td className="p-3 font-bold text-slate-800">{act.activity}</td>
-                              <td className="p-3 text-sm">{act.time}</td>
-                              <td className="p-3 text-sm flex items-center"><MapPin size={14} className="mr-1 text-red-400"/> {act.location}</td>
-                              {!staffShowAll && <td className="p-3"><StatusIndicator status={act.attendance?.[today]} /></td>}
-                              <td className="p-3 text-sm font-mono text-blue-600">{act.rawPhone || '-'}</td>
-                          </tr>
-                      )) : (
-                          <tr><td colSpan={staffShowAll ? 6 : 7} className="p-12 text-center text-slate-400">{staffShowAll ? '沒有找到相關資料' : '今天沒有已安排的活動 (或尚未輸入)'}</td></tr>
-                      )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-        </div>
-      </div>
-  );
-  
+  // ⭐ 修復 4：整合並修復教職員檢視頁面，讀取 Firebase 的 activities 陣列與放學方式
   const renderStaffView = () => {
-    // 1. 篩選後得出的資料清單 (會自動讀取每筆資料的 dismissalMethod)
-    const filteredList = (publishedData || []).filter(item => {
+    const filteredList = activities.filter(item => {
         const matchesSearch = !staffSearchTerm || 
-            item.rawName?.includes(staffSearchTerm) || 
+            item.verifiedName?.includes(staffSearchTerm) || 
+            item.rawName?.includes(staffSearchTerm) ||
+            item.verifiedClass?.toLowerCase().includes(staffSearchTerm.toLowerCase()) ||
             item.rawClass?.toLowerCase().includes(staffSearchTerm.toLowerCase()) ||
             item.activity?.includes(staffSearchTerm);
             
-        const matchesClass = !staffClassFilter || item.rawClass === staffClassFilter;
+        const matchesClass = !staffClassFilter || item.verifiedClass === staffClassFilter || item.rawClass === staffClassFilter;
         
-        // 放學方式篩選
         const matchesDismissal = !staffDismissalFilter || 
             (staffDismissalFilter === '自' && item.dismissalMethod === '自') ||
             (staffDismissalFilter === '家' && item.dismissalMethod === '家');
@@ -1005,14 +899,12 @@ const App = () => {
         return matchesSearch && matchesClass && matchesDismissal;
     });
 
-    // 2. 人數統計數據
     const totalCount = filteredList.length;
     const selfCount = filteredList.filter(i => i.dismissalMethod === '自').length;
     const parentCount = filteredList.filter(i => i.dismissalMethod === '家').length;
 
     return (
         <div className="space-y-6 p-4 max-w-7xl mx-auto">
-            {/* 頁面標題與人數統計卡片 */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                 <div>
                     <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
@@ -1023,7 +915,6 @@ const App = () => {
                     </p>
                 </div>
 
-                {/* 頂部快速統計卡片 */}
                 <div className="flex items-center gap-3">
                     <div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-center">
                         <div className="text-xs text-slate-500">總人次</div>
@@ -1040,25 +931,22 @@ const App = () => {
                 </div>
             </div>
 
-            {/* 控制與篩選列 */}
             <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-wrap gap-4 items-center justify-between">
                 <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-                    {/* 關鍵字搜尋 */}
                     <div className="relative flex-1 md:w-64">
                         <input
                             type="text"
                             placeholder="搜尋學生姓名 / 班別 / 活動..."
-                            value={staffSearchTerm || ''}
-                            onChange={(e) => setStaffSearchTerm && setStaffSearchTerm(e.target.value)}
+                            value={staffSearchTerm}
+                            onChange={(e) => setStaffSearchTerm(e.target.value)}
                             className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                         <span className="absolute left-3 top-2.5 text-slate-400">🔍</span>
                     </div>
 
-                    {/* 班別篩選 */}
                     <select
-                        value={staffClassFilter || ''}
-                        onChange={(e) => setStaffClassFilter && setStaffClassFilter(e.target.value)}
+                        value={staffClassFilter}
+                        onChange={(e) => setStaffClassFilter(e.target.value)}
                         className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                         <option value="">全部班別</option>
@@ -1067,10 +955,9 @@ const App = () => {
                         ))}
                     </select>
 
-                    {/* 放學方式篩選 */}
                     <select
-                        value={staffDismissalFilter || ''}
-                        onChange={(e) => setStaffDismissalFilter && setStaffDismissalFilter(e.target.value)}
+                        value={staffDismissalFilter}
+                        onChange={(e) => setStaffDismissalFilter(e.target.value)}
                         className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700"
                     >
                         <option value="">全部放學方式</option>
@@ -1079,13 +966,12 @@ const App = () => {
                     </select>
                 </div>
 
-                {/* 清除篩選按鈕 */}
                 {(staffSearchTerm || staffClassFilter || staffDismissalFilter) && (
                     <button
                         onClick={() => {
-                            setStaffSearchTerm && setStaffSearchTerm('');
-                            setStaffClassFilter && setStaffClassFilter('');
-                            setStaffDismissalFilter && setStaffDismissalFilter('');
+                            setStaffSearchTerm('');
+                            setStaffClassFilter('');
+                            setStaffDismissalFilter('');
                         }}
                         className="text-xs text-slate-500 hover:text-slate-700 underline"
                     >
@@ -1094,7 +980,6 @@ const App = () => {
                 )}
             </div>
 
-            {/* 資料表格 */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse text-sm">
@@ -1103,7 +988,6 @@ const App = () => {
                                 <th className="p-3.5 font-semibold text-center w-20">班別</th>
                                 <th className="p-3.5 font-semibold text-center w-16">座號</th>
                                 <th className="p-3.5 font-semibold">學生姓名</th>
-                                {/* ⭐ 放學方式欄位 */}
                                 <th className="p-3.5 font-semibold text-center w-32">放學方式</th>
                                 <th className="p-3.5 font-semibold">活動名稱</th>
                                 <th className="p-3.5 font-semibold">時間 / 日期</th>
@@ -1118,24 +1002,20 @@ const App = () => {
                                         key={act.id || index} 
                                         className="hover:bg-slate-50/80 transition-colors"
                                     >
-                                        {/* 班別 */}
                                         <td className="p-3.5 text-center font-bold text-slate-700">
                                             <span className="bg-slate-100 px-2 py-1 rounded border border-slate-200">
-                                                {act.rawClass || '-'}
+                                                {act.verifiedClass || act.rawClass || '-'}
                                             </span>
                                         </td>
 
-                                        {/* 座號 */}
                                         <td className="p-3.5 text-center text-slate-500 font-mono">
-                                            {act.rawClassNo || '-'}
+                                            {act.verifiedClassNo || act.rawClassNo || '-'}
                                         </td>
 
-                                        {/* 姓名 */}
                                         <td className="p-3.5 font-bold text-slate-800">
-                                            {act.rawName || '未命名'}
+                                            {act.verifiedName || act.rawName || '未命名'}
                                         </td>
 
-                                        {/* ⭐ 放學方式顯示 (綠色標籤代表自行回家，黃色標籤代表家長接送) */}
                                         <td className="p-3.5 text-center">
                                             {act.dismissalMethod === '自' && (
                                                 <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-300 text-xs px-2.5 py-1 rounded-full font-bold">
@@ -1152,23 +1032,19 @@ const App = () => {
                                             )}
                                         </td>
 
-                                        {/* 活動名稱 */}
                                         <td className="p-3.5 font-medium text-blue-700">
                                             {act.activity || '-'}
                                         </td>
 
-                                        {/* 時間與日期 */}
                                         <td className="p-3.5 text-slate-600 text-xs space-y-0.5">
                                             <div>{act.dateText || '-'}</div>
                                             <div className="text-slate-400">{act.time || ''}</div>
                                         </td>
 
-                                        {/* 地點 */}
                                         <td className="p-3.5 text-slate-600">
                                             {act.location || '-'}
                                         </td>
 
-                                        {/* 電話 */}
                                         <td className="p-3.5 text-slate-600 font-mono text-xs">
                                             {act.rawPhone ? (
                                                 <a href={`tel:${act.rawPhone}`} className="text-slate-600 hover:text-blue-600 underline">
@@ -1191,7 +1067,6 @@ const App = () => {
                     </table>
                 </div>
 
-                {/* 表格底部說明 */}
                 <div className="bg-slate-50 p-3 border-t border-slate-200 text-xs text-slate-500 flex justify-between items-center px-4">
                     <span>顯示 {filteredList.length} 筆資料</span>
                     <span>標示說明：<span className="text-emerald-700 font-bold">自</span> = 自行回家 | <span className="text-amber-700 font-bold">家</span> = 家長接送</span>
@@ -1199,7 +1074,7 @@ const App = () => {
             </div>
         </div>
     );
-};
+  };
 
   const renderLoginView = () => (
       <div className="flex-1 flex flex-col items-center justify-center bg-slate-100 p-6">
@@ -1314,7 +1189,6 @@ const App = () => {
                                     <td className="p-3 text-slate-500">{act.dateText}</td>
                                     <td className="p-3 text-right">
                                         <div className="flex justify-end gap-2 items-center">
-                                            {/* ⭐ [更新] 「新增學生名單」按鈕，觸發 Pop-up 彈窗 */}
                                             <button 
                                                 title="新增學生名單" 
                                                 onClick={() => handleOpenAddStudentModal(act)} 
@@ -1336,7 +1210,7 @@ const App = () => {
             </table>
         </div>
 
-        {/* ⭐ 「新增學生名單」 - Pop-up Window 彈窗 */}
+        {/* 「新增學生名單」 - Pop-up Window 彈窗 */}
         {isAddStudentModalOpen && targetActivityForAdd && (
             <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                 <div className="bg-white rounded-2xl p-6 max-w-lg w-full shadow-2xl border border-slate-200 animate-in zoom-in-95">
@@ -1578,62 +1452,34 @@ const App = () => {
                             </div>
                         </div>
 
-                        {/* ⭐ [更新] 新增活動資料 - 名單樣式改為 "3B 20 温小文 自行回家 91400040" */}
                         <div className="mb-4">
                             <label className="text-xs text-slate-500 font-bold uppercase flex justify-between">
                                 <span>貼上名單 (PDF Copy/Paste)</span>
-                                <span className="text-blue-500 cursor-pointer flex items-center" title="格式: 3B 20 温小文 自行回家 91400040">
+                                <span className="text-blue-500 cursor-pointer flex items-center" title="格式: 3B 20 温小文 自行回家 91400040 或 3B 20 温小文 自 91400040">
                                     <FileText size={12} className="mr-1"/> 說明
                                 </span>
                             </label>
                             <textarea 
                                 className="w-full h-32 p-2 border rounded bg-slate-50 text-sm font-mono" 
-                                placeholder={`3B 20 温小文 自行回家 91400040\n4A 05 蔡舒朗 自行回家 91234567`} 
+                                placeholder={`3B 20 温小文 自行回家 91400040\n4A 05 蔡舒朗 家長接送 91234567`} 
                                 value={bulkInput} 
                                 onChange={e => setBulkInput(e.target.value)}
                             ></textarea>
+                            <button onClick={handleBulkImport} className="w-full mt-2 bg-blue-600 text-white py-2 rounded font-bold hover:bg-blue-700 transition">識別並處理名單</button>
                         </div>
-                        <button onClick={handleBulkImport} className="w-full py-2 bg-blue-600 text-white font-bold rounded hover:bg-blue-700 transition">識別並載入</button>
                     </div>
-                </div>
                 </div>
             )}
         </div>
       </div>
   );
 
-  const renderKioskResultView = () => {
-     const upcomingDays = [];
-     const today = new Date();
-     const weekDayNames = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
-     const weekDayEnNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-     for (let i = 0; i < 8; i++) { 
-         const d = new Date(today); d.setDate(today.getDate() + i);
-         const year = d.getFullYear(); const month = String(d.getMonth() + 1).padStart(2, '0'); const day = String(d.getDate()).padStart(2, '0');
-         const localDateString = `${year}-${month}-${day}`; const displayDate = `(${day}/${month}/${year})`;
-         upcomingDays.push({ dayId: d.getDay(), dateString: localDateString, label: i === 0 ? '今天' : weekDayNames[d.getDay()], fullLabel: `${weekDayNames[d.getDay()]} ${weekDayEnNames[d.getDay()]} ${displayDate}` });
-     }
-     const currentStudent = masterList.find(s => s.classCode === selectedClass && s.classNo === selectedClassNo.padStart(2, '0'));
-
-     return (
-        <div className="flex-1 bg-slate-800 flex flex-col font-sans text-white h-screen overflow-hidden">
-            <div className="p-4 flex items-center justify-between bg-slate-900 shadow-md shrink-0"><h2 className="text-xl font-bold text-slate-300">活動日程表</h2><button onClick={() => { setCurrentView('student'); setStudentResult(null); setSelectedClassNo(''); }} className="bg-white/10 px-4 py-2 rounded-full flex items-center text-sm backdrop-blur-md hover:bg-white/20 transition"><ArrowLeft size={20} className="mr-1" /> 返回</button></div>
-            <div className="px-8 pt-6 pb-2 shrink-0"><h1 className="text-4xl font-bold">{selectedClass}班 ({selectedClassNo})號 <span className="text-orange-400">{currentStudent ? currentStudent.chiName : ''}</span></h1><p className="text-slate-400 mt-1">未來一週活動概覽</p></div>
-            <div className="flex-1 px-8 pb-8 overflow-y-auto"><div className="space-y-6 mt-4">{upcomingDays.map((dayItem) => {
-                const dayActivities = studentResult ? studentResult.filter(act => { if (act.specificDates && act.specificDates.length > 0) { return act.specificDates.includes(dayItem.dateString); } return act.dayIds && act.dayIds.includes(dayItem.dayId); }) : [];
-                const isToday = dayItem.label === '今天';
-                return (<div key={dayItem.dateString} className={`rounded-3xl p-6 transition-all ${isToday ? 'bg-slate-700/80 ring-2 ring-green-500 shadow-[0_0_20px_rgba(34,197,94,0.3)]' : 'bg-slate-700/30'}`}><div className="flex items-center mb-4 border-b border-slate-600 pb-2"><div className={`text-2xl font-bold ${isToday ? 'text-green-400' : 'text-slate-200'}`}>{dayItem.fullLabel}</div>{isToday && <span className="ml-3 bg-green-600 text-white text-xs px-2 py-1 rounded-full animate-pulse">Today</span>}</div><div className="space-y-4">{dayActivities.length > 0 ? (dayActivities.map((item, idx) => (<div key={`${item.id}-${idx}`} className="bg-white text-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden"><div className="flex justify-between items-start mb-2"><h3 className="text-2xl font-bold text-slate-900">{item.activity}</h3></div><div className="grid grid-cols-2 gap-4 mt-3"><div className="flex items-center text-slate-600 bg-slate-100 p-2 rounded-lg"><Clock size={20} className="mr-2 text-orange-500" /><span className="font-bold">{item.time}</span></div><div className="flex items-center text-blue-800 bg-blue-50 p-2 rounded-lg"><MapPin size={20} className="mr-2 text-blue-500" /><span className="font-bold">{item.location}</span></div></div></div>))) : (<div className="text-slate-500 text-sm italic py-4 text-center border border-dashed border-slate-600 rounded-xl">沒有安排活動</div>)}</div></div>);
-            })}</div>{(!studentResult) && (<div className="flex flex-col items-center justify-center h-40 mt-8 text-slate-400 bg-slate-700/30 rounded-2xl border border-dashed border-slate-600"><Calendar size={48} className="mb-2 opacity-50" /><p className="text-lg">請輸入班別及學號查詢</p></div>)}</div></div>
-     );
-  }
-
   return (
-    <div className="min-h-screen flex flex-col font-sans">
+    <div className="min-h-screen flex flex-col bg-slate-100 font-sans">
       {renderTopNavBar()}
       {currentView === 'student' && renderStudentView()}
-      {currentView === 'staff' && (staffUnlocked ? renderStaffView() : renderStaffLoginView())}
+      {currentView === 'staff' && renderStaffView()}
       {currentView === 'admin' && (user ? renderAdminView() : renderLoginView())}
-      {currentView === 'kiosk_result' && renderKioskResultView()}
     </div>
   );
 };
