@@ -842,7 +842,6 @@ const App = () => {
   const renderTopNavBar = () => (
     <div className="bg-slate-900 text-white p-3 flex justify-between items-center shadow-md sticky top-0 z-50">
         <div className="flex items-center space-x-2 cursor-pointer" onClick={() => { setCurrentView('student'); setStaffUnlocked(false); setStaffPasswordInput(''); }}>
-            <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center font-bold text-sm">佛</div>
             <span className="font-bold text-lg tracking-wide hidden sm:block">香海正覺蓮社佛教正覺蓮社學校</span>
         </div>
         
@@ -1202,56 +1201,31 @@ const App = () => {
     );
   };
 
-  // ==========================================================
-  // 修復：加回丟失的學生查詢結果頁面 (renderKioskResultView)
-  const renderKioskResultView = () => (
-    <div className="flex-1 flex flex-col bg-gradient-to-b from-orange-50 to-white p-6">
-        <div className="w-full max-w-4xl mx-auto bg-white p-8 rounded-3xl shadow-xl border border-orange-100">
-            <div className="flex justify-between items-center mb-6 border-b pb-4">
-                <h2 className="text-2xl font-bold text-slate-800">
-                    查詢結果：{selectedClass}班 {selectedClassNo}號
-                </h2>
-                <button onClick={() => setCurrentView('student')} className="flex items-center text-orange-600 hover:text-orange-800 font-bold transition">
-                    <ArrowLeft className="mr-2" size={20} /> 返回重新查詢
-                </button>
-            </div>
+  const renderKioskResultView = () => {
+    const upcomingDays = [];
+    const today = new Date();
+    const weekDayNames = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+    const weekDayEnNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    for (let i = 0; i < 8; i++) { 
+        const d = new Date(today); d.setDate(today.getDate() + i);
+        const year = d.getFullYear(); const month = String(d.getMonth() + 1).padStart(2, '0'); const day = String(d.getDate()).padStart(2, '0');
+        const localDateString = `${year}-${month}-${day}`; const displayDate = `(${day}/${month}/${year})`;
+        upcomingDays.push({ dayId: d.getDay(), dateString: localDateString, label: i === 0 ? '今天' : weekDayNames[d.getDay()], fullLabel: `${weekDayNames[d.getDay()]} ${weekDayEnNames[d.getDay()]} ${displayDate}` });
+    }
+    const currentStudent = masterList.find(s => s.classCode === selectedClass && s.classNo === selectedClassNo.padStart(2, '0'));
 
-            {studentResult && studentResult.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {studentResult.map((act, i) => (
-                        <div key={i} className="bg-slate-50 border border-slate-200 p-5 rounded-2xl shadow-sm hover:shadow-md transition">
-                            <h3 className="font-bold text-xl text-blue-700 mb-3">{act.activity}</h3>
-                            <div className="space-y-2 text-sm text-slate-600">
-                                <div className="flex items-center"><Calendar size={16} className="mr-2 text-slate-400"/> {act.dateText}</div>
-                                <div className="flex items-center"><Clock size={16} className="mr-2 text-slate-400"/> {act.time}</div>
-                                <div className="flex items-center"><MapPin size={16} className="mr-2 text-slate-400"/> {act.location}</div>
-                                <div className="mt-3 pt-3 border-t flex items-center">
-                                    <span className="font-bold mr-2 text-slate-500">放學方式:</span>
-                                    {act.dismissalMethod === '自' ? (
-                                        <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full font-bold text-xs">🚶‍♂️ 自行回家</span>
-                                    ) : act.dismissalMethod === '家' ? (
-                                        <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full font-bold text-xs">👨‍👩‍👧 家長接送</span>
-                                    ) : (
-                                        <span className="bg-slate-100 text-slate-500 px-3 py-1 rounded-full font-bold text-xs">未設定</span>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            ) : (
-                <div className="text-center py-16">
-                    <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <Search size={40} className="text-slate-400" />
-                    </div>
-                    <h3 className="text-xl font-bold text-slate-700 mb-2">今天沒有找到活動紀錄</h3>
-                    <p className="text-slate-500">請確認班別與學號是否正確，或向負責老師查詢。</p>
-                </div>
-            )}
-        </div>
-    </div>
-);
-// ==========================================================
+    return (
+       <div className="flex-1 bg-slate-800 flex flex-col font-sans text-white h-screen overflow-hidden">
+           <div className="p-4 flex items-center justify-between bg-slate-900 shadow-md shrink-0"><h2 className="text-xl font-bold text-slate-300">活動日程表</h2><button onClick={() => { setCurrentView('student'); setStudentResult(null); setSelectedClassNo(''); }} className="bg-white/10 px-4 py-2 rounded-full flex items-center text-sm backdrop-blur-md hover:bg-white/20 transition"><ArrowLeft size={20} className="mr-1" /> 返回</button></div>
+           <div className="px-8 pt-6 pb-2 shrink-0"><h1 className="text-4xl font-bold">{selectedClass}班 ({selectedClassNo})號 <span className="text-orange-400">{currentStudent ? currentStudent.chiName : ''}</span></h1><p className="text-slate-400 mt-1">未來一週活動概覽</p></div>
+           <div className="flex-1 px-8 pb-8 overflow-y-auto"><div className="space-y-6 mt-4">{upcomingDays.map((dayItem) => {
+               const dayActivities = studentResult ? studentResult.filter(act => { if (act.specificDates && act.specificDates.length > 0) { return act.specificDates.includes(dayItem.dateString); } return act.dayIds && act.dayIds.includes(dayItem.dayId); }) : [];
+               const isToday = dayItem.label === '今天';
+               return (<div key={dayItem.dateString} className={`rounded-3xl p-6 transition-all ${isToday ? 'bg-slate-700/80 ring-2 ring-green-500 shadow-[0_0_20px_rgba(34,197,94,0.3)]' : 'bg-slate-700/30'}`}><div className="flex items-center mb-4 border-b border-slate-600 pb-2"><div className={`text-2xl font-bold ${isToday ? 'text-green-400' : 'text-slate-200'}`}>{dayItem.fullLabel}</div>{isToday && <span className="ml-3 bg-green-600 text-white text-xs px-2 py-1 rounded-full animate-pulse">Today</span>}</div><div className="space-y-4">{dayActivities.length > 0 ? (dayActivities.map((item, idx) => (<div key={`${item.id}-${idx}`} className="bg-white text-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden"><div className="flex justify-between items-start mb-2"><h3 className="text-2xl font-bold text-slate-900">{item.activity}</h3></div><div className="grid grid-cols-2 gap-4 mt-3"><div className="flex items-center text-slate-600 bg-slate-100 p-2 rounded-lg"><Clock size={20} className="mr-2 text-orange-500" /><span className="font-bold">{item.time}</span></div><div className="flex items-center text-blue-800 bg-blue-50 p-2 rounded-lg"><MapPin size={20} className="mr-2 text-blue-500" /><span className="font-bold">{item.location}</span></div></div></div>))) : (<div className="text-slate-500 text-sm italic py-4 text-center border border-dashed border-slate-600 rounded-xl">沒有安排活動</div>)}</div></div>);
+           })}</div>{(!studentResult) && (<div className="flex flex-col items-center justify-center h-40 mt-8 text-slate-400 bg-slate-700/30 rounded-2xl border border-dashed border-slate-600"><Calendar size={48} className="mb-2 opacity-50" /><p className="text-lg">請輸入班別及學號查詢</p></div>)}</div></div>
+    );
+ }
+
 
 
   const renderLoginView = () => (
