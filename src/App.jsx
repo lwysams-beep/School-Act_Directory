@@ -1023,6 +1023,7 @@ const App = () => {
                                 <th className="p-3.5 font-semibold text-center w-20">班別</th>
                                 <th className="p-3.5 font-semibold text-center w-16">座號</th>
                                 <th className="p-3.5 font-semibold">學生姓名</th>
+                                <th className="p-3.5 font-semibold text-center w-32">實時點名</th>
                                 <th className="p-3.5 font-semibold text-center w-32">放學方式</th>
                                 <th className="p-3.5 font-semibold">活動名稱</th>
                                 <th className="p-3.5 font-semibold">時間 / 日期</th>
@@ -1049,6 +1050,34 @@ const App = () => {
 
                                         <td className="p-3.5 font-bold text-slate-800">
                                             {act.verifiedName || act.rawName || '未命名'}
+                                        </td>
+                                        <td className="p-3.5 font-bold text-slate-800">
+                                            {act.verifiedName || act.rawName || '未命名'}
+                                        </td>
+
+                                        {/* 版本 1.0: 實時點名狀態切換 */}
+                                        <td className="p-3.5 text-center">
+                                            <select
+                                                value={act.attendanceStatus || '未點名'}
+                                                onChange={(e) => handleAttendanceChange(act.id, e.target.value)}
+                                                className={`border rounded-lg px-2 py-1 text-xs font-bold focus:outline-none cursor-pointer ${
+                                                    act.attendanceStatus === '出席' ? 'bg-green-100 text-green-800 border-green-300' :
+                                                    act.attendanceStatus === '遲到' ? 'bg-blue-100 text-blue-800 border-blue-300' :
+                                                    act.attendanceStatus === '無故缺席' ? 'bg-red-100 text-red-800 border-red-300' :
+                                                    act.attendanceStatus === '病假' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
+                                                    act.attendanceStatus === '事假' ? 'bg-purple-100 text-purple-800 border-purple-300' :
+                                                    act.attendanceStatus === '未知' ? 'bg-slate-200 text-slate-800 border-slate-300' :
+                                                    'bg-white text-slate-600 border-slate-300'
+                                                }`}
+                                            >
+                                                <option value="未點名">⚫ 未點名</option>
+                                                <option value="出席">🟢 出席</option>
+                                                <option value="遲到">🔵 遲到</option>
+                                                <option value="無故缺席">🔴 無缺</option>
+                                                <option value="病假">🟡 病假</option>
+                                                <option value="事假">🟣 事假</option>
+                                                <option value="未知">⚪ 未知</option>
+                                            </select>
                                         </td>
 
                                         <td className="p-3.5 text-center">
