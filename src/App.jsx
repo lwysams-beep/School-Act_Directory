@@ -245,6 +245,13 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
 const App = () => {
   const [currentView, setCurrentView] = useState('student'); 
   
+  // ==========================================
+  // 版本 1.5: 在網頁頁籤 (Tab) 加入 Star Emoji
+  useEffect(() => {
+    document.title = "⭐ 正覺活動系統";
+}, []);
+// ==========================================
+
   // Auth State
   const [user, setUser] = useState(null); 
   const [authLoading, setAuthLoading] = useState(true); 
@@ -856,7 +863,7 @@ const App = () => {
             
             {/* 版本 1.4: 教職員按鈕僅在 user 存在 (Admin 登入後) 顯示 */}
             {user && (
-                <button onClick={() => setCurrentView('staff')} className={`px-4 py-2 rounded-lg flex items-center text-sm transition-all ${currentView === 'staff' ? 'bg-blue-600 text-white font-bold shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}><Users size={16} className="mr-2" /> 教職員名單管理</button>
+                <button onClick={() => setCurrentView('staff')} className={`px-4 py-2 rounded-lg flex items-center text-sm transition-all ${currentView === 'staff' ? 'bg-blue-600 text-white font-bold shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}><Users size={16} className="mr-2" /> 教職員查詢</button>
             )}
 
             <button onClick={() => { setCurrentView('admin'); setStaffUnlocked(false); setStaffPasswordInput(''); }} className={`px-4 py-2 rounded-lg flex items-center text-sm transition-all ${currentView === 'admin' ? 'bg-slate-700 text-white font-bold shadow-lg ring-1 ring-slate-500' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
@@ -963,7 +970,7 @@ const App = () => {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                 <div>
                     <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                        <span>📋</span> 教職員查詢與名單管理
+                        <span>📋</span> 教職員查詢
                     </h2>
                     <p className="text-slate-500 text-sm mt-1">
                         檢視學生放學活動安排及放學方式統計
