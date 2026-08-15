@@ -986,18 +986,18 @@ const App = () => {
                         <option value="家">👨‍👩‍👧 家長接送 (家)</option>
                         </select>
 
-{/* 版本 1.0: 新增活動班下拉式選單 */}
-<select
-    value={staffActivityFilter}
-    onChange={(e) => setStaffActivityFilter(e.target.value)}
-    className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700"
->
-    <option value="">全部活動班</option>
-    {uniqueActivities.map(act => (
-        <option key={act} value={act}>{act}</option>
-    ))}
-</select>
-</div>
+                    {/* 版本 1.0: 新增活動班下拉式選單 */}
+                    <select
+                        value={staffActivityFilter}
+                        onChange={(e) => setStaffActivityFilter(e.target.value)}
+                       className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700"
+                    >
+                       <option value="">全部活動班</option>
+                       {uniqueActivities.map(act => (
+                       <option key={act} value={act}>{act}</option>
+                      ))}
+                    </select>
+                </div>
 
 {(staffSearchTerm || staffClassFilter || staffDismissalFilter || staffActivityFilter) && (
 <button
