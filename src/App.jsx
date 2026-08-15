@@ -309,7 +309,7 @@ const App = () => {
   const [staffSearchTerm, setStaffSearchTerm] = useState('');
   const [staffClassFilter, setStaffClassFilter] = useState('');
   const [staffDismissalFilter, setStaffDismissalFilter] = useState('');
-  const [staffDismissalFilter, setStaffDismissalFilter] = useState('');
+  
   // ==========================================
   // 版本 1.0: 新增活動班篩選 State 及 Firebase 點名更新函式
   const [staffActivityFilter, setStaffActivityFilter] = useState('');
@@ -323,9 +323,9 @@ const App = () => {
       }
   };
   // ==========================================
-  const STAFF_PASSWORD = "bcklas_staff";
 
-  const STAFF_PASSWORD = "bcklas_staff";
+  const STAFF_PASSWORD = "staff2627";
+
 
   // Search UI
   const [searchTerm, setSearchTerm] = useState('');
