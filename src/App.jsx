@@ -239,6 +239,64 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
     );
 };
 
+// =============================================================================
+// 版本 1.5: 獨立抽出點名單元組件，加入實時更新閃爍及彈出提示效果
+// =============================================================================
+const RealTimeAttendanceCell = ({ act, handleAttendanceChange }) => {
+    const [flash, setFlash] = useState(false);
+    const prevStatus = useRef(act.attendanceStatus);
+
+    useEffect(() => {
+        // 當 Firebase 實時傳來的狀態與上次不同，且不是初次載入時，觸發閃爍
+        if (prevStatus.current !== undefined && prevStatus.current !== act.attendanceStatus) {
+            setFlash(true);
+            const timer = setTimeout(() => setFlash(false), 3000); // 3秒後移除閃爍
+            prevStatus.current = act.attendanceStatus;
+            return () => clearTimeout(timer);
+        }
+        prevStatus.current = act.attendanceStatus;
+    }, [act.attendanceStatus]);
+
+    const currentStatus = act.attendanceStatus || 'unmarked';
+
+    return (
+        <td className={`p-3.5 text-center transition-all duration-500 ${flash ? 'bg-yellow-50' : ''}`}>
+            <div className="relative inline-block">
+                <select
+                    value={currentStatus}
+                    onChange={(e) => handleAttendanceChange(act.id, e.target.value)}
+                    className={`border rounded-lg px-2 py-1 text-xs font-bold focus:outline-none cursor-pointer transition-all duration-500 ${
+                        flash ? 'ring-4 ring-yellow-400 scale-110 shadow-lg' : ''
+                    } ${
+                        currentStatus === 'present' ? 'bg-green-100 text-green-800 border-green-300' :
+                        currentStatus === 'late' ? 'bg-blue-100 text-blue-800 border-blue-300' :
+                        currentStatus === 'absent' ? 'bg-red-100 text-red-800 border-red-300' :
+                        currentStatus === 'sick' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
+                        currentStatus === 'leave' ? 'bg-purple-100 text-purple-800 border-purple-300' :
+                        currentStatus === 'unknown' ? 'bg-slate-200 text-slate-800 border-slate-300' :
+                        'bg-white text-slate-600 border-slate-300'
+                    }`}
+                >
+                    <option value="unmarked">⚫ 未點名</option>
+                    <option value="present">🟢 出席</option>
+                    <option value="late">🔵 遲到</option>
+                    <option value="absent">🔴 無故缺席</option>
+                    <option value="sick">🟡 病假</option>
+                    <option value="leave">🟣 事假</option>
+                    <option value="unknown">⚪ 未知</option>
+                </select>
+                
+                {/* 閃爍時顯示的浮動提示 */}
+                {flash && (
+                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-yellow-400 text-yellow-900 text-[10px] px-2 py-0.5 rounded shadow-md animate-bounce whitespace-nowrap z-10 font-bold">
+                        即時更新!
+                    </div>
+                )}
+            </div>
+        </td>
+    );
+};
+
 // -----------------------------------------------------------------------------
 // MAIN APP COMPONENT
 // -----------------------------------------------------------------------------
@@ -331,25 +389,22 @@ const App = () => {
       return `${yyyy}-${mm}-${dd}`;
   };
   const [staffDateFilter, setStaffDateFilter] = useState(getTodayString());
-// ==========================================
-// 版本 1.4: 修改點名儲存結構，以日期為鍵值儲存點名狀態
-const handleAttendanceChange = async (id, newStatus) => {
+  // ==========================================
+  // 版本 1.5: 修改點名更新邏輯，確保教職員修改時同步寫入當日紀錄
+  const handleAttendanceChange = async (id, newStatus) => {
     try {
-        // 取得當前教職員介面篩選的日期，若無則預設為今天
-        const dateKey = staffDateFilter || getTodayString();
-        
-        // 使用 Firebase 的點記法 (dot notation) 更新特定日期的紀錄
-        const updateField = `attendanceRecords.${dateKey}`;
-
-        // 即時更新 Firebase
+        const todayStr = getTodayString();
+        // 即時更新 Firebase 中的 attendanceStatus 及獨立日期欄位
         await updateDoc(doc(db, "activities", id), { 
-            [updateField]: newStatus 
+            attendanceStatus: newStatus,
+            [`attendance.${todayStr}`]: newStatus
         });
     } catch (error) {
         alert("更新點名狀態失敗: " + error.message);
     }
 };
 // ==========================================
+
 
 
   const STAFF_PASSWORD = "staff2627";
@@ -1138,7 +1193,10 @@ const handleAttendanceChange = async (id, newStatus) => {
                                             {act.verifiedName || act.rawName || '未命名'}
                                         </td>
 
-                                          {/* 版本 1.1: 實時點名狀態 (被動式實時讀取 Firebase，並使用英文鍵值) */}
+                                        {/* 版本 1.5: 使用帶有實時閃爍效果的組件 */}
+                                        <RealTimeAttendanceCell act={act} handleAttendanceChange={handleAttendanceChange} />
+
+
                                          {/* 版本 1.4: 按篩選日期讀取實時點名狀態 */}
 <td className="p-3.5 text-center">
     {(() => {
