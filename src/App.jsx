@@ -240,24 +240,37 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
 };
 
 // =============================================================================
-// 版本 1.5: 獨立抽出點名單元組件，加入實時更新閃爍及彈出提示效果
+// 版本 1.6: 點名單元組件 (修正重複顯示，並完美綁定篩選日期與前線數據)
 // =============================================================================
-const RealTimeAttendanceCell = ({ act, handleAttendanceChange }) => {
+const RealTimeAttendanceCell = ({ act, handleAttendanceChange, staffDateFilter }) => {
     const [flash, setFlash] = useState(false);
-    const prevStatus = useRef(act.attendanceStatus);
+    const prevStatus = useRef();
+
+    // 獲取今天日期的函數
+    const getTodayString = () => {
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const dd = String(today.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+    };
+
+    // 決定當下查詢的日期
+    const dateKey = staffDateFilter || getTodayString();
+    
+    // 正確讀取該日期的紀錄 (對應前線導師的 attendance 欄位)，如果沒有則顯示 'unmarked'
+    const currentStatus = (act.attendance && act.attendance[dateKey]) ? act.attendance[dateKey] : 'unmarked';
 
     useEffect(() => {
-        // 當 Firebase 實時傳來的狀態與上次不同，且不是初次載入時，觸發閃爍
-        if (prevStatus.current !== undefined && prevStatus.current !== act.attendanceStatus) {
+        // 當前線資料變動，且與上次不同時，觸發閃爍
+        if (prevStatus.current !== undefined && prevStatus.current !== currentStatus) {
             setFlash(true);
-            const timer = setTimeout(() => setFlash(false), 3000); // 3秒後移除閃爍
-            prevStatus.current = act.attendanceStatus;
+            const timer = setTimeout(() => setFlash(false), 3000); 
+            prevStatus.current = currentStatus;
             return () => clearTimeout(timer);
         }
-        prevStatus.current = act.attendanceStatus;
-    }, [act.attendanceStatus]);
-
-    const currentStatus = act.attendanceStatus || 'unmarked';
+        prevStatus.current = currentStatus;
+    }, [currentStatus]);
 
     return (
         <td className={`p-3.5 text-center transition-all duration-500 ${flash ? 'bg-yellow-50' : ''}`}>
@@ -296,6 +309,7 @@ const RealTimeAttendanceCell = ({ act, handleAttendanceChange }) => {
         </td>
     );
 };
+
 
 // -----------------------------------------------------------------------------
 // MAIN APP COMPONENT
@@ -1193,44 +1207,8 @@ const App = () => {
                                             {act.verifiedName || act.rawName || '未命名'}
                                         </td>
 
-                                        {/* 版本 1.5: 使用帶有實時閃爍效果的組件 */}
-                                        <RealTimeAttendanceCell act={act} handleAttendanceChange={handleAttendanceChange} />
-
-
-                                         {/* 版本 1.4: 按篩選日期讀取實時點名狀態 */}
-<td className="p-3.5 text-center">
-    {(() => {
-        // 決定當下查詢的日期
-        const dateKey = staffDateFilter || getTodayString();
-        // 讀取該日期的紀錄，如果沒有則預設顯示 'unmarked'
-        const currentStatus = (act.attendanceRecords && act.attendanceRecords[dateKey]) ? act.attendanceRecords[dateKey] : 'unmarked';
-        
-        return (
-            <select
-                value={currentStatus}
-                onChange={(e) => handleAttendanceChange(act.id, e.target.value)}
-                className={`border rounded-lg px-2 py-1 text-xs font-bold focus:outline-none cursor-pointer transition-colors ${
-                    currentStatus === 'present' ? 'bg-green-100 text-green-800 border-green-300' :
-                    currentStatus === 'late' ? 'bg-blue-100 text-blue-800 border-blue-300' :
-                    currentStatus === 'absent' ? 'bg-red-100 text-red-800 border-red-300' :
-                    currentStatus === 'sick' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
-                    currentStatus === 'leave' ? 'bg-purple-100 text-purple-800 border-purple-300' :
-                    currentStatus === 'unknown' ? 'bg-slate-200 text-slate-800 border-slate-300' :
-                    'bg-white text-slate-600 border-slate-300'
-                }`}
-            >
-                <option value="unmarked">⚫ 未點名</option>
-                <option value="present">🟢 出席</option>
-                <option value="late">🔵 遲到</option>
-                <option value="absent">🔴 無故缺席</option>
-                <option value="sick">🟡 病假</option>
-                <option value="leave">🟣 事假</option>
-                <option value="unknown">⚪ 未知</option>
-            </select>
-        );
-    })()}
-</td>
-
+                                       {/* 版本 1.6: 使用帶有實時閃爍效果的組件 (並傳入日期篩選狀態) */}
+                                        <RealTimeAttendanceCell act={act} handleAttendanceChange={handleAttendanceChange} staffDateFilter={staffDateFilter} />
 
 
                                         <td className="p-3.5 text-center">
