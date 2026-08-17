@@ -331,17 +331,26 @@ const App = () => {
       return `${yyyy}-${mm}-${dd}`;
   };
   const [staffDateFilter, setStaffDateFilter] = useState(getTodayString());
-  // ==========================================
+// ==========================================
+// 版本 1.4: 修改點名儲存結構，以日期為鍵值儲存點名狀態
+const handleAttendanceChange = async (id, newStatus) => {
+    try {
+        // 取得當前教職員介面篩選的日期，若無則預設為今天
+        const dateKey = staffDateFilter || getTodayString();
+        
+        // 使用 Firebase 的點記法 (dot notation) 更新特定日期的紀錄
+        const updateField = `attendanceRecords.${dateKey}`;
 
-  const handleAttendanceChange = async (id, newStatus) => {
-      try {
-          // 即時更新 Firebase 中的 attendanceStatus 欄位
-          await updateDoc(doc(db, "activities", id), { attendanceStatus: newStatus });
-      } catch (error) {
-          alert("更新點名狀態失敗: " + error.message);
-      }
-  };
-  // ==========================================
+        // 即時更新 Firebase
+        await updateDoc(doc(db, "activities", id), { 
+            [updateField]: newStatus 
+        });
+    } catch (error) {
+        alert("更新點名狀態失敗: " + error.message);
+    }
+};
+// ==========================================
+
 
   const STAFF_PASSWORD = "staff2627";
 
@@ -1130,29 +1139,40 @@ const App = () => {
                                         </td>
 
                                           {/* 版本 1.1: 實時點名狀態 (被動式實時讀取 Firebase，並使用英文鍵值) */}
-                                         <td className="p-3.5 text-center">
-                                            <select
-                                                value={act.attendanceStatus || 'unmarked'}
-                                                onChange={(e) => handleAttendanceChange(act.id, e.target.value)}
-                                                className={`border rounded-lg px-2 py-1 text-xs font-bold focus:outline-none cursor-pointer transition-colors ${
-                                                    act.attendanceStatus === 'present' ? 'bg-green-100 text-green-800 border-green-300' :
-                                                    act.attendanceStatus === 'late' ? 'bg-blue-100 text-blue-800 border-blue-300' :
-                                                    act.attendanceStatus === 'absent' ? 'bg-red-100 text-red-800 border-red-300' :
-                                                    act.attendanceStatus === 'sick' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
-                                                    act.attendanceStatus === 'leave' ? 'bg-purple-100 text-purple-800 border-purple-300' :
-                                                    act.attendanceStatus === 'unknown' ? 'bg-slate-200 text-slate-800 border-slate-300' :
-                                                    'bg-white text-slate-600 border-slate-300'
-                                                }`}
-                                            >
-                                                <option value="unmarked">⚫ 未點名</option>
-                                                <option value="present">🟢 出席</option>
-                                                <option value="late">🔵 遲到</option>
-                                                <option value="absent">🔴 無故缺席</option>
-                                                <option value="sick">🟡 病假</option>
-                                                <option value="leave">🟣 事假</option>
-                                                <option value="unknown">⚪ 未知</option>
-                                            </select>
-                                        </td>
+                                         {/* 版本 1.4: 按篩選日期讀取實時點名狀態 */}
+<td className="p-3.5 text-center">
+    {(() => {
+        // 決定當下查詢的日期
+        const dateKey = staffDateFilter || getTodayString();
+        // 讀取該日期的紀錄，如果沒有則預設顯示 'unmarked'
+        const currentStatus = (act.attendanceRecords && act.attendanceRecords[dateKey]) ? act.attendanceRecords[dateKey] : 'unmarked';
+        
+        return (
+            <select
+                value={currentStatus}
+                onChange={(e) => handleAttendanceChange(act.id, e.target.value)}
+                className={`border rounded-lg px-2 py-1 text-xs font-bold focus:outline-none cursor-pointer transition-colors ${
+                    currentStatus === 'present' ? 'bg-green-100 text-green-800 border-green-300' :
+                    currentStatus === 'late' ? 'bg-blue-100 text-blue-800 border-blue-300' :
+                    currentStatus === 'absent' ? 'bg-red-100 text-red-800 border-red-300' :
+                    currentStatus === 'sick' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
+                    currentStatus === 'leave' ? 'bg-purple-100 text-purple-800 border-purple-300' :
+                    currentStatus === 'unknown' ? 'bg-slate-200 text-slate-800 border-slate-300' :
+                    'bg-white text-slate-600 border-slate-300'
+                }`}
+            >
+                <option value="unmarked">⚫ 未點名</option>
+                <option value="present">🟢 出席</option>
+                <option value="late">🔵 遲到</option>
+                <option value="absent">🔴 無故缺席</option>
+                <option value="sick">🟡 病假</option>
+                <option value="leave">🟣 事假</option>
+                <option value="unknown">⚪ 未知</option>
+            </select>
+        );
+    })()}
+</td>
+
 
 
                                         <td className="p-3.5 text-center">
