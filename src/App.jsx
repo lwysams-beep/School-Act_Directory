@@ -334,13 +334,16 @@ const App = () => {
   // ==========================================
 
   const handleAttendanceChange = async (id, newStatus) => {
-      try {
-          // 即時更新 Firebase 中的 attendanceStatus 欄位
-          await updateDoc(doc(db, "activities", id), { attendanceStatus: newStatus });
-      } catch (error) {
-          alert("更新點名狀態失敗: " + error.message);
-      }
-  };
+    try {
+        const currentDate = staffDateFilter || getTodayString();
+        // 將點名狀態依據日期存入 attendanceRecords 物件中
+        await updateDoc(doc(db, "activities", id), { 
+            [`attendanceRecords.${currentDate}`]: newStatus 
+        });
+    } catch (error) {
+        alert("更新點名狀態失敗: " + error.message);
+    }
+};
   // ==========================================
 
   const STAFF_PASSWORD = "staff2627";
@@ -964,6 +967,19 @@ const App = () => {
     const totalCount = filteredList.length;
     const selfCount = filteredList.filter(i => i.dismissalMethod === '自').length;
     const parentCount = filteredList.filter(i => i.dismissalMethod === '家').length;
+    {filteredActivities.map((act) => {
+        // 1. 取得當前選取的日期（若無選取則預設今天）
+        const currentDate = staffDateFilter || getTodayString();
+        // 2. 從 attendanceRecords 物件中取出該日期的狀態，若不存在則預設為 'unmarked'
+        const currentStatus = act.attendanceRecords?.[currentDate] || 'unmarked';
+    
+        return (
+            <tr key={act.id}>
+                {/* 其他欄位 */}
+                {/* 步驟 2 替換處 */}
+            </tr>
+        );
+    })}
 
     return (
         <div className="space-y-6 p-4 max-w-7xl mx-auto">
@@ -1130,29 +1146,29 @@ const App = () => {
                                         </td>
 
                                           {/* 版本 1.1: 實時點名狀態 (被動式實時讀取 Firebase，並使用英文鍵值) */}
-                                         <td className="p-3.5 text-center">
-                                            <select
-                                                value={act.attendanceStatus || 'unmarked'}
-                                                onChange={(e) => handleAttendanceChange(act.id, e.target.value)}
-                                                className={`border rounded-lg px-2 py-1 text-xs font-bold focus:outline-none cursor-pointer transition-colors ${
-                                                    act.attendanceStatus === 'present' ? 'bg-green-100 text-green-800 border-green-300' :
-                                                    act.attendanceStatus === 'late' ? 'bg-blue-100 text-blue-800 border-blue-300' :
-                                                    act.attendanceStatus === 'absent' ? 'bg-red-100 text-red-800 border-red-300' :
-                                                    act.attendanceStatus === 'sick' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
-                                                    act.attendanceStatus === 'leave' ? 'bg-purple-100 text-purple-800 border-purple-300' :
-                                                    act.attendanceStatus === 'unknown' ? 'bg-slate-200 text-slate-800 border-slate-300' :
-                                                    'bg-white text-slate-600 border-slate-300'
-                                                }`}
-                                            >
-                                                <option value="unmarked">⚫ 未點名</option>
-                                                <option value="present">🟢 出席</option>
-                                                <option value="late">🔵 遲到</option>
-                                                <option value="absent">🔴 無故缺席</option>
-                                                <option value="sick">🟡 病假</option>
-                                                <option value="leave">🟣 事假</option>
-                                                <option value="unknown">⚪ 未知</option>
-                                            </select>
-                                        </td>
+                                          <td className="p-3.5 text-center">
+    <select
+        value={currentStatus}
+        onChange={(e) => handleAttendanceChange(act.id, e.target.value)}
+        className={`border rounded-lg px-2 py-1 text-xs font-bold focus:outline-none cursor-pointer transition-colors ${
+            currentStatus === 'present' ? 'bg-green-100 text-green-800 border-green-300' :
+            currentStatus === 'late' ? 'bg-blue-100 text-blue-800 border-blue-300' :
+            currentStatus === 'absent' ? 'bg-red-100 text-red-800 border-red-300' :
+            currentStatus === 'sick' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
+            currentStatus === 'leave' ? 'bg-purple-100 text-purple-800 border-purple-300' :
+            currentStatus === 'unknown' ? 'bg-slate-200 text-slate-800 border-slate-300' :
+            'bg-white text-slate-600 border-slate-300'
+        }`}
+    >
+        <option value="unmarked">⚫ 未點名</option>
+        <option value="present">🟢 出席</option>
+        <option value="late">🔵 遲到</option>
+        <option value="absent">🔴 無故缺席</option>
+        <option value="sick">🟡 病假</option>
+        <option value="leave">🟣 事假</option>
+        <option value="unknown">⚪ 未知</option>
+    </select>
+</td>
 
 
                                         <td className="p-3.5 text-center">
