@@ -1745,8 +1745,11 @@ const App = () => {
                 </div>
             </div>
         )}
+        <span>標示說明：<span className="text-emerald-700 font-bold">自</span> = 自行回家 | <span className="text-amber-700 font-bold">家</span> = 家長接送</span>
     </div>
   );
+
+                                    
 
   const renderAdminView = () => (
       <div className="min-h-screen bg-slate-100 p-6 flex-1">
