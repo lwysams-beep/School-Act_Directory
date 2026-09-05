@@ -57,34 +57,53 @@ const db = getFirestore(app);
 // -----------------------------------------------------------------------------
 // 1. MASTER DATA UTILS
 // -----------------------------------------------------------------------------
+/**
+ * 解析年度學生 CSV 數據
+ * @param {string} csvText - CSV 原始文字
+ * @returns {Array<Object>} 學生資料物件陣列
+ */
 const parseMasterCSV = (csvText) => {
-  const lines = csvText.trim().split('\n');
-  return lines.map(line => {
-    const cols = line.split(',');
-    if (cols.length < 4) return null; 
-    return {
-      classCode: cols[0].trim(), 
-      classNo: cols[1].trim().padStart(2, '0'), 
-      engName: cols[2].trim(), 
-      chiName: cols[3].trim(), 
-      sex: cols[4] ? cols[4].trim() : '', 
-      key: `${cols[0].trim()}-${cols[3].trim()}` 
-    };
-  }).filter(item => item !== null);
-};
+    // 使用正則表達式相容 \r\n 與 \n 換行
+    const lines = csvText.trim().split(/\r\n|\n/);
+    
+    return lines.map((line, index) => {
+      // 1. 自動跳過第一行欄位標頭 (Header)
+      if (index === 0 && (line.includes('班別') || line.includes('Class') || line.includes('Name'))) {
+        return null;
+      }
+  
+      // 2. 切分欄位並清除引號與前後空白
+      const cols = line.split(',').map(col => col.replace(/^["']|["']$/g, '').trim());
+      if (cols.length < 4) return null; 
+  
+      // 3. 解析與格式化第 5 個 Column (Index 4) 的性別
+      const rawSex = cols[4] ? cols[4].toUpperCase() : '';
+      let sex = '';
+      if (rawSex === 'M' || rawSex === '男') sex = 'M';
+      else if (rawSex === 'F' || rawSex === '女') sex = 'F';
+  
+      return {
+        classCode: cols[0], 
+        classNo: cols[1].padStart(2, '0'), // 座號補齊兩位數 (如 "1" -> "01")
+        engName: cols[2], 
+        chiName: cols[3], 
+        sex: sex, // 標準化性別: 'M' / 'F' / ''
+        key: `${cols[0]}-${cols[3]}` 
+      };
+    }).filter(item => item !== null);
+  };
 
 // 通用名單解析函式 (支援 "3B 20 温小文 自行回家 91400040" 或 "3B 20 温小文 自 91400040")
 const processBulkText = (text, actName, actTime, actLoc, actDateText, dayIds, dates) => {
     const lines = text.trim().split('\n');
     const newItems = [];
     const mixedClassRegex = /([1-6][A-E])\s*(\d{1,2})?/; 
-    const phoneRegex = /[569]\d{7}/; 
 
     lines.forEach((line) => {
         const cleanLine = line.trim().replace(/['"]/g, ''); 
         if(!cleanLine) return;
 
-        // ⭐ 修復 1：更靈活的放學方式識別 (支援：'自'/'自行'/'自行回家' 以及 '家'/'家長'/'家長接送')
+        // 放學方式識別 ('自' / '家')
         let dismissalMethod = '';
         if (cleanLine.includes('自行回家') || cleanLine.includes('自行') || /\b自\b|\s自\s|\s自$|^自\s/.test(cleanLine)) {
             dismissalMethod = '自';
@@ -92,11 +111,22 @@ const processBulkText = (text, actName, actTime, actLoc, actDateText, dayIds, da
             dismissalMethod = '家';
         }
 
-        // ⭐ 修復 2：先剔除放學關鍵字，避免姓名匹配器把 "自行回家" 誤認為學生名字
+        // 性別識別 ('M' / 'F')
+        let sex = '';
+        const sexMatch = cleanLine.match(/\b([MFmf])\b/) || cleanLine.match(/(男|女)/);
+        if (sexMatch) {
+            const s = sexMatch[1].toUpperCase();
+            sex = (s === 'M' || s === '男') ? 'M' : (s === 'F' || s === '女') ? 'F' : '';
+        }
+
+        // 多電話號碼提取（匹配最多 2 組 8 位數字電話，如 12345678 / 87654321）
+        const phoneMatches = cleanLine.match(/[235689]\d{7}/g);
+        const rawPhone = phoneMatches ? phoneMatches.slice(0, 2).join(' / ') : '';
+
+        // 先剔除放學關鍵字，避免影響學生姓名識別
         const lineWithoutDismissal = cleanLine.replace(/自行回家|家長接送|自行|家長/g, '');
         const classMatch = cleanLine.match(mixedClassRegex);
         const nameMatch = lineWithoutDismissal.match(/[\u4e00-\u9fa5]{2,}/) || cleanLine.match(/[\u4e00-\u9fa5]{2,}/);
-        const phoneMatch = cleanLine.match(phoneRegex);
 
         if (classMatch && nameMatch) {
             newItems.push({
@@ -104,8 +134,9 @@ const processBulkText = (text, actName, actTime, actLoc, actDateText, dayIds, da
                 rawName: nameMatch[0],
                 rawClass: classMatch[1],
                 rawClassNo: classMatch[2] ? classMatch[2].padStart(2, '0') : '00', 
-                rawPhone: phoneMatch ? phoneMatch[0] : '', 
-                dismissalMethod: dismissalMethod, // 寫入 Firebase 資料庫欄位 ('自' 或 '家')
+                rawPhone: rawPhone, 
+                sex: sex,
+                dismissalMethod: dismissalMethod,
                 activity: actName,
                 time: actTime,
                 location: actLoc,
@@ -331,6 +362,7 @@ const App = () => {
   const [loginPwd, setLoginPwd] = useState('');
   
   // Data State
+  const [masterStudentList, setMasterStudentList] = useState([]);
   const [masterList, setMasterList] = useState([]); 
   const [activities, setActivities] = useState([]); 
   const [pendingImports, setPendingImports] = useState([]);
@@ -1372,65 +1404,175 @@ const App = () => {
             )}
         </div>
 
-        <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm border-collapse">
-                <thead className="bg-slate-100 text-slate-600 uppercase">
-                    <tr>
-                        <th className="p-3 w-10 text-center"><input type="checkbox" checked={filteredDbActivities.length > 0 && dbSelectedIds.size === filteredDbActivities.length} onChange={toggleDbSelectAll} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"/></th>
-                        <th className="p-3">學生</th>
-                        <th className="p-3">活動名稱</th>
-                        <th className="p-3">時間</th>
-                        <th className="p-3">地點</th>
-                        <th className="p-3">日期/備註</th>
-                        <th className="p-3 text-right">操作</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {filteredDbActivities.map(act => (
-                        <tr key={act.id} className={`border-b hover:bg-slate-50 ${dbSelectedIds.has(act.id) ? 'bg-blue-50/50' : ''}`}>
-                            <td className="p-3 text-center"><input type="checkbox" checked={dbSelectedIds.has(act.id)} onChange={() => toggleDbSelect(act.id)} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer" /></td>
-                            <td className="p-3"><div className="font-bold text-slate-800">{act.verifiedClass} ({act.verifiedClassNo})</div><div className="text-slate-500">{act.verifiedName}</div></td>
-                            {editingId === act.id ? (
-                                <>
-                                    <td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.activity} onChange={e => setEditFormData({...editFormData, activity: e.target.value})} /></td>
-                                    <td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.time} onChange={e => setEditFormData({...editFormData, time: e.target.value})} /></td>
-                                    <td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.location} onChange={e => setEditFormData({...editFormData, location: e.target.value})} /></td>
-                                    <td className="p-3"><input className="w-full p-1 border rounded" value={editFormData.dateText} onChange={e => setEditFormData({...editFormData, dateText: e.target.value})} /></td>
-                                    <td className="p-3 text-right">
-                                        <div className="flex justify-end gap-2">
-                                            <button onClick={() => saveEditActivity(act.id)} className="bg-green-100 text-green-700 p-1 rounded hover:bg-green-200"><CheckCircle size={18} /></button>
-                                            <button onClick={cancelEdit} className="bg-slate-100 text-slate-600 p-1 rounded hover:bg-slate-200"><X size={18} /></button>
-                                        </div>
-                                    </td>
-                                </>
-                            ) : (
-                                <>
-                                    <td className="p-3 font-bold text-blue-700">{act.activity}</td>
-                                    <td className="p-3">{act.time}</td>
-                                    <td className="p-3">{act.location}</td>
-                                    <td className="p-3 text-slate-500">{act.dateText}</td>
-                                    <td className="p-3 text-right">
-                                        <div className="flex justify-end gap-2 items-center">
-                                            <button 
-                                                title="新增學生名單" 
-                                                onClick={() => handleOpenAddStudentModal(act)} 
-                                                className="text-green-600 hover:text-green-800 p-1 flex items-center gap-1 text-xs font-bold bg-green-50 hover:bg-green-100 px-2 py-1 rounded transition border border-green-200 mr-1"
-                                            >
-                                                <PlusCircle size={14} />
-                                                <span>新增學生名單</span>
-                                            </button>
-                                            <button title="編輯" onClick={() => startEditActivity(act)} className="text-blue-500 hover:text-blue-700 p-1"><Edit2 size={18} /></button>
-                                            <button title="刪除" onClick={() => handleDeleteActivity(act.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={18} /></button>
-                                        </div>
-                                    </td>
-                                </>
-                            )}
-                        </tr>
-                    ))}
-                    {filteredDbActivities.length === 0 && <tr><td colSpan="7" className="p-8 text-center text-slate-400">沒有符合搜尋的資料。</td></tr>}
-                </tbody>
-            </table>
-        </div>
+{/* 管理員控制台 > 管理活動資料庫 > 數據庫管理 表格結構 */}
+<div className="overflow-x-auto bg-white rounded-lg shadow border border-slate-200">
+    <table className="w-full text-left text-sm border-collapse">
+        {/* 表格標頭區：確定 10 個欄位的精確順序 */}
+        <thead className="bg-slate-100 text-slate-600 uppercase border-b border-slate-200">
+            <tr>
+                <th className="p-3 w-10 text-center">
+                    <input 
+                        type="checkbox" 
+                        checked={filteredDbActivities.length > 0 && dbSelectedIds.size === filteredDbActivities.length} 
+                        onChange={toggleDbSelectAll} 
+                        className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    />
+                </th>
+                <th className="p-3">學生</th>
+                <th className="p-3 w-20">性別</th>
+                <th className="p-3">電話</th>
+                <th className="p-3">活動名稱</th>
+                <th className="p-3">時間</th>
+                <th className="p-3">地點</th>
+                <th className="p-3">資料日期</th>
+                <th className="p-3">放學方式</th>
+                <th className="p-3 text-right">操作</th>
+            </tr>
+        </thead>
+
+        {/* 表格內容區 */}
+        <tbody>
+            {filteredDbActivities.map(act => (
+                <tr key={act.id} className={`border-b border-slate-100 hover:bg-slate-50 transition-colors ${dbSelectedIds.has(act.id) ? 'bg-blue-50/50' : ''}`}>
+                    
+                    {/* 1. 多選框 (Checkbox) */}
+                    <td className="p-3 text-center">
+                        <input 
+                            type="checkbox" 
+                            checked={dbSelectedIds.has(act.id)} 
+                            onChange={() => toggleDbSelect(act.id)} 
+                            className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer" 
+                        />
+                    </td>
+
+                    {/* 2. 學生 (班別、座號、姓名) */}
+                    <td className="p-3">
+                        <div className="font-bold text-slate-800">
+                            {act.verifiedClass} ({act.verifiedClassNo})
+                        </div>
+                        <div className="text-slate-500">{act.verifiedName}</div>
+                    </td>
+
+                    {/* 3. 性別 (學生右側) */}
+                    <td className="p-3 font-semibold">
+                        {act.sex === 'M' && (
+                            <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-bold inline-block">
+                                M (男)
+                            </span>
+                        )}
+                        {act.sex === 'F' && (
+                            <span className="px-2 py-0.5 bg-pink-100 text-pink-700 rounded text-xs font-bold inline-block">
+                                F (女)
+                            </span>
+                        )}
+                        {!act.sex && <span className="text-slate-300">-</span>}
+                    </td>
+
+                    {/* 4. 電話 */}
+                    <td className="p-3 font-mono text-xs text-slate-600">
+                        {act.rawPhone ? (
+                            <a href={`tel:${act.rawPhone.split('/')[0].trim()}`} className="hover:text-blue-600 underline">
+                                {act.rawPhone}
+                            </a>
+                        ) : '-'}
+                    </td>
+
+                    {/* 判斷：行內編輯狀態 vs 一般瀏覽狀態 */}
+                    {editingId === act.id ? (
+                        <>
+                            {/* 5. 活動名稱（編輯） */}
+                            <td className="p-3">
+                                <input className="w-full p-1 border rounded text-xs border-slate-300 focus:outline-blue-500" value={editFormData.activity} onChange={e => setEditFormData({...editFormData, activity: e.target.value})} />
+                            </td>
+                            {/* 6. 時間（編輯） */}
+                            <td className="p-3">
+                                <input className="w-full p-1 border rounded text-xs border-slate-300 focus:outline-blue-500" value={editFormData.time} onChange={e => setEditFormData({...editFormData, time: e.target.value})} />
+                            </td>
+                            {/* 7. 地點（編輯） */}
+                            <td className="p-3">
+                                <input className="w-full p-1 border rounded text-xs border-slate-300 focus:outline-blue-500" value={editFormData.location} onChange={e => setEditFormData({...editFormData, location: e.target.value})} />
+                            </td>
+                            {/* 8. 資料日期（編輯） */}
+                            <td className="p-3">
+                                <input className="w-full p-1 border rounded text-xs border-slate-300 focus:outline-blue-500" value={editFormData.dateText} onChange={e => setEditFormData({...editFormData, dateText: e.target.value})} />
+                            </td>
+                            {/* 9. 放學方式（編輯：位於資料日期之後） */}
+                            <td className="p-3">
+                                <select 
+                                    className="p-1 border rounded text-xs bg-white border-slate-300 focus:outline-blue-500"
+                                    value={editFormData.dismissalMethod || ''} 
+                                    onChange={e => setEditFormData({...editFormData, dismissalMethod: e.target.value})}
+                                >
+                                    <option value="">未設定</option>
+                                    <option value="家">家 (家長接送)</option>
+                                    <option value="自">自 (自行回家)</option>
+                                </select>
+                            </td>
+                            {/* 10. 操作（編輯狀態下的儲存/取消按鈕） */}
+                            <td className="p-3 text-right">
+                                <div className="flex justify-end gap-2">
+                                    <button onClick={() => saveEditActivity(act.id)} className="bg-green-100 text-green-700 p-1 rounded hover:bg-green-200 transition" title="儲存"><CheckCircle size={18} /></button>
+                                    <button onClick={cancelEdit} className="bg-slate-100 text-slate-600 p-1 rounded hover:bg-slate-200 transition" title="取消"><X size={18} /></button>
+                                </div>
+                            </td>
+                        </>
+                    ) : (
+                        <>
+                            {/* 5. 活動名稱 */}
+                            <td className="p-3 font-bold text-blue-700">{act.activity}</td>
+                            {/* 6. 時間 */}
+                            <td className="p-3 text-xs text-slate-700">{act.time}</td>
+                            {/* 7. 地點 */}
+                            <td className="p-3 text-xs text-slate-700">{act.location}</td>
+                            {/* 8. 資料日期 */}
+                            <td className="p-3 text-slate-500 text-xs">{act.dateText}</td>
+                            
+                            {/* 9. 放學方式（位於資料日期之後） */}
+                            <td className="p-3">
+                                {act.dismissalMethod === '自' && (
+                                    <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs px-2 py-0.5 rounded font-bold">
+                                        🚶‍♂️ 自
+                                    </span>
+                                )}
+                                {act.dismissalMethod === '家' && (
+                                    <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 border border-amber-200 text-xs px-2 py-0.5 rounded font-bold">
+                                        👨‍👩‍👧 家
+                                    </span>
+                                )}
+                                {!act.dismissalMethod && <span className="text-slate-300">-</span>}
+                            </td>
+
+                            {/* 10. 操作按鈕 */}
+                            <td className="p-3 text-right">
+                                <div className="flex justify-end gap-2 items-center">
+                                    <button title="新增學生名單" onClick={() => handleOpenAddStudentModal(act)} className="text-green-600 hover:text-green-800 p-1 flex items-center gap-1 text-xs font-bold bg-green-50 hover:bg-green-100 px-2 py-1 rounded transition border border-green-200">
+                                        <PlusCircle size={14} />
+                                        <span>新增學生名單</span>
+                                    </button>
+                                    <button title="編輯" onClick={() => startEditActivity(act)} className="text-blue-500 hover:text-blue-700 p-1 transition">
+                                        <Edit2 size={18} />
+                                    </button>
+                                    <button title="刪除" onClick={() => handleDeleteActivity(act.id)} className="text-red-400 hover:text-red-600 p-1 transition">
+                                        <Trash2 size={18} />
+                                    </button>
+                                </div>
+                            </td>
+                        </>
+                    )}
+                </tr>
+            ))}
+
+            {/* 無資料時的提示行 */}
+            {filteredDbActivities.length === 0 && (
+                <tr>
+                    <td colSpan="10" className="p-8 text-center text-slate-400">
+                        目前資料庫中沒有符合條件的數據。
+                    </td>
+                </tr>
+            )}
+        </tbody>
+    </table>
+</div>
 
         {/* 「新增學生名單」 - Pop-up Window 彈窗 */}
         {isAddStudentModalOpen && targetActivityForAdd && (
