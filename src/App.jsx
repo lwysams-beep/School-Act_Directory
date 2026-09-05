@@ -1024,7 +1024,7 @@ const App = () => {
                 </div>
 
                 <div className="mt-4 text-center text-xs text-slate-400 font-mono tracking-wider">
-                    Version 4.6
+                    Version 4.7
                 </div>
             </div>
         </div>
