@@ -120,7 +120,7 @@ const processBulkText = (text, actName, actTime, actLoc, actDateText, dayIds, da
         }
 
         // 多電話號碼提取（匹配最多 2 組 8 位數字電話，如 12345678 / 87654321）
-        const phoneMatches = cleanLine.match(/[235689]\d{7}/g);
+        const phoneMatches = cleanLine.match(/[12345689]\d{7}/g);
         const rawPhone = phoneMatches ? phoneMatches.slice(0, 2).join(' / ') : '';
 
         // 先剔除放學關鍵字，避免影響學生姓名識別
@@ -911,7 +911,7 @@ const App = () => {
 
   const startEditActivity = (act) => {
       setEditingId(act.id);
-      setEditFormData({ activity: act.activity, time: act.time, location: act.location, dateText: act.dateText });
+      setEditFormData({ activity: act.activity, time: act.time, location: act.location, dateText: act.dateText, rawPhone: act.rawPhone || '' });
   };
 
   const saveEditActivity = async (id) => {
@@ -920,7 +920,7 @@ const App = () => {
           setEditingId(null);
       } catch(e) { alert("更新失敗:" + e.message) }
   };
-  const cancelEdit = () => { setEditingId(null); setEditFormData({}); };
+  const cancelEdit = () => { setEditingId(null); setEditFormData({ activity: '', time: '', location: '', dateText: '', rawPhone: '' }); };
 
   const handleStudentSearch = () => {
     const formattedClassNo = selectedClassNo.padStart(2, '0');
@@ -1424,7 +1424,8 @@ const App = () => {
                 <th className="p-3">活動名稱</th>
                 <th className="p-3">時間</th>
                 <th className="p-3">地點</th>
-                <th className="p-3">資料日期</th>
+                <th className="p-3">日期/備註</th>
+                <th className="p-3">聯絡電話</th>
                 <th className="p-3">放學方式</th>
                 <th className="p-3 text-right">操作</th>
             </tr>
@@ -1496,6 +1497,7 @@ const App = () => {
                             <td className="p-3">
                                 <input className="w-full p-1 border rounded text-xs border-slate-300 focus:outline-blue-500" value={editFormData.dateText} onChange={e => setEditFormData({...editFormData, dateText: e.target.value})} />
                             </td>
+                            <td className="p-3"><input className="w-full p-1 border rounded" placeholder="聯絡電話..." value={editFormData.rawPhone} onChange={e => setEditFormData({...editFormData, rawPhone: e.target.value})} /></td>
                             {/* 9. 放學方式（編輯：位於資料日期之後） */}
                             <td className="p-3">
                                 <select 
@@ -1526,6 +1528,7 @@ const App = () => {
                             <td className="p-3 text-xs text-slate-700">{act.location}</td>
                             {/* 8. 資料日期 */}
                             <td className="p-3 text-slate-500 text-xs">{act.dateText}</td>
+                            <td className="p-3 font-mono text-xs">{act.rawPhone || '-'}</td>
                             
                             {/* 9. 放學方式（位於資料日期之後） */}
                             <td className="p-3">
