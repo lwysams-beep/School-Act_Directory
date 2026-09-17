@@ -1,5 +1,5 @@
 // =============================================================================
-//  校園資訊 APP - VERSION 4.6 (放學方式修復 + 教職員介面優化版)
+//  校園資訊 APP - VERSION 4.8 (放學方式修復 + 教職員介面優化版)
 // =============================================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
@@ -308,7 +308,7 @@ const RealTimeAttendanceCell = ({ act, handleAttendanceChange, staffDateFilter }
             <div className="relative inline-block">
                 <select
                     value={currentStatus}
-                    onChange={(e) => handleAttendanceChange(act.id, e.target.value)}
+                    onChange={(e) => handleAttendanceChange(act.id, e.target.value, dateKey)}
                     className={`border rounded-lg px-2 py-1 text-xs font-bold focus:outline-none cursor-pointer transition-all duration-500 ${
                         flash ? 'ring-4 ring-yellow-400 scale-110 shadow-lg' : ''
                     } ${
@@ -437,14 +437,19 @@ const App = () => {
   const [staffDateFilter, setStaffDateFilter] = useState(getTodayString());
   // ==========================================
   // 版本 1.5: 修改點名更新邏輯，確保教職員修改時同步寫入當日紀錄
-  const handleAttendanceChange = async (id, newStatus) => {
+  const handleAttendanceChange = async (id, newStatus, targetDate) => {
     try {
-        const todayStr = getTodayString();
-        // 即時更新 Firebase 中的 attendanceStatus 及獨立日期欄位
+        // 若有傳入 targetDate（如前一日），則使用該日期；否則預設為今天
+        const dateKey = targetDate || getTodayString();
+        
         await updateDoc(doc(db, "activities", id), { 
             attendanceStatus: newStatus,
-            [`attendance.${todayStr}`]: newStatus
+            [`attendance.${dateKey}`]: newStatus
         });
+    } catch (error) {
+        alert("更新點名狀態失敗: " + error.message);
+    }
+};
     } catch (error) {
         alert("更新點名狀態失敗: " + error.message);
     }
@@ -1024,7 +1029,7 @@ const App = () => {
                 </div>
 
                 <div className="mt-4 text-center text-xs text-slate-400 font-mono tracking-wider">
-                    Version 4.7
+                    Version 4.8
                 </div>
             </div>
         </div>
