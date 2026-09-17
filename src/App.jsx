@@ -450,10 +450,9 @@ const App = () => {
         alert("更新點名狀態失敗: " + error.message);
     }
 };
-    } catch (error) {
-        alert("更新點名狀態失敗: " + error.message);
+    
     }
-};
+
 // ==========================================
 
 
@@ -1860,6 +1859,6 @@ const App = () => {
       {currentView === 'admin' && (user ? renderAdminView() : renderLoginView())}
     </div>
   );
-};
+
 
 export default App;
