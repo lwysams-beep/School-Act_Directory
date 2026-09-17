@@ -1,5 +1,5 @@
 // =============================================================================
-//  校園資訊 APP - VERSION 4.8 (放學方式修復 + 教職員介面優化版)
+//  校園資訊 APP - VERSION 4.7 (放學方式修復 + 教職員介面優化版)
 // =============================================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
@@ -308,7 +308,7 @@ const RealTimeAttendanceCell = ({ act, handleAttendanceChange, staffDateFilter }
             <div className="relative inline-block">
                 <select
                     value={currentStatus}
-                    onChange={(e) => handleAttendanceChange(act.id, e.target.value, dateKey)}
+                    onChange={(e) => handleAttendanceChange(act.id, e.target.value)}
                     className={`border rounded-lg px-2 py-1 text-xs font-bold focus:outline-none cursor-pointer transition-all duration-500 ${
                         flash ? 'ring-4 ring-yellow-400 scale-110 shadow-lg' : ''
                     } ${
@@ -437,22 +437,18 @@ const App = () => {
   const [staffDateFilter, setStaffDateFilter] = useState(getTodayString());
   // ==========================================
   // 版本 1.5: 修改點名更新邏輯，確保教職員修改時同步寫入當日紀錄
-  const handleAttendanceChange = async (id, newStatus, targetDate) => {
+  const handleAttendanceChange = async (id, newStatus) => {
     try {
-        // 若有傳入 targetDate（如前一日），則使用該日期；否則預設為今天
-        const dateKey = targetDate || getTodayString();
-        
+        const todayStr = getTodayString();
+        // 即時更新 Firebase 中的 attendanceStatus 及獨立日期欄位
         await updateDoc(doc(db, "activities", id), { 
             attendanceStatus: newStatus,
-            [`attendance.${dateKey}`]: newStatus
+            [`attendance.${todayStr}`]: newStatus
         });
     } catch (error) {
         alert("更新點名狀態失敗: " + error.message);
     }
 };
-    
-    }
-
 // ==========================================
 
 
@@ -1028,7 +1024,7 @@ const App = () => {
                 </div>
 
                 <div className="mt-4 text-center text-xs text-slate-400 font-mono tracking-wider">
-                    Version 4.8
+                    Version 4.7
                 </div>
             </div>
         </div>
@@ -1756,7 +1752,7 @@ const App = () => {
     </div>
   );
 
-                                 
+                                    
 
   const renderAdminView = () => (
       <div className="min-h-screen bg-slate-100 p-6 flex-1">
@@ -1859,6 +1855,6 @@ const App = () => {
       {currentView === 'admin' && (user ? renderAdminView() : renderLoginView())}
     </div>
   );
-
+};
 
 export default App;
