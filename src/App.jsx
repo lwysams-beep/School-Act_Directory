@@ -716,6 +716,9 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
 // =============================================================================
 //  V5.37 終極版：支持七種點名狀態顯示、點擊切換與即時更新氣泡
 // =============================================================================
+// =============================================================================
+//  V5.38 終極版：支援 7 種點名狀態「下拉式選單」與「即時更新氣泡」
+// =============================================================================
 const getTodayStringForCell = () => {
     const today = new Date();
     const yyyy = today.getFullYear();
@@ -730,50 +733,68 @@ const RealTimeAttendanceCell = ({ act, handleAttendanceChange, staffDateFilter, 
 
     const attendanceStatus = useMemo(() => {
         const attendanceRecord = act.attendance || {};
-        return attendanceRecord[effectiveDate] || 'pending';
+        // 資料相容：未點名除了對應 'unmarked' 外，如果原本資料是 'pending' 或是空值，也統一對應到 'unmarked' 顯示
+        const current = attendanceRecord[effectiveDate];
+        if (!current || current === 'pending') return 'unmarked';
+        return current;
     }, [act.attendance, effectiveDate]);
 
-    // 使用 useEffect 來處理更新氣泡的顯示與消失
+    // 處理更新氣泡的顯示與自動消失（2秒）
     useEffect(() => {
         if (act.id === lastUpdatedId) {
             const timer = setTimeout(() => {
                 setLastUpdatedId(null);
-            }, 2000); // 氣泡顯示 2 秒
+            }, 2000);
             return () => clearTimeout(timer);
         }
     }, [lastUpdatedId, act.id, setLastUpdatedId]);
     
-    // 點擊事件處理函數
-    const handleClick = () => {
-        handleAttendanceChange(act.id, attendanceStatus, effectiveDate);
+    // 當老師在下拉式選單中選擇了新狀態時觸發
+    const handleChange = (e) => {
+        const newStatus = e.target.value;
+        
+        // 1. 調用主元件更新函數寫入 Firestore
+        //（由於我們直接讀取下拉選單的值，主元件的 handleAttendanceChange 不需要再進行 statusFlow 的循環運算）
+        handleAttendanceChangeDirectly(act.id, newStatus, effectiveDate);
+        
+        // 2. 顯示黃色「即時更新!」氣泡
         setLastUpdatedId(act.id);
     };
 
-    // 建立完整的狀態對應表 (文字 + 樣式)
-    const statusMap = {
-        pending: { text: '⚫ 待點', style: 'bg-slate-100 text-slate-600 border-slate-300' },
-        present: { text: '🟢 出席', style: 'bg-green-100 text-green-800 border-green-300' },
-        late:    { text: '🔵 遲到', style: 'bg-blue-100 text-blue-800 border-blue-300' },
-        absent:  { text: '🔴 缺席', style: 'bg-red-100 text-red-800 border-red-300' },
-        sick:    { text: '🟡 病假', style: 'bg-yellow-100 text-yellow-800 border-yellow-300' },
-        leave:   { text: '🟣 事假', style: 'bg-purple-100 text-purple-800 border-purple-300' },
-        unknown: { text: '⚪ 未知', style: 'bg-gray-200 text-gray-800 border-gray-400' }
+    // 依據當前狀態設定下拉選單的文字與背景配色
+    const selectStyleMap = {
+        unmarked: 'bg-slate-100 text-slate-600 border-slate-300',
+        present:  'bg-green-100 text-green-800 border-green-300 font-bold',
+        late:     'bg-blue-100 text-blue-800 border-blue-300 font-bold',
+        absent:   'bg-red-100 text-red-800 border-red-300 font-bold',
+        sick:     'bg-yellow-100 text-yellow-800 border-yellow-300 font-bold',
+        leave:    'bg-purple-100 text-purple-800 border-purple-300 font-bold',
+        unknown:  'bg-gray-200 text-gray-800 border-gray-400 font-bold'
     };
 
-    // 安全地獲取當前狀態的顯示設定，如果找不到則退回 'pending'
-    const { text, style } = statusMap[attendanceStatus] || statusMap.pending;
+    const currentStyle = selectStyleMap[attendanceStatus] || selectStyleMap.unmarked;
 
     return (
         <td className="p-3.5 text-center">
-            <div className="relative">
-                <span
-                    onClick={handleClick}
-                    className={`cursor-pointer inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-bold transition-all duration-300 transform hover:scale-110 ${style}`}
+            <div className="relative inline-block">
+                {/* 下拉式選單 */}
+                <select
+                    value={attendanceStatus}
+                    onChange={handleChange}
+                    className={`cursor-pointer text-xs px-2 py-1 rounded-full border transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${currentStyle}`}
                 >
-                    {text}
-                </span>
+                    <option value="unmarked">⚫ 未點名</option>
+                    <option value="present">🟢 出席</option>
+                    <option value="late">🔵 遲到</option>
+                    <option value="absent">🔴 無故缺席</option>
+                    <option value="sick">🟡 病假</option>
+                    <option value="leave">🟣 事假</option>
+                    <option value="unknown">⚪ 未知</option>
+                </select>
+
+                {/* 即時更新黃色氣泡提示 */}
                 {act.id === lastUpdatedId && (
-                    <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-yellow-400 text-yellow-900 text-[10px] px-2 py-0.5 rounded-full shadow-lg animate-bounce whitespace-nowrap z-10 font-bold">
+                    <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-yellow-400 text-yellow-900 text-[10px] px-2 py-0.5 rounded shadow-lg animate-bounce whitespace-nowrap z-10 font-bold">
                         即時更新!
                     </div>
                 )}
