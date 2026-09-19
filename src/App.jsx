@@ -1,5 +1,5 @@
 // =============================================================================
-//  校園資訊 APP - VERSION 5.13 (放學方式修復 + 教職員介面優化版)
+//  校園資訊 APP - VERSION 5.14 (放學方式修復 + 教職員介面優化版)
 // =============================================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
@@ -291,7 +291,7 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                 }
             });
 
-            const gradeArr = Object.keys(gradeMap).map(g => ({ grade: `P.${g}`, total: gradeMap[g].totalHours, details: g.details }));
+            const gradeArr = Object.keys(gradeMap).map(g => ({ grade: `P.${g}`, total: gradeMap[g].totalHours, details: gradeMap[g].details }));
             const finalActStats = Object.values(actStats).sort((a, b) => b.hours - a.hours);
             const totalH = finalActStats.reduce((acc, cur) => acc + cur.hours, 0);
             const finalCatStats = Object.entries(catStats).map(([name, hours]) => ({ name, hours })).sort((a, b) => b.hours - a.hours);
@@ -1232,7 +1232,7 @@ const App = () => {
                 </div>
 
                 <div className="mt-4 text-center text-xs text-slate-400 font-mono tracking-wider">
-                    Version 5.13
+                    Version 5.14
                 </div>
             </div>
         </div>
