@@ -713,6 +713,9 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
 // =============================================================================
 //  V5.37 終極版：支持七種點名狀態顯示、點擊切換與即時更新氣泡
 // =============================================================================
+// =============================================================================
+//  V5.37 終極版：支持七種點名狀態顯示、點擊切換與即時更新氣泡
+// =============================================================================
 const getTodayStringForCell = () => {
     const today = new Date();
     const yyyy = today.getFullYear();
@@ -778,6 +781,7 @@ const RealTimeAttendanceCell = ({ act, handleAttendanceChange, staffDateFilter, 
         </td>
     );
 };
+
 
 
 
@@ -881,22 +885,33 @@ const App = () => {
     // ===================================================================
   //  V5.36 升級：融合 V4.7 的點擊循環邏輯 + V5.33 的多日期寫入
   // ===================================================================
+    // ===================================================================
+  //  V5.37 升級：擴展至七種點名狀態，並優化循環邏輯
+  // ===================================================================
   const handleAttendanceChange = async (id, currentStatus, targetDate) => {
-    // 定義點名狀態的循環順序
-    const a_status_flow = ['pending', 'present', 'absent'];
+    // 定義完整的點名狀態循環順序
+    const attendanceFlow = [
+      'pending', 
+      'present', 
+      'late',
+      'absent', 
+      'sick', 
+      'leave', 
+      'unknown'
+    ];
     
     // 找出目前狀態在循環中的位置
-    const currentIndex = a_status_flow.indexOf(currentStatus);
+    const currentIndex = attendanceFlow.indexOf(currentStatus);
     
-    // 計算下一個狀態 (如果找不到或已是最後一個，則回到第一個)
-    const nextIndex = (currentIndex === -1 || currentIndex === a_status_flow.length - 1) ? 0 : currentIndex + 1;
-    const newStatus = a_status_flow[nextIndex];
+    // 計算下一個狀態 (如果找不到或已是最後一個，則回到第一個 'pending')
+    const nextIndex = (currentIndex === -1 || currentIndex === attendanceFlow.length - 1) ? 0 : currentIndex + 1;
+    const newStatus = attendanceFlow[nextIndex];
 
     // 決定要更新的日期 (如果沒有傳入特定日期，就用今天)
     const dateKey = targetDate || getTodayString();
 
     try {
-      // 更新 Firestore 文件
+      // 更新 Firestore 文件中對應日期的狀態
       await updateDoc(doc(db, "activities", id), {
         [`attendance.${dateKey}`]: newStatus
       });
@@ -904,6 +919,7 @@ const App = () => {
       alert("更新點名狀態失敗: " + error.message);
     }
   };
+
 
 
 // ==========================================
