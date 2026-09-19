@@ -1,5 +1,5 @@
 // =============================================================================
-//  校園資訊 APP - version 5.24 (放學方式修復 + 教職員介面優化版)
+//  校園資訊 APP - version 5.25 (放學方式修復 + 教職員介面優化版)
 // =============================================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
@@ -1425,7 +1425,7 @@ const App = () => {
                 </div>
 
                 <div className="mt-4 text-center text-xs text-slate-400 font-mono tracking-wider">
-                    version 5.24
+                    version 5.25
                 </div>
             </div>
         </div>
@@ -1459,11 +1459,16 @@ const App = () => {
                     matchesDate = item.specificDates.includes(staffDateFilter);
                 } 
                 // 否則，檢查該活動的星期幾 (dayIds) 是否符合選擇的日期
-                else if (item.dayIds && item.dayIds.length > 0) {
-                    const filterDateObj = new Date(staffDateFilter);
-                    const filterDayOfWeek = filterDateObj.getDay(); // 0(日) 到 6(六)
-                    matchesDate = item.dayIds.includes(filterDayOfWeek);
-                }
+                // ...
+else if (item.dayIds && item.dayIds.length > 0) {
+    // 修正：將 'YYYY-MM-DD' 轉為 'YYYY/MM/DD' 格式，確保 new Date() 在所有時區下都能正確解析為本地日期
+    const safeDateString = staffDateFilter.replace(/-/g, '/');
+    const filterDateObj = new Date(safeDateString);
+    const filterDayOfWeek = filterDateObj.getDay(); // 0(日) 到 6(六)
+    matchesDate = item.dayIds.includes(filterDayOfWeek);
+}
+// ...
+
             }
             
             // 版本 1.3: 將 matchesDate 加入最終 return
