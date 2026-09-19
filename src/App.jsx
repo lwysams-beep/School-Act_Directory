@@ -1673,6 +1673,7 @@ else if (item.dayIds && item.dayIds.length > 0) {
     <div>{act.dateText || '-'}</div>
     <div className="text-slate-400 font-bold">
         {/* 修正：使用可選串聯 (?.) 安全地讀取 dateSpecificTimes，防止因 undefined 導致的渲染失敗 */}
+        // 修正：使用可選串聯 (?.) 安全地讀取 dateSpecificTimes，防止因 undefined 導致的渲染失敗
         {(staffDateFilter && act.dateSpecificTimes?.[staffDateFilter]) ? act.dateSpecificTimes[staffDateFilter] : act.time || ''}
     </div>
 </td>
