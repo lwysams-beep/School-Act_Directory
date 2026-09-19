@@ -1,5 +1,5 @@
 // =============================================================================
-//  校園資訊 APP - version 5.31 (放學方式修復 + 教職員介面優化版)
+//  校園資訊 APP - version 5.30 (放學方式修復 + 教職員介面優化版)
 // =============================================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
@@ -1439,7 +1439,7 @@ const App = () => {
                 </div>
 
                 <div className="mt-4 text-center text-xs text-slate-400 font-mono tracking-wider">
-                    version 5.31
+                    version 5.30
                 </div>
             </div>
         </div>
@@ -1462,37 +1462,32 @@ const App = () => {
         (staffDismissalFilter === '自' && item.dismissalMethod === '自') ||
         (staffDismissalFilter === '家' && item.dismissalMethod === '家');
 
-                    // ==========================================
-            // 版本 5.30: 最終修正日期篩選，完美向下兼容
-            // ==========================================
-            let matchesDate = true; // 預設為 true，當沒有啟用日期篩選時，顯示所有資料
-            if (staffDateFilter) {
-                // 如果日期篩選被啟用...
+        let matchesDate = true;
+        if (staffDateFilter) {
+            // 預設為不符合，除非明確找到匹配
+            matchesDate = false;
 
-                // 1. 優先檢查是否有特定日期 (specificDates)
-                if (item.specificDates && item.specificDates.length > 0) {
-                    matchesDate = item.specificDates.includes(staffDateFilter);
-                } 
-                // 2. 如果沒有特定日期，再檢查星期 (dayIds)
-                else if (item.dayIds && item.dayIds.length > 0) {
-                    const safeDateString = staffDateFilter.replace(/-/g, '/');
-                    const filterDateObj = new Date(safeDateString);
-                    
-                    if (!isNaN(filterDateObj.getTime())) {
-                        const filterDayOfWeek = filterDateObj.getDay(); // 0(日) 到 6(六)
-                        matchesDate = item.dayIds.includes(filterDayOfWeek);
-                    } else {
-                        // 如果日期無效，則不匹配
-                        matchesDate = false;
-                    }
-                }
-                // 3. 如果是一筆舊資料 (既沒有 specificDates 也沒有 dayIds)
-                else {
-                    // 在啟用日期篩選的情況下，舊資料應被視為不匹配
-                    matchesDate = false;
+            // 1. 優先檢查是否有特定日期
+            if (item.specificDates && item.specificDates.length > 0) {
+                if (item.specificDates.includes(staffDateFilter)) {
+                    matchesDate = true;
                 }
             }
-
+            // 2. 如果沒有特定日期，再檢查星期
+            else if (item.dayIds && item.dayIds.length > 0) {
+                const safeDateString = staffDateFilter.replace(/-/g, '/');
+                const filterDateObj = new Date(safeDateString);
+                // 檢查日期是否有效
+                if (!isNaN(filterDateObj.getTime())) {
+                    const filterDayOfWeek = filterDateObj.getDay(); // 0(日) 到 6(六)
+                    if (item.dayIds.includes(filterDayOfWeek)) {
+                        matchesDate = true;
+                    }
+                }
+            }
+            // 3. 對於沒有 specificDates 和 dayIds 的舊數據，在啟用日期篩選時，它們永遠不應該顯示
+            //    (此處不需要 else，因為 matchesDate 預設就是 false)
+        }
 
             
             // 版本 1.3: 將 matchesDate 加入最終 return
