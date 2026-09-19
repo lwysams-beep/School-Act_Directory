@@ -1462,28 +1462,33 @@ const App = () => {
         (staffDismissalFilter === '自' && item.dismissalMethod === '自') ||
         (staffDismissalFilter === '家' && item.dismissalMethod === '家');
 
-    // 版本 1.0: 增加活動班篩選條件
-    const matchesActivity = !staffActivityFilter || item.activity === staffActivityFilter;
-            // ==========================================
-            // 版本 1.3: 增加日期篩選條件
-            let matchesDate = true;
-            if (staffDateFilter) {
-                // 如果該活動有設定特定日期 (specificDates)
-                if (item.specificDates && item.specificDates.length > 0) {
-                    matchesDate = item.specificDates.includes(staffDateFilter);
-                } 
-                // 否則，檢查該活動的星期幾 (dayIds) 是否符合選擇的日期
-                // ...
-else if (item.dayIds && item.dayIds.length > 0) {
-    // 修正：將 'YYYY-MM-DD' 轉為 'YYYY/MM/DD' 格式，確保 new Date() 在所有時區下都能正確解析為本地日期
-    const safeDateString = staffDateFilter.replace(/-/g, '/');
-    const filterDateObj = new Date(safeDateString);
-    const filterDayOfWeek = filterDateObj.getDay(); // 0(日) 到 6(六)
-    matchesDate = item.dayIds.includes(filterDayOfWeek);
-}
-// ...
+        let matchesDate = true;
+        if (staffDateFilter) {
+            // 預設為不符合，除非明確找到匹配
+            matchesDate = false;
 
+            // 1. 優先檢查是否有特定日期
+            if (item.specificDates && item.specificDates.length > 0) {
+                if (item.specificDates.includes(staffDateFilter)) {
+                    matchesDate = true;
+                }
             }
+            // 2. 如果沒有特定日期，再檢查星期
+            else if (item.dayIds && item.dayIds.length > 0) {
+                const safeDateString = staffDateFilter.replace(/-/g, '/');
+                const filterDateObj = new Date(safeDateString);
+                // 檢查日期是否有效
+                if (!isNaN(filterDateObj.getTime())) {
+                    const filterDayOfWeek = filterDateObj.getDay(); // 0(日) 到 6(六)
+                    if (item.dayIds.includes(filterDayOfWeek)) {
+                        matchesDate = true;
+                    }
+                }
+            }
+            // 3. 對於沒有 specificDates 和 dayIds 的舊數據，在啟用日期篩選時，它們永遠不應該顯示
+            //    (此處不需要 else，因為 matchesDate 預設就是 false)
+        }
+
             
             // 版本 1.3: 將 matchesDate 加入最終 return
             return matchesSearch && matchesClass && matchesDismissal && matchesActivity && matchesDate;
