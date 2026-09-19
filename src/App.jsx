@@ -1,5 +1,5 @@
 // =============================================================================
-//  校園資訊 APP - VERSION 5.12 (放學方式修復 + 教職員介面優化版)
+//  校園資訊 APP - VERSION 5.13 (放學方式修復 + 教職員介面優化版)
 // =============================================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
@@ -238,7 +238,71 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
     const toggleSelection = (actName) => { if (!actName) return; const newSet = new Set(selectedActs); if (newSet.has(actName)) newSet.delete(actName); else newSet.add(actName); setSelectedActs(newSet); };
     const clearSelection = () => setSelectedActs(new Set());
     const handleCategoryChange = async (activityName, newCategory) => { if (!window.confirm(`確定要將「${activityName}」的所有記錄分類更改為「${newCategory}」嗎？`)) return; setUpdatingCategory(true); try { const batch = writeBatch(db); const targetDocs = activities.filter(a => a.activity === activityName); targetDocs.forEach(item => { const docRef = doc(db, "activities", item.id); batch.update(docRef, { manualCategory: newCategory }); }); await batch.commit(); alert("分類更新成功！"); } catch (error) { console.error(error); alert("更新失敗，請檢查網絡"); } finally { setUpdatingCategory(false); } };
-    const { activityStats, gradeDistribution, categoryStats, studentStats, totalHours } = useMemo(() => { try { if (!masterList || masterList.length === 0 || !activities) { return { activityStats: [], gradeDistribution: [], categoryStats: [], studentStats: [], totalHours: 0 }; } const actStats = {}; const stuStats = {}; const catStats = {}; const gradeMap = { '1': {}, '2': {}, '3': {}, '4': {}, '5': {}, '6': {} }; Object.keys(gradeMap).forEach(g => gradeMap[g] = { totalHours: 0, byActivity: {} }); masterList.forEach(s => { if (s && s.key) stuStats[s.key] = { ...s, count: 0, hours: 0, acts: [] }; }); activities.forEach(item => { const dur = calculateDuration(item.time); const sessionCount = (item.specificDates && item.specificDates.length > 0) ? item.specificDates.length : 1; const totalItemHours = dur * sessionCount; const actName = item.activity || "Unknown"; const category = item.manualCategory || detectCategory(actName); if(!actStats[actName]) actStats[actName] = { name: actName, count: 0, hours: 0, category }; actStats[actName].count += sessionCount; actStats[actName].hours += totalItemHours; actStats[actName].category = category; if(!catStats[category]) catStats[category] = 0; catStats[category] += totalItemHours; const sKey = `${item.verifiedClass}-${item.verifiedName}`; if (stuStats[sKey]) { stuStats[sKey].count += sessionCount; stuStats[sKey].hours += totalItemHours; if(!stuStats[sKey].acts.includes(actName)) stuStats[sKey].acts.push(actName); } const gradeStr = String(item.verifiedClass || ''); if(gradeStr.length >= 2) { const grade = gradeStr.charAt(0); if(gradeMap[grade]) { gradeMap[grade].totalHours += totalItemHours; if(!gradeMap[grade].byActivity[actName]) gradeMap[grade].byActivity[actName] = 0; gradeMap[grade].byActivity[actName] += totalItemHours; } } }); const gradeArr = Object.keys(gradeMap).map(g => ({ grade: `P.${g}`, total: gradeMap[g].totalHours, details: gradeMap[g].byActivity })); const finalActStats = Object.values(actStats).sort((a,b) => b.hours - a.hours); const totalH = finalActStats.reduce((acc, cur) => acc + cur.hours, 0); const finalCatStats = Object.entries(catStats).map(([name, hours]) => ({ name, hours })).sort((a,b) => b.hours - a.hours); return { activityStats: finalActStats, gradeDistribution: gradeArr, categoryStats: finalCatStats, studentStats: Object.values(stuStats).sort((a,b) => a.hours - b.hours), totalHours: totalH }; } catch (e) { console.error("Data Calculation Error:", e); return { activityStats: [], gradeDistribution: [], categoryStats: [], studentStats: [], totalHours: 0 }; } }, [masterList, activities]);
+    const { activityStats, gradeDistribution, categoryStats, studentStats, totalHours } = useMemo(() => {
+        try {
+            if (!masterList || masterList.length === 0 || !activities) {
+                return { activityStats: [], gradeDistribution: [], categoryStats: [], studentStats: [], totalHours: 0 };
+            }
+            const actStats = {};
+            const stuStats = {};
+            const catStats = {};
+            const gradeMap = { '1': {}, '2': {}, '3': {}, '4': {}, '5': {}, '6': {} };
+            Object.keys(gradeMap).forEach(g => gradeMap[g] = { totalHours: 0, byActivity: {} });
+
+            // 學生總表，已包含性別
+            masterList.forEach(s => {
+                if (s && s.key) stuStats[s.key] = { ...s, count: 0, hours: 0, acts: [] };
+            });
+
+            activities.forEach(item => {
+                const dur = calculateDuration(item.time);
+                const sessionCount = (item.specificDates && item.specificDates.length > 0) ? item.specificDates.length : 1;
+                const totalItemHours = dur * sessionCount;
+                const actName = item.activity || "Unknown";
+                const category = item.manualCategory || detectCategory(actName);
+
+                if (!actStats[actName]) actStats[actName] = { name: actName, count: 0, hours: 0, category };
+                actStats[actName].count += sessionCount;
+                actStats[actName].hours += totalItemHours;
+                actStats[actName].category = category;
+
+                if (!catStats[category]) catStats[category] = 0;
+                catStats[category] += totalItemHours;
+
+                const sKey = `${item.verifiedClass}-${item.verifiedName}`;
+                if (stuStats[sKey]) {
+                    stuStats[sKey].count += sessionCount;
+                    stuStats[sKey].hours += totalItemHours;
+                    if (!stuStats[sKey].acts.includes(actName)) stuStats[sKey].acts.push(actName);
+                    // 【核心修改】如果學生統計資料中沒有性別，從活動記錄 item 中補上
+                    if (!stuStats[sKey].sex && item.sex) {
+                        stuStats[sKey].sex = item.sex;
+                    }
+                }
+
+                const gradeStr = String(item.verifiedClass || '');
+                if (gradeStr.length >= 2) {
+                    const grade = gradeStr.charAt(0);
+                    if (gradeMap[grade]) {
+                        gradeMap[grade].totalHours += totalItemHours;
+                        if (!gradeMap[grade].byActivity[actName]) gradeMap[grade].byActivity[actName] = 0;
+                        gradeMap[grade].byActivity[actName] += totalItemHours;
+                    }
+                }
+            });
+
+            const gradeArr = Object.keys(gradeMap).map(g => ({ grade: `P.${g}`, total: gradeMap[g].totalHours, details: g.details }));
+            const finalActStats = Object.values(actStats).sort((a, b) => b.hours - a.hours);
+            const totalH = finalActStats.reduce((acc, cur) => acc + cur.hours, 0);
+            const finalCatStats = Object.entries(catStats).map(([name, hours]) => ({ name, hours })).sort((a, b) => b.hours - a.hours);
+            
+            return { activityStats: finalActStats, gradeDistribution: gradeArr, categoryStats: finalCatStats, studentStats: Object.values(stuStats).sort((a, b) => a.hours - b.hours), totalHours: totalH };
+        } catch (e) {
+            console.error("Data Calculation Error:", e);
+            return { activityStats: [], gradeDistribution: [], categoryStats: [], studentStats: [], totalHours: 0 };
+        }
+    }, [masterList, activities]);
+
     const filteredActivityList = useMemo(() => { if (selectedActs.size === 0) return activityStats; return activityStats.filter(a => selectedActs.has(a.name)); }, [activityStats, selectedActs]);
     const filteredTotalHours = useMemo(() => { if (selectedActs.size === 0) return totalHours; return filteredActivityList.reduce((acc, cur) => acc + cur.hours, 0); }, [filteredActivityList, totalHours, selectedActs]);
     const getSafeColor = (idx) => CHART_COLORS[idx % CHART_COLORS.length] || '#cbd5e1';
@@ -845,14 +909,30 @@ const App = () => {
   // DB MANAGEMENT LOGIC
   // ---------------------------------------------------------------------------
   const filteredDbActivities = useMemo(() => {
-      if (!dbSearchTerm) return activities;
-      const lower = dbSearchTerm.toLowerCase();
-      return activities.filter(a => 
-          a.activity?.toLowerCase().includes(lower) || 
-          a.verifiedName?.includes(lower) || 
-          a.verifiedClass?.includes(lower)
-      );
-  }, [activities, dbSearchTerm]);
+    // 建立一個學生總表 Map，方便快速查找性別
+    const studentSexMap = new Map(masterList.map(s => [`${s.classCode}-${s.chiName}`, s.sex]));
+    
+    const enrichedActivities = activities.map(act => {
+        // 如果活動記錄本身沒有性別，就去 Map 裡查找並補上
+        if (!act.sex) {
+            const studentKey = `${act.verifiedClass}-${act.verifiedName}`;
+            const sexFromMaster = studentSexMap.get(studentKey);
+            if (sexFromMaster) {
+                return { ...act, sex: sexFromMaster };
+            }
+        }
+        return act;
+    });
+
+    if (!dbSearchTerm) return enrichedActivities;
+    const lower = dbSearchTerm.toLowerCase();
+    return enrichedActivities.filter(a => 
+        a.activity?.toLowerCase().includes(lower) || 
+        a.verifiedName?.includes(lower) || 
+        a.verifiedClass?.includes(lower)
+    );
+}, [activities, dbSearchTerm, masterList]);
+
 
   const toggleDbSelect = (id) => {
       const newSet = new Set(dbSelectedIds);
@@ -1152,7 +1232,7 @@ const App = () => {
                 </div>
 
                 <div className="mt-4 text-center text-xs text-slate-400 font-mono tracking-wider">
-                    Version 5.12
+                    Version 5.13
                 </div>
             </div>
         </div>
