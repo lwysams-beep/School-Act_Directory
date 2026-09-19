@@ -941,6 +941,19 @@ const App = () => {
     }
   };
 
+// ===================================================================
+//  V5.38 直接寫入下拉選單指定之考勤狀態 (請貼在這裡！)
+// ===================================================================
+const handleAttendanceChangeDirectly = async (id, newStatus, targetDate) => {
+    const dateKey = targetDate || getTodayString();
+    try {
+      await updateDoc(doc(db, "activities", id), {
+        [`attendance.${dateKey}`]: newStatus
+      });
+    } catch (error) {
+      alert("更新點名狀態失敗: " + error.message);
+    }
+};
 
 
 // ==========================================
@@ -1804,11 +1817,12 @@ const App = () => {
                                        {/* 版本 1.6: 使用帶有實時閃爍效果的組件 (並傳入日期篩選狀態) */}
                                        <RealTimeAttendanceCell 
     act={act} 
-    handleAttendanceChange={handleAttendanceChange} 
+    handleAttendanceChange={handleAttendanceChangeDirectly} // 這裡改為傳遞 handleAttendanceChangeDirectly
     staffDateFilter={staffDateFilter}
     lastUpdatedId={lastUpdatedId}
     setLastUpdatedId={setLastUpdatedId} 
 />
+
 
 
 
