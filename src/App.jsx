@@ -1,5 +1,5 @@
 // =============================================================================
-//  校園資訊 APP - VERSION 4.9 (放學方式修復 + 教職員介面優化版)
+//  校園資訊 APP - VERSION 5.0 (放學方式修復 + 教職員介面優化版)
 // =============================================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
@@ -1043,7 +1043,7 @@ const App = () => {
                 </div>
 
                 <div className="mt-4 text-center text-xs text-slate-400 font-mono tracking-wider">
-                    Version 4.9
+                    Version 5.0
                 </div>
             </div>
         </div>
@@ -1825,10 +1825,10 @@ const App = () => {
                         <div className="space-y-3 mb-4">
                             <div><label className="text-xs text-slate-500 font-bold uppercase">活動名稱</label><input type="text" className="w-full p-2 border rounded" value={importActivity} onChange={e => setImportActivity(e.target.value)} /></div>
                             <div className="grid grid-cols-2 gap-2"><div><label className="text-xs text-slate-500 font-bold uppercase">時間</label><input type="text" className="w-full p-2 border rounded" value={importTime} onChange={e => setImportTime(e.target.value)} /></div><div><label className="text-xs text-slate-500 font-bold uppercase">地點</label><input type="text" className="w-full p-2 border rounded" value={importLocation} onChange={e => setImportLocation(e.target.value)} /></div></div>
-                            <div className="border border-slate-200 rounded p-3 bg-slate-50"><label className="text-xs text-slate-500 font-bold uppercase mb-2 block">選擇日期 (輸入 0209 代表 9月2日)</label><div className="flex gap-2 mb-2">
-    <input type="text" ref={dateInputRef} placeholder="DDMM (如 0209)" className="flex-1 p-2 border rounded text-sm" value={tempDateInput} onChange={(e) => setTempDateInput(e.target.value)} onKeyDown={handleDateInputKeyDown} />
-    <input type="text" placeholder="特定時間 (選填, 例如: 14:00-15:00)" className="flex-1 p-2 border rounded text-sm" value={tempTimeInput} onChange={(e) => setTempTimeInput(e.target.value)} onKeyDown={handleDateInputKeyDown} />
-    <button onClick={handleAddDate} className="bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 flex items-center"><Plus size={16} /></button>
+                            <div className="border border-slate-200 rounded p-3 bg-slate-50"><label className="text-xs text-slate-500 font-bold uppercase mb-2 block">選擇日期 (輸入 0209 代表 9月2日)</label><div className="flex flex-wrap sm:flex-nowrap gap-2 mb-2">
+    <input type="text" ref={dateInputRef} placeholder="DDMM (如 0209)" className="w-full sm:flex-1 p-2 border rounded text-sm" value={tempDateInput} onChange={(e) => setTempDateInput(e.target.value)} onKeyDown={handleDateInputKeyDown} />
+    <input type="text" placeholder="特定時間 (選填)" className="w-full sm:flex-1 p-2 border rounded text-sm" value={tempTimeInput} onChange={(e) => setTempTimeInput(e.target.value)} onKeyDown={handleDateInputKeyDown} />
+    <button onClick={handleAddDate} className="w-full sm:w-auto bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 flex justify-center items-center shrink-0"><Plus size={16} /></button>
 </div>
 <div className="flex flex-wrap gap-2 mb-2">
     {importDates.map(date => (
