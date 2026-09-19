@@ -1,5 +1,5 @@
 // =============================================================================
-//  校園資訊 APP - VERSION 5.1 (放學方式修復 + 教職員介面優化版)
+//  校園資訊 APP - VERSION 5.11 (放學方式修復 + 教職員介面優化版)
 // =============================================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
@@ -229,6 +229,7 @@ const CATEGORY_COLORS = {
 // 3. STATS VIEW COMPONENT
 // -----------------------------------------------------------------------------
 const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
+    const [filterPanelOpen, setFilterPanelOpen] = useState(true); // <-- 新增此行，預設打開篩選器
     const [statsViewMode, setStatsViewMode] = useState('dashboard');
     const [selectedActs, setSelectedActs] = useState(new Set());
     const [updatingCategory, setUpdatingCategory] = useState(false);
@@ -242,7 +243,32 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
     const getSafeColor = (idx) => CHART_COLORS[idx % CHART_COLORS.length] || '#cbd5e1';
     const ghostPieGradient = useMemo(() => { if (totalHours === 0) return '#e2e8f0 0deg 360deg'; let currentDeg = 0; return activityStats.map((item, idx) => { const deg = (item.hours / (totalHours || 1)) * 360; const isSelected = selectedActs.size === 0 || selectedActs.has(item.name); const color = isSelected ? getSafeColor(idx) : '#f1f5f9'; const str = `${color} ${currentDeg}deg ${currentDeg + deg}deg`; currentDeg += deg; return str; }).join(', '); }, [activityStats, totalHours, selectedActs]);
     const categoryPieGradient = useMemo(() => { if (totalHours === 0) return '#e2e8f0 0deg 360deg'; let currentDeg = 0; return categoryStats.map((item) => { const deg = (item.hours / (totalHours || 1)) * 360; const color = CATEGORY_COLORS[item.name] || '#94a3b8'; const str = `${color} ${currentDeg}deg ${currentDeg + deg}deg`; currentDeg += deg; return str; }).join(', '); }, [categoryStats, totalHours]);
-    const filteredStudentList = useMemo(() => { if (selectedActs.size === 0) return studentStats; return studentStats.filter(s => s.acts.some(act => selectedActs.has(act))); }, [studentStats, selectedActs]);
+    const filteredStudentList = useMemo(() => {
+        // 如果沒有選擇任何篩選條件，直接回傳原始的全年統計
+        if (selectedActs.size === 0) return studentStats;
+
+        // 核心邏輯：重新計算篩選後的時數
+        const selectedActivitiesData = activities.filter(a => selectedActs.has(a.activity));
+
+        return studentStats.map(student => {
+            const relevantActs = selectedActivitiesData.filter(act => 
+                act.verifiedClass === student.classCode && 
+                act.verifiedName === student.chiName
+            );
+
+            // 只計算篩選範圍內的時數
+            const filteredHours = relevantActs.reduce((acc, act) => {
+                const dur = calculateDuration(act.time);
+                const sessionCount = (act.specificDates && act.specificDates.length > 0) ? act.specificDates.length : 1;
+                return acc + (dur * sessionCount);
+            }, 0);
+            
+            // 回傳包含「篩選後時數」的新學生物件
+            return { ...student, filteredHours: filteredHours };
+        }).filter(s => s.filteredHours > 0); // 只顯示在篩選範圍內有參與時數的學生
+
+    }, [studentStats, activities, selectedActs]);
+
     const exportGradeStats = () => { const rows = []; gradeDistribution.forEach(g => { Object.entries(g.details).forEach(([actName, hours]) => { if (selectedActs.size === 0 || selectedActs.has(actName)) { rows.push({ Grade: g.grade, Activity: actName, Hours: hours.toFixed(2) }); } }); }); exportToCSV(rows, 'Grade_Activity_Distribution'); };
     const exportCategoryStats = () => exportToCSV(categoryStats, 'Category_Distribution_Report');
     const maxGradeHours = useMemo(() => { return Math.max(...gradeDistribution.map(g => g.total)) || 1; }, [gradeDistribution]);
@@ -265,7 +291,88 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                 {statsViewMode === 'dashboard' && (<div className="flex flex-col space-y-12 pb-12"><div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col md:flex-row items-center md:items-start relative min-h-[400px]"><div className="absolute top-4 left-4 z-20"><button onClick={() => exportToCSV(filteredActivityList, 'Activity_Hours_Report')} className="text-xs bg-indigo-600 text-white border px-3 py-1.5 rounded flex items-center hover:bg-indigo-700 shadow-md transition"><Download size={14} className="mr-1"/> 匯出 CSV</button></div><div className="flex-1 flex flex-col items-center justify-center p-4 pt-10"><h3 className="font-bold text-slate-700 mb-6 flex items-center text-lg"><Clock className="mr-2 text-orange-500"/> 活動總時數分佈 (真實比例)</h3><div className="relative w-72 h-72 rounded-full shadow-2xl border-4 border-white transition-all duration-500" style={{ background: `conic-gradient(${ghostPieGradient})` }}><div className="absolute inset-0 m-auto w-36 h-36 bg-slate-50 rounded-full flex flex-col items-center justify-center shadow-inner"><div className="text-xs text-slate-400 mb-1">{selectedActs.size > 0 ? "已選 / 總計" : "總學時"}</div><div className="flex items-baseline">{selectedActs.size > 0 && <span className="text-2xl font-bold text-blue-600 mr-1">{filteredTotalHours.toFixed(0)}</span>}{selectedActs.size > 0 && <span className="text-slate-400">/</span>}<span className={`font-bold text-slate-800 ${selectedActs.size > 0 ? 'text-lg ml-1' : 'text-4xl'}`}>{totalHours.toFixed(0)}</span></div><span className="text-xs text-slate-400">Hours</span></div></div><p className="text-xs text-slate-400 mt-4">點擊右側圖例進行多項對比</p></div><div className="w-full md:w-80 h-96 border-l border-slate-200 pl-0 md:pl-6 overflow-y-auto"><h4 className="text-xs font-bold text-slate-400 uppercase mb-3 sticky top-0 bg-slate-50 py-2 z-10 flex justify-between"><span>圖例 (點選切換)</span>{selectedActs.size > 0 && <span className="text-blue-500">已選 {selectedActs.size} 項</span>}</h4><div className="space-y-1">{activityStats.map((a, i) => { const isSelected = selectedActs.size === 0 || selectedActs.has(a.name); const isDimmed = selectedActs.size > 0 && !isSelected; return (<button key={i} onClick={() => toggleSelection(a.name)} className={`w-full flex items-center justify-between p-2 rounded text-xs transition-all duration-200 ${isSelected ? 'bg-white shadow ring-2 ring-blue-500 scale-[1.02] z-10' : 'hover:bg-white hover:shadow-sm'} ${isDimmed ? 'opacity-40 grayscale' : 'opacity-100'}`}><div className="flex items-center truncate"><span className="w-3 h-3 rounded-full mr-2 flex-shrink-0" style={{backgroundColor: getSafeColor(i)}}></span><span className="truncate max-w-[120px]" title={a.name}>{a.name}</span></div><div className="font-bold text-slate-600">{((a.hours/(totalHours||1))*100).toFixed(1)}%</div></button>) })}</div></div></div><div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col md:flex-row items-center md:items-start relative min-h-[300px]"><div className="absolute top-4 left-4 z-20"><button onClick={exportCategoryStats} className="text-xs bg-indigo-600 text-white border px-3 py-1.5 rounded flex items-center hover:bg-indigo-700 shadow-md transition"><Download size={14} className="mr-1"/> 匯出 CSV</button></div><div className="flex-1 flex flex-col items-center justify-center p-4 pt-10"><h3 className="font-bold text-slate-700 mb-6 flex items-center text-lg"><Palette className="mr-2 text-purple-500"/> 課程範疇分佈 (可手動修正)</h3><div className="relative w-64 h-64 rounded-full shadow-xl border-4 border-white" style={{ background: `conic-gradient(${categoryPieGradient})` }}><div className="absolute inset-0 m-auto w-32 h-32 bg-slate-50 rounded-full flex flex-col items-center justify-center shadow-inner"><span className="text-lg font-bold text-slate-600">分類統計</span></div></div><p className="text-xs text-slate-400 mt-4">前往「活動列表」即可手動更改分類</p></div><div className="w-full md:w-64 p-4"><h4 className="text-xs font-bold text-slate-400 uppercase mb-3">類別圖例</h4><div className="space-y-2">{categoryStats.map((cat, i) => (<div key={i} className="flex items-center justify-between p-2 bg-white rounded shadow-sm"><div className="flex items-center"><span className="w-3 h-3 rounded-full mr-2" style={{backgroundColor: CATEGORY_COLORS[cat.name] || '#94a3b8'}}></span><span className="text-xs font-bold">{cat.name}</span></div><div className="text-xs font-mono">{((cat.hours/(totalHours||1))*100).toFixed(1)}%</div></div>))}</div></div></div><div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 relative flex flex-col h-[600px]"><div className="flex flex-col md:flex-row justify-between items-start mb-6"><div className="flex items-center space-x-4 mb-2 md:mb-0"><button onClick={exportGradeStats} className="text-xs bg-indigo-600 text-white border px-3 py-1.5 rounded flex items-center hover:bg-indigo-700 shadow-md transition"><Download size={14} className="mr-1"/> 匯出 CSV</button></div><div className="text-right"><h3 className="font-bold text-slate-700 text-lg flex items-center justify-end"><TrendingUp className="mr-2 text-green-500"/> 各級總時數分佈 (固定比例)</h3><p className="text-xs text-slate-500 mt-1">{selectedActs.size > 0 ? '灰色: 該級總時數 | 彩色: 所選活動佔比' : '顯示全校所有活動堆疊'}</p></div></div><div className="flex-1 flex items-end justify-between space-x-8 border-b-2 border-slate-300 pb-0 px-4 mx-4 relative">{gradeDistribution.map((g) => { const maxScale = maxGradeHours; const ghostHeightPct = (g.total / (maxScale || 1)) * 100; const activeItems = Object.entries(g.details).filter(([name]) => selectedActs.size === 0 || selectedActs.has(name)).sort((a,b) => b[1] - a[1]); const selectedTotalHours = activeItems.reduce((acc, cur) => acc + cur[1], 0); const activeHeightPct = (selectedTotalHours / (maxScale || 1)) * 100; return (<div key={g.grade} className="flex flex-col items-center flex-1 h-full relative group">{selectedActs.size > 0 && (<div className="w-full absolute bottom-0 bg-slate-200 rounded-t-sm transition-all duration-700 pointer-events-none" style={{height: `${ghostHeightPct}%`}}/>)}<div className={`w-full absolute bottom-0 flex flex-col-reverse rounded-t-sm overflow-hidden transition-all duration-700 ${selectedActs.size > 0 ? 'w-4/5 z-10 shadow-lg left-1/2 -translate-x-1/2' : 'bg-slate-200'}`} style={{height: `${activeHeightPct}%`}}>{activeItems.map(([actName, hrs], idx) => { const colorIdx = getActColorIndex(actName); const color = getSafeColor(colorIdx); const pctOfStack = (hrs / (selectedTotalHours || 1)) * 100; return (<div key={actName} className="w-full relative" style={{height: `${pctOfStack}%`, backgroundColor: color}} />)})}</div><div className="absolute w-full text-center -top-6 transition-all duration-500" style={{bottom: `${Math.max(ghostHeightPct, activeHeightPct) + 2}%`}}><span className="text-xs font-bold text-slate-600 bg-white/80 px-1 rounded">{selectedActs.size > 0 ? selectedTotalHours.toFixed(0) : g.total.toFixed(0)}h</span></div><div className="hidden group-hover:block absolute bottom-1/2 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-xs p-3 rounded-lg shadow-xl z-50 w-48 pointer-events-none"><div className="font-bold border-b border-slate-600 pb-1 mb-1">{g.grade} 統計詳情</div><div className="flex justify-between mb-1"><span>全級總時數:</span> <span className="font-mono">{g.total.toFixed(1)}h</span></div>{selectedActs.size > 0 && (<div className="flex justify-between text-yellow-400"><span>所選活動:</span> <span className="font-mono">{selectedTotalHours.toFixed(1)}h</span></div>)}</div><div className="absolute -bottom-8 w-full text-center"><div className="text-sm font-bold text-slate-700">{g.grade}</div></div></div>) })}<div className="absolute left-0 top-0 h-full border-l border-dashed border-slate-300 pointer-events-none"><span className="absolute top-0 left-1 text-[10px] text-slate-400 bg-slate-50 px-1">Max: {maxGradeHours.toFixed(0)}h</span></div></div></div></div>)}
                 {statsViewMode === 'activities' && (<div className="bg-white border rounded-xl overflow-hidden"><div className="p-4 bg-slate-50 border-b flex justify-between items-center"><h3 className="font-bold text-slate-700">活動統計列表</h3><button onClick={() => exportToCSV(filteredActivityList, 'Activity_Report')} className="text-sm bg-white border px-3 py-1 rounded hover:bg-slate-50 flex items-center text-blue-600 border-blue-200"><Download size={14} className="mr-1"/> 匯出 CSV</button></div><table className="w-full text-sm text-left"><thead className="bg-slate-100 text-slate-500 uppercase"><tr><th className="p-3">活動名稱</th><th className="p-3 w-48">類別 (可手動更改)</th><th className="p-3 text-right">總人次</th><th className="p-3 text-right">總學時</th></tr></thead><tbody className="divide-y">{filteredActivityList.map((a, i) => (<tr key={i} className="hover:bg-slate-50"><td className="p-3 font-medium flex items-center"><span className="w-2 h-2 rounded-full mr-2" style={{backgroundColor: getSafeColor(getActColorIndex(a.name))}}></span>{a.name}</td><td className="p-3"><div className="relative group/cat"><select className="w-full text-xs p-1 border rounded bg-slate-50 hover:bg-white focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer" value={a.category} disabled={updatingCategory} onChange={(e) => handleCategoryChange(a.name, e.target.value)}>{CATEGORY_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}</select>{updatingCategory && <span className="absolute right-0 top-0 text-[8px] text-blue-500">更新中...</span>}</div></td><td className="p-3 text-right">{a.count}</td><td className="p-3 text-right font-bold text-blue-600">{a.hours.toFixed(1)}</td></tr>))}</tbody></table></div>)}
                 {statsViewMode === 'logs' && (<div className="bg-white border rounded-xl overflow-hidden"><div className="p-4 bg-slate-50 border-b"><h3 className="font-bold text-slate-700">查詢日誌 (Audit Log)</h3></div><table className="w-full text-sm text-left"><thead className="bg-slate-100 text-slate-500"><tr><th className="p-3">日期</th><th className="p-3">時間</th><th className="p-3">查詢班別</th><th className="p-3">學生姓名</th><th className="p-3">結果</th></tr></thead><tbody>{queryLogs.length > 0 ? queryLogs.map((log, i) => (<tr key={i} className="border-b last:border-0 hover:bg-white"><td className="p-3 text-slate-600">{log.dateStr}</td><td className="p-3 font-mono text-slate-500 text-xs">{log.timeStr}</td><td className="p-3 font-bold text-slate-800">{log.class} ({log.classNo})</td><td className="p-3">{log.name}</td><td className="p-3">{log.success ? <span className="text-green-600 text-xs bg-green-100 px-2 py-1 rounded">成功</span> : <span className="text-red-500 text-xs">無記錄</span>}</td></tr>)) : (<tr><td colSpan="5" className="p-8 text-center text-slate-400">暫無查詢紀錄</td></tr>)}</tbody></table></div>)}
-                {statsViewMode === 'students' && (<div className="bg-white border rounded-xl overflow-hidden"><div className="p-4 bg-slate-50 border-b flex flex-col md:flex-row justify-between items-center gap-3"><h3 className="font-bold text-slate-700 flex items-center"><AlertTriangle className="mr-2 text-orange-500" size={18}/> 學生參與度監測</h3><div className="flex flex-wrap items-center gap-2"><select className="text-xs p-1.5 border border-slate-300 rounded bg-white text-slate-600 outline-none focus:ring-1 focus:ring-blue-500 font-bold" onChange={(e) => { const val = e.target.value; if(val) toggleSelection(val); e.target.value = ''; }}><option value="">+ 按活動班加入篩選...</option>{activityStats.map(a => (<option key={a.name} value={a.name}>{a.name}</option>))}</select><select className="text-xs p-1.5 border border-slate-300 rounded bg-white text-slate-600 outline-none focus:ring-1 focus:ring-purple-500 font-bold" onChange={(e) => { const cat = e.target.value; if(cat) { const actsInCat = activityStats.filter(a => a.category === cat).map(a => a.name); const newSet = new Set(selectedActs); actsInCat.forEach(act => newSet.add(act)); setSelectedActs(newSet); } e.target.value = ''; }}><option value="">+ 按分類一鍵加入 (如: 體育)</option>{categoryStats.map(c => (<option key={c.name} value={c.name}>{c.name}</option>))}</select><button onClick={() => exportToCSV(filteredStudentList, 'Student_Participation')} className="text-sm bg-white border px-3 py-1 rounded hover:bg-slate-50 flex items-center text-blue-600 border-blue-200"><Download size={14} className="mr-1"/> 匯出 CSV</button></div></div>
+                {statsViewMode === 'students' && (<div className="bg-white border rounded-xl overflow-hidden">
+                    {/* Part 1: 標題與篩選器 */}
+                    <div className="p-4 bg-slate-50 border-b">
+                        <div className="flex justify-between items-center">
+                            <h3 className="font-bold text-slate-700 flex items-center"><AlertTriangle className="mr-2 text-orange-500" size={18}/> 學生參與度監測</h3>
+                            <button onClick={() => setFilterPanelOpen(!filterPanelOpen)} className="text-sm text-blue-600 font-bold flex items-center bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-100">
+                                <Filter size={14} className="mr-2"/>{filterPanelOpen ? '收合篩選器' : '展開篩選器'}
+                            </button>
+                        </div>
+                        {filterPanelOpen && (
+                            <div className="mt-4 p-4 bg-white border rounded-lg animate-in slide-in-from-top-2">
+                                {categoryStats.map(cat => {
+                                    const actsInCat = activityStats.filter(a => a.category === cat.name);
+                                    if(actsInCat.length === 0) return null;
+                                    const isAllSelected = actsInCat.every(a => selectedActs.has(a.name));
+                                    const handleCatToggle = () => {
+                                        const newSet = new Set(selectedActs);
+                                        if (isAllSelected) { actsInCat.forEach(a => newSet.delete(a.name)); } 
+                                        else { actsInCat.forEach(a => newSet.add(a.name)); }
+                                        setSelectedActs(newSet);
+                                    };
+                                    return (
+                                        <div key={cat.name} className="mb-3 last:mb-0">
+                                            <label className="flex items-center font-bold text-slate-700 text-sm mb-2 cursor-pointer">
+                                                <input type="checkbox" checked={isAllSelected} onChange={handleCatToggle} className="w-4 h-4 mr-2 text-purple-600 rounded focus:ring-purple-500"/>
+                                                {cat.name}
+                                            </label>
+                                            <div className="flex flex-wrap gap-2 pl-6">
+                                                {actsInCat.map(act => (
+                                                    <label key={act.name} className="flex items-center text-xs text-slate-600 cursor-pointer bg-slate-100 px-2 py-1 rounded-md hover:bg-slate-200">
+                                                        <input type="checkbox" checked={selectedActs.has(act.name)} onChange={() => toggleSelection(act.name)} className="w-3 h-3 mr-1.5 text-blue-600 rounded focus:ring-blue-500"/>
+                                                        {act.name}
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        )}
+                    </div>
+                    {/* Part 2: 學生列表 */}
+                    <div className="max-h-[500px] overflow-y-auto">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-slate-100 text-slate-500 uppercase sticky top-0">
+                                <tr>
+                                    <th className="p-3">班別 (學號)</th>
+                                    <th className="p-3">姓名</th>
+                                    <th className="p-3 text-right">
+                                        {selectedActs.size > 0 ? "篩選後時數" : "總參與時數"}
+                                    </th>
+                                    <th className="p-3 text-center">狀態</th>
+                                    <th className="p-3">
+                                       <button onClick={() => exportToCSV(filteredStudentList.map(s => ({
+                                           Class: s.classCode,
+                                           ClassNo: s.classNo,
+                                           Name: s.chiName,
+                                           Hours: (selectedActs.size > 0 ? s.filteredHours : s.hours).toFixed(1)
+                                       })), 'Student_Participation_Report')} className="text-xs bg-white border px-2 py-1 rounded hover:bg-slate-50 flex items-center text-blue-600 border-blue-200">
+                                            <Download size={12} className="mr-1"/> 匯出
+                                       </button>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y">
+                                {filteredStudentList.map((s, i) => {
+                                    const displayHours = selectedActs.size > 0 ? (s.filteredHours || 0) : s.hours;
+                                    return (
+                                        <tr key={i} className={`hover:bg-slate-50 ${displayHours === 0 ? 'bg-red-50' : ''}`}>
+                                            <td className="p-3 text-slate-600">{s.classCode} ({s.classNo})</td>
+                                            <td className="p-3 font-bold">{s.chiName}</td>
+                                            <td className="p-3 text-right font-bold text-blue-700">{displayHours.toFixed(1)}</td>
+                                            <td className="p-3 text-center">{displayHours === 0 ? <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded font-bold">無相關參與</span> : <span className="text-xs text-green-600">正常</span>}</td>
+                                            <td></td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>)}
+
 <div className="max-h-[500px] overflow-y-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-100 text-slate-500 uppercase sticky top-0"><tr><th className="p-3">班別 (學號)</th><th className="p-3">姓名</th><th className="p-3 text-right">參與時數</th><th className="p-3 text-center">狀態</th></tr></thead><tbody className="divide-y">{filteredStudentList.map((s, i) => (<tr key={i} className={`hover:bg-slate-50 ${s.hours === 0 ? 'bg-red-50' : ''}`}><td className="p-3 text-slate-600">{s.classCode} ({s.classNo})</td><td className="p-3 font-bold">{s.chiName}</td><td className="p-3 text-right">{s.hours.toFixed(1)}</td><td className="p-3 text-center">{s.hours === 0 ? <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded font-bold">關注</span> : <span className="text-xs text-green-600">正常</span>}</td></tr>))}</tbody></table></div></div>)}
             </div>
         </div>
@@ -1044,7 +1151,7 @@ const App = () => {
                 </div>
 
                 <div className="mt-4 text-center text-xs text-slate-400 font-mono tracking-wider">
-                    Version 5.1
+                    Version 5.11
                 </div>
             </div>
         </div>
