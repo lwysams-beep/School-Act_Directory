@@ -719,6 +719,9 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
 // =============================================================================
 //  V5.38 終極版：支援 7 種點名狀態「下拉式選單」與「即時更新氣泡」
 // =============================================================================
+// =============================================================================
+//  V5.39 完美修復版：下拉式選單與即時更新氣泡 (統一參數命稱)
+// =============================================================================
 const getTodayStringForCell = () => {
     const today = new Date();
     const yyyy = today.getFullYear();
@@ -733,7 +736,6 @@ const RealTimeAttendanceCell = ({ act, handleAttendanceChange, staffDateFilter, 
 
     const attendanceStatus = useMemo(() => {
         const attendanceRecord = act.attendance || {};
-        // 資料相容：未點名除了對應 'unmarked' 外，如果原本資料是 'pending' 或是空值，也統一對應到 'unmarked' 顯示
         const current = attendanceRecord[effectiveDate];
         if (!current || current === 'pending') return 'unmarked';
         return current;
@@ -749,15 +751,16 @@ const RealTimeAttendanceCell = ({ act, handleAttendanceChange, staffDateFilter, 
         }
     }, [lastUpdatedId, act.id, setLastUpdatedId]);
     
-    // 當老師在下拉式選單中選擇了新狀態時觸發
+    // 當下拉式選單選擇新狀態時觸發
     const handleChange = (e) => {
         const newStatus = e.target.value;
         
-        // 1. 調用主元件更新函數寫入 Firestore
-        //（由於我們直接讀取下拉選單的值，主元件的 handleAttendanceChange 不需要再進行 statusFlow 的循環運算）
-        handleAttendanceChangeDirectly(act.id, newStatus, effectiveDate);
+        // 🌟 修正點：直接呼叫從 prop 傳進來的 handleAttendanceChange
+        if (handleAttendanceChange) {
+            handleAttendanceChange(act.id, newStatus, effectiveDate);
+        }
         
-        // 2. 顯示黃色「即時更新!」氣泡
+        // 顯示黃色「即時更新!」氣泡
         setLastUpdatedId(act.id);
     };
 
@@ -777,7 +780,6 @@ const RealTimeAttendanceCell = ({ act, handleAttendanceChange, staffDateFilter, 
     return (
         <td className="p-3.5 text-center">
             <div className="relative inline-block">
-                {/* 下拉式選單 */}
                 <select
                     value={attendanceStatus}
                     onChange={handleChange}
@@ -792,7 +794,6 @@ const RealTimeAttendanceCell = ({ act, handleAttendanceChange, staffDateFilter, 
                     <option value="unknown">⚪ 未知</option>
                 </select>
 
-                {/* 即時更新黃色氣泡提示 */}
                 {act.id === lastUpdatedId && (
                     <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-yellow-400 text-yellow-900 text-[10px] px-2 py-0.5 rounded shadow-lg animate-bounce whitespace-nowrap z-10 font-bold">
                         即時更新!
@@ -1817,11 +1818,12 @@ const handleAttendanceChangeDirectly = async (id, newStatus, targetDate) => {
                                        {/* 版本 1.6: 使用帶有實時閃爍效果的組件 (並傳入日期篩選狀態) */}
                                        <RealTimeAttendanceCell 
     act={act} 
-    handleAttendanceChange={handleAttendanceChangeDirectly} // 這裡改為傳遞 handleAttendanceChangeDirectly
+    handleAttendanceChange={handleAttendanceChangeDirectly} // 這裡會把直接修改考勤的邏輯傳進去！
     staffDateFilter={staffDateFilter}
     lastUpdatedId={lastUpdatedId}
     setLastUpdatedId={setLastUpdatedId} 
 />
+
 
 
 
