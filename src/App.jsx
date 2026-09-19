@@ -1,5 +1,5 @@
 // =============================================================================
-//  校園資訊 APP - version 5.38 (放學方式修復 + 教職員介面優化版)
+//  校園資訊 APP - version 5.37 (放學方式修復 + 教職員介面優化版)
 // =============================================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
@@ -237,9 +237,6 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
     const [statsViewMode, setStatsViewMode] = useState('dashboard');
     const [selectedActs, setSelectedActs] = useState(new Set());
     const [updatingCategory, setUpdatingCategory] = useState(false);
-    const [selectedCategories, setSelectedCategories] = useState(new Set());
-    const [showNoRecords, setShowNoRecords] = useState(false);
-
 
     const toggleSelection = (actName) => { 
         if (!actName) return; 
@@ -271,58 +268,23 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
         } 
     };
 
-        // =========================================================================
-    //  V5.40 核心升級：數據計算引擎，完美兼容「活動」與「範疇」雙重篩選
-    // =========================================================================
-    const {
-        activityStats,
-        gradeDistribution,
-        categoryStats,
-        studentStats,
-        totalHours,
-        allCategoryStats // 新增：一個永不過濾的範疇列表，用於渲染UI
-    } = useMemo(() => {
+    const { activityStats, gradeDistribution, categoryStats, studentStats, totalHours } = useMemo(() => {
         try {
             if (!masterList || masterList.length === 0 || !activities) {
-                return { activityStats: [], gradeDistribution: [], categoryStats: [], studentStats: [], totalHours: 0, allCategoryStats: [] };
+                return { activityStats: [], gradeDistribution: [], categoryStats: [], studentStats: [], totalHours: 0 };
             }
-
-            // 預先計算一次完整的範疇統計，用於 UI 顯示
-            const initialCatStats = {};
-            activities.forEach(item => {
-                const actName = item.activity || "Unknown";
-                const category = item.manualCategory || detectCategory(actName);
-                const dur = calculateDuration(item.time);
-                const sessionCount = (Array.isArray(item.specificDates) && item.specificDates.length > 0) ? item.specificDates.length : (Array.isArray(item.dayIds) ? item.dayIds.length : 1);
-                const totalItemHours = dur * sessionCount;
-                if (!initialCatStats[category]) initialCatStats[category] = 0;
-                initialCatStats[category] += totalItemHours;
-            });
-            const allCatArr = Object.entries(initialCatStats).map(([name, hours]) => ({ name, hours })).sort((a, b) => b.hours - a.hours);
-
-            // 根據「已選範疇」預先過濾活動列表
-            const filteredByCatActivities = selectedCategories.size === 0
-                ? activities
-                : activities.filter(item => {
-                    const category = item.manualCategory || detectCategory(item.activity || "Unknown");
-                    return selectedCategories.has(category);
-                });
-
-            // --- 後續所有計算，都基於上面過濾後的活動列表 ---
-
             const actStats = {};
             const stuStats = {};
             const catStats = {};
-            const gradeMap = { '1': {}, '2': {}, '3': {}, '4': {}, '5': {}, '6': {} };
-            Object.keys(gradeMap).forEach(g => gradeMap[g] = { totalHours: 0, byActivity: {} });
+            const gradeMap = { '1': { totalHours: 0, byActivity: {} }, '2': { totalHours: 0, byActivity: {} }, '3': { totalHours: 0, byActivity: {} }, '4': { totalHours: 0, byActivity: {} }, '5': { totalHours: 0, byActivity: {} }, '6': { totalHours: 0, byActivity: {} } };
 
             masterList.forEach(s => {
                 if (s && s.key) stuStats[s.key] = { ...s, count: 0, hours: 0, acts: [] };
             });
 
-            filteredByCatActivities.forEach(item => { // <--- 注意：使用過濾後的列表
+            activities.forEach(item => {
                 const dur = calculateDuration(item.time);
-                const sessionCount = (Array.isArray(item.specificDates) && item.specificDates.length > 0) ? item.specificDates.length : (Array.isArray(item.dayIds) ? item.dayIds.length : 1);
+                const sessionCount = (item.specificDates && item.specificDates.length > 0) ? item.specificDates.length : 1;
                 const totalItemHours = dur * sessionCount;
                 const actName = item.activity || "Unknown";
                 const category = item.manualCategory || detectCategory(actName);
@@ -342,7 +304,7 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                     if (!stuStats[sKey].acts.includes(actName)) stuStats[sKey].acts.push(actName);
                     if (!stuStats[sKey].sex && item.sex) stuStats[sKey].sex = item.sex;
                 }
-                
+
                 const gradeStr = String(item.verifiedClass || '');
                 if (gradeStr.length >= 2) {
                     const grade = gradeStr.charAt(0);
@@ -353,30 +315,18 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                     }
                 }
             });
-
+            
             const gradeArr = Object.keys(gradeMap).map(g => ({ grade: `P.${g}`, total: gradeMap[g].totalHours, details: gradeMap[g].byActivity }));
             const finalActStats = Object.values(actStats).sort((a, b) => b.hours - a.hours);
-            const totalH = activities.reduce((acc, item) => {
-                 const dur = calculateDuration(item.time);
-                 const sessionCount = (Array.isArray(item.specificDates) && item.specificDates.length > 0) ? item.specificDates.length : (Array.isArray(item.dayIds) ? item.dayIds.length : 1);
-                 return acc + (dur * sessionCount);
-            },0);
+            const totalH = finalActStats.reduce((acc, cur) => acc + cur.hours, 0);
             const finalCatStats = Object.entries(catStats).map(([name, hours]) => ({ name, hours })).sort((a, b) => b.hours - a.hours);
             
-            return {
-                activityStats: finalActStats,
-                gradeDistribution: gradeArr,
-                categoryStats: finalCatStats,
-                studentStats: Object.values(stuStats),
-                totalHours: totalH,
-                allCategoryStats: allCatArr
-            };
+            return { activityStats: finalActStats, gradeDistribution: gradeArr, categoryStats: finalCatStats, studentStats: Object.values(stuStats).sort((a,b) => b.hours - b.hours), totalHours: totalH };
         } catch (e) {
             console.error("Data Calculation Error:", e);
-            return { activityStats: [], gradeDistribution: [], categoryStats: [], studentStats: [], totalHours: 0, allCategoryStats: [] };
+            return { activityStats: [], gradeDistribution: [], categoryStats: [], studentStats: [], totalHours: 0 };
         }
-    }, [masterList, activities, selectedCategories]);
-
+    }, [masterList, activities]);
 
     const filteredActivityList = useMemo(() => { 
         if (selectedActs.size === 0) return activityStats; 
@@ -423,41 +373,26 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
         }).join(', '); 
     }, [categoryStats, totalHours]);
     
-    // =========================================================================
-    //  V5.40 學生列表升級：兼容「活動篩選」與「顯示零記錄」模式
-    // =========================================================================
     const filteredStudentList = useMemo(() => {
-        // 模式一：如果開啟「只顯示無記錄學生」
-        if (showNoRecords) {
-            const participatingStudentKeys = new Set(studentStats.filter(s => s.hours > 0).map(s => s.key));
-            return masterList
-                .filter(s => !participatingStudentKeys.has(s.key))
-                .map(s => ({ ...s, hours: 0, filteredHours: 0 }));
-        }
-
-        // 模式二：常規篩選
-        const listWithHours = studentStats.map(student => {
-            const relevantActs = activities.filter(act => 
-                (selectedActs.size === 0 || selectedActs.has(act.activity)) &&
-                (selectedCategories.size === 0 || selectedCategories.has(act.manualCategory || detectCategory(act.activity))) &&
+        if (selectedActs.size === 0) return studentStats;
+        const selectedActivityNames = new Set(Array.from(selectedActs));
+        const studentDataWithFilteredHours = studentStats.map(student => {
+            const relevantActsForStudent = activities.filter(act => 
+                selectedActivityNames.has(act.activity) &&
                 act.verifiedClass === student.classCode && 
                 act.verifiedName === student.chiName
             );
             
-            const filteredHours = relevantActs.reduce((acc, act) => {
+            const filteredHours = relevantActsForStudent.reduce((acc, act) => {
                 const dur = calculateDuration(act.time);
-                const sessionCount = (Array.isArray(act.specificDates) && act.specificDates.length > 0) ? act.specificDates.length : (Array.isArray(act.dayIds) ? act.dayIds.length : 1);
+                const sessionCount = (act.specificDates && act.specificDates.length > 0) ? act.specificDates.length : 1;
                 return acc + (dur * sessionCount);
             }, 0);
             
             return { ...student, filteredHours };
         });
-
-        // 只返回在當前篩選下，有活動時數的學生
-        return listWithHours.filter(s => s.filteredHours > 0).sort((a,b) => b.filteredHours - a.filteredHours);
-
-    }, [studentStats, masterList, activities, selectedActs, selectedCategories, showNoRecords]);
-
+        return studentDataWithFilteredHours.filter(s => s.filteredHours > 0);
+    }, [studentStats, activities, selectedActs]);
 
     const exportGradeStats = () => { 
         const rows = []; 
@@ -497,55 +432,58 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
             <div className="flex-1 overflow-y-auto">
                 {statsViewMode === 'dashboard' && (
                     <div className="flex flex-col space-y-12 pb-12">
-                        
-                        {/* ================================================================= */}
-                        {/* V5.40 升級：課程範疇分佈 (可互動篩選)                             */}
-                        {/* ================================================================= */}
-                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col md:flex-row items-center md:items-start relative min-h-[300px]">
+                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col md:flex-row items-center md:items-start relative min-h-[400px]">
                             <div className="absolute top-4 left-4 z-20">
-                                <button onClick={exportCategoryStats} className="text-xs bg-indigo-600 text-white border px-3 py-1.5 rounded flex items-center hover:bg-indigo-700 shadow-md transition">
+                                <button onClick={() => exportToCSV(filteredActivityList, 'Activity_Hours_Report')} className="text-xs bg-indigo-600 text-white border px-3 py-1.5 rounded flex items-center hover:bg-indigo-700 shadow-md transition">
                                     <Download size={14} className="mr-1"/> 匯出 CSV
                                 </button>
                             </div>
                             <div className="flex-1 flex flex-col items-center justify-center p-4 pt-10">
-                                <h3 className="font-bold text-slate-700 mb-6 flex items-center text-lg"><Palette className="mr-2 text-purple-500"/> 課程範疇分佈 (可篩選)</h3>
-                                <div className="relative w-64 h-64 rounded-full shadow-xl border-4 border-white" style={{ background: `conic-gradient(${categoryPieGradient})` }}>
-                                    <div className="absolute inset-0 m-auto w-32 h-32 bg-slate-50 rounded-full flex flex-col items-center justify-center shadow-inner">
-                                        <span className="text-lg font-bold text-slate-600">{selectedCategories.size > 0 ? '篩選後' : '全校'}</span>
-                                        <span className="text-xs text-slate-400">分類統計</span>
+                                <h3 className="font-bold text-slate-700 mb-6 flex items-center text-lg"><Clock className="mr-2 text-orange-500"/> 活動總時數分佈 (可篩選)</h3>
+                                <div className="relative w-72 h-72 rounded-full shadow-2xl border-4 border-white transition-all duration-500" style={{ background: `conic-gradient(${ghostPieGradient})` }}>
+                                    <div className="absolute inset-0 m-auto w-40 h-40 bg-slate-50 rounded-full flex flex-col items-center justify-center shadow-inner">
+                                        <div className="text-xs text-slate-400 mb-1">{selectedActs.size > 0 ? "篩選後總時數" : "全校總學時"}</div>
+                                        <div className="font-bold text-slate-800 text-4xl">
+                                          {filteredChartData.total.toFixed(0)}
+                                        </div>
+                                        <span className="text-xs text-slate-400">Hours</span>
                                     </div>
                                 </div>
+                                <p className="text-xs text-slate-400 mt-4">點擊右側圖例進行篩選</p>
                             </div>
-                            <div className="w-full md:w-80 p-4 border-l border-slate-200 h-96 overflow-y-auto">
+                            <div className="w-full md:w-80 h-96 border-l border-slate-200 pl-0 md:pl-6 overflow-y-auto">
                                 <h4 className="text-xs font-bold text-slate-400 uppercase mb-3 sticky top-0 bg-slate-50 py-2 z-10 flex justify-between items-center">
-                                    <span>類別圖例 (點選切換)</span>
+                                    <span>圖例 (點選切換)</span>
                                     <button
                                         onClick={() => {
-                                            if (selectedCategories.size > 0) setSelectedCategories(new Set());
-                                            else setSelectedCategories(new Set(allCategoryStats.map(c => c.name)));
+                                            if (selectedActs.size > 0) {
+                                                setSelectedActs(new Set());
+                                            } else {
+                                                setSelectedActs(new Set(activityStats.map(a => a.name)));
+                                            }
                                         }}
                                         className="font-bold text-blue-600 hover:text-blue-800 text-[11px] bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-md"
                                     >
-                                        {selectedCategories.size > 0 ? '清除全部' : '全選'}
+                                        {selectedActs.size > 0 ? '清除全部' : '全選'}
                                     </button>
                                 </h4>
-                                <div className="space-y-2">
-                                    {allCategoryStats.map((cat, i) => {
-                                        const isChecked = selectedCategories.has(cat.name);
-                                        const isEffectivelyActive = selectedCategories.size === 0 || isChecked;
+                                <div className="space-y-1">
+                                    {activityStats.map((a, i) => {
+                                        const isChecked = selectedActs.has(a.name);
+                                        const isEffectivelyActive = selectedActs.size === 0 || isChecked;
+                                        const percentage = (a.hours / (filteredChartData.total || 1)) * 100;
                                         return (
                                             <label key={i} className={`w-full flex items-center justify-between p-2 rounded text-xs transition-all duration-200 cursor-pointer ${isEffectivelyActive ? 'bg-white shadow-sm' : 'bg-slate-50 opacity-50 hover:opacity-100'}`}>
-                                                <div className="flex items-center">
-                                                    <input type="checkbox" checked={isChecked} onChange={() => {
-                                                        const newSet = new Set(selectedCategories);
-                                                        if (newSet.has(cat.name)) newSet.delete(cat.name);
-                                                        else newSet.add(cat.name);
-                                                        setSelectedCategories(newSet);
-                                                    }} className="w-4 h-4 mr-3 text-purple-600 rounded focus:ring-purple-500 border-slate-300"/>
-                                                    <span className="w-3 h-3 rounded-full mr-2" style={{backgroundColor: CATEGORY_COLORS[cat.name] || '#94a3b8'}}></span>
-                                                    <span className="font-bold">{cat.name}</span>
+                                                <div className="flex items-center truncate">
+                                                    <input type="checkbox" checked={isChecked} onChange={() => toggleSelection(a.name)} className="w-4 h-4 mr-3 text-blue-600 rounded focus:ring-blue-500 border-slate-300"/>
+                                                    <span className="w-3 h-3 rounded-full mr-2 flex-shrink-0" style={{backgroundColor: getSafeColor(i)}}></span>
+                                                    <span className="truncate max-w-[120px]" title={a.name}>{a.name}</span>
                                                 </div>
-                                                 <div className="text-xs font-mono">{((cat.hours / (totalHours || 1)) * 100).toFixed(1)}%</div>
+                                                {isEffectivelyActive && (
+                                                    <div className="font-bold text-slate-600">
+                                                        {percentage.toFixed(1)}%
+                                                    </div>
+                                                )}
                                             </label>
                                         );
                                     })}
@@ -553,7 +491,7 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                             </div>
                         </div>
 
-                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 relative flex flex-col h-[600px]">
+                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col md:flex-row items-center md:items-start relative min-h-[300px]">
                             <div className="absolute top-4 left-4 z-20">
                                 <button onClick={exportCategoryStats} className="text-xs bg-indigo-600 text-white border px-3 py-1.5 rounded flex items-center hover:bg-indigo-700 shadow-md transition">
                                     <Download size={14} className="mr-1"/> 匯出 CSV
@@ -577,9 +515,7 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                                                 <span className="w-3 h-3 rounded-full mr-2" style={{backgroundColor: CATEGORY_COLORS[cat.name] || '#94a3b8'}}></span>
                                                 <span className="text-xs font-bold">{cat.name}</span>
                                             </div>
-                                            <div className="text-xs font-mono">
-                                                {((cat.hours/(totalHours||1))*100).toFixed(1)}%
-                                                </div>
+                                            <div className="text-xs font-mono">{((cat.hours/(totalHours||1))*100).toFixed(1)}%</div>
                                         </div>
                                     ))}
                                 </div>
@@ -691,34 +627,20 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                     </div>
                 )}
                 
-                {/* ================================================================= */}
-                {/* V5.40 升級：學生監測 (加入「顯示無記錄」開關)                     */}
-                {/* ================================================================= */}
                 {statsViewMode === 'students' && (
                     <div className="bg-white border rounded-xl overflow-hidden">
                         <div className="p-4 bg-slate-50 border-b">
                             <div className="flex justify-between items-center">
-                                <h3 className="font-bold text-slate-700 flex items-center"><Users className="mr-2 text-slate-500" size={18}/> 學生參與度監測</h3>
-                                <div className="flex items-center gap-4">
-                                     <label className="flex items-center cursor-pointer">
-                                        <div className={`relative ${showNoRecords ? 'bg-red-500' : 'bg-slate-300'} w-11 h-6 rounded-full transition-colors`}>
-                                            <input type="checkbox" className="hidden" checked={showNoRecords} onChange={() => setShowNoRecords(!showNoRecords)} />
-                                            <div className={`absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${showNoRecords ? 'translate-x-5' : ''}`}></div>
-                                        </div>
-                                        <span className={`ml-2 text-sm font-bold ${showNoRecords ? 'text-red-600' : 'text-slate-600'}`}>
-                                            只顯示無記錄學生
-                                        </span>
-                                    </label>
-                                    <button onClick={() => setFilterPanelOpen(!filterPanelOpen)} disabled={showNoRecords} className="text-sm text-blue-600 font-bold flex items-center bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed">
-                                        <Filter size={14} className="mr-2"/>{filterPanelOpen ? '收合選項' : '展開選項'}
-                                    </button>
-                                </div>
+                                <h3 className="font-bold text-slate-700 flex items-center"><AlertTriangle className="mr-2 text-orange-500" size={18}/> 學生參與度監測</h3>
+                                <button onClick={() => setFilterPanelOpen(!filterPanelOpen)} className="text-sm text-blue-600 font-bold flex items-center bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-100">
+                                    <Filter size={14} className="mr-2"/>{filterPanelOpen ? '收合選項' : '展開選項'}
+                                </button>
                             </div>
                             
-                            {filterPanelOpen && !showNoRecords && (
+                            {filterPanelOpen && (
                                 <div className="mt-4 p-4 bg-white border rounded-lg animate-in slide-in-from-top-2 max-h-[300px] overflow-y-auto">
-                                    {allCategoryStats.map(cat => {
-                                        const actsInCat = activityStats.filter(a => (a.manualCategory || detectCategory(a.name)) === cat.name);
+                                    {categoryStats.map(cat => {
+                                        const actsInCat = activityStats.filter(a => a.category === cat.name);
                                         if(actsInCat.length === 0) return null;
                                         const isAllSelected = actsInCat.every(a => selectedActs.has(a.name));
                                         const handleCatToggle = () => {
@@ -753,10 +675,10 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                                     <tr>
                                         <th className="p-3">班別 (學號)</th>
                                         <th className="p-3">姓名</th>
-                                        <th className="p-3 text-right">{selectedActs.size > 0 || selectedCategories.size > 0 ? "篩選後時數" : "總參與時數"}</th>
+                                        <th className="p-3 text-right">{selectedActs.size > 0 ? "篩選後時數" : "總參與時數"}</th>
                                         <th className="p-3 text-center">狀態</th>
                                         <th className="p-3">
-                                           <button onClick={() => exportToCSV(filteredStudentList.map(s => ({ Class: s.classCode, ClassNo: s.classNo, Name: s.chiName, Hours: (showNoRecords ? 0 : s.filteredHours).toFixed(1) })), 'Student_Participation_Report')} className="text-xs bg-white border px-2 py-1.5 rounded hover:bg-slate-50 flex items-center text-blue-600 border-blue-200 ml-auto whitespace-nowrap shadow-sm">
+                                           <button onClick={() => exportToCSV(filteredStudentList.map(s => ({ Class: s.classCode, ClassNo: s.classNo, Name: s.chiName, Hours: (selectedActs.size > 0 ? s.filteredHours : s.hours).toFixed(1) })), 'Student_Participation_Report')} className="text-xs bg-white border px-2 py-1.5 rounded hover:bg-slate-50 flex items-center text-blue-600 border-blue-200 ml-auto whitespace-nowrap shadow-sm">
                                                 <Download size={14} className="mr-1"/> 匯出名單
                                            </button>
                                         </th>
@@ -764,12 +686,12 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                                 </thead>
                                 <tbody className="divide-y">
                                     {filteredStudentList.map((s, i) => {
-                                        const displayHours = showNoRecords ? 0 : s.filteredHours;
+                                        const displayHours = selectedActs.size > 0 ? (s.filteredHours || 0) : s.hours;
                                         return (
-                                            <tr key={s.key || i} className={`hover:bg-slate-50 transition-colors ${displayHours === 0 ? 'bg-red-50/50' : ''}`}>
+                                            <tr key={i} className={`hover:bg-slate-50 transition-colors ${displayHours === 0 ? 'bg-red-50/50' : ''}`}>
                                                 <td className="p-3 text-slate-600">{s.classCode} ({s.classNo})</td>
                                                 <td className="p-3 font-bold">{s.chiName}</td>
-                                                <td className={`p-3 text-right font-bold ${selectedActs.size > 0 || selectedCategories.size > 0 ? 'text-blue-700' : ''}`}>{displayHours.toFixed(1)}</td>
+                                                <td className={`p-3 text-right font-bold ${selectedActs.size > 0 ? 'text-blue-700' : ''}`}>{displayHours.toFixed(1)}</td>
                                                 <td className="p-3 text-center">{displayHours === 0 ? <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-full font-bold">無紀錄</span> : <span className="text-xs text-green-600">正常</span>}</td>
                                                 <td></td>
                                             </tr>
@@ -1660,7 +1582,7 @@ const handleAttendanceChangeDirectly = async (id, newStatus, targetDate) => {
                 </div>
 
                 <div className="mt-4 text-center text-xs text-slate-400 font-mono tracking-wider">
-                    version 5.38
+                    version 5.37
                 </div>
             </div>
         </div>
