@@ -1,5 +1,5 @@
 // =============================================================================
-//  校園資訊 APP - version 5.35 (放學方式修復 + 教職員介面優化版)
+//  校園資訊 APP - version 5.37 (放學方式修復 + 教職員介面優化版)
 // =============================================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
@@ -710,6 +710,9 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
 // =============================================================================
 //  V5.35 終極修正：定義並實作絕對安全的 RealTimeAttendanceCell 元件
 // =============================================================================
+// =============================================================================
+//  V5.37 終極版：支持七種點名狀態顯示、點擊切換與即時更新氣泡
+// =============================================================================
 const getTodayStringForCell = () => {
     const today = new Date();
     const yyyy = today.getFullYear();
@@ -718,66 +721,64 @@ const getTodayStringForCell = () => {
     return `${yyyy}-${mm}-${dd}`;
 };
 
-const RealTimeAttendanceCell = ({ act, handleAttendanceChange, staffDateFilter }) => {
-    // 安全地獲取今天的日期字串
+const RealTimeAttendanceCell = ({ act, handleAttendanceChange, staffDateFilter, lastUpdatedId, setLastUpdatedId }) => {
     const todayStr = useMemo(() => getTodayStringForCell(), []);
-    
-    // 絕對安全的 effectiveDate 計算邏輯
-    const effectiveDate = useMemo(() => {
-        // 如果父元件有傳入 staffDateFilter，就用它
-        if (staffDateFilter) return staffDateFilter;
-        // 否則，使用今天的日期
-        return todayStr;
-    }, [staffDateFilter, todayStr]);
+    const effectiveDate = useMemo(() => staffDateFilter || todayStr, [staffDateFilter, todayStr]);
 
-    // 從 act.attendance 物件中安全地獲取狀態
     const attendanceStatus = useMemo(() => {
-        // 關鍵防護：確保 act.attendance 是一個物件，如果不是，就當作空物件處理
         const attendanceRecord = act.attendance || {};
-        // 從記錄中讀取當天的狀態，如果沒有，則預設為 'pending'
         return attendanceRecord[effectiveDate] || 'pending';
     }, [act.attendance, effectiveDate]);
 
-    const isToday = effectiveDate === todayStr;
-
-    const getStatusIndicator = () => {
-        switch (attendanceStatus) {
-            case 'present':
-                return (
-                    <span className={`inline-flex items-center gap-1.5 bg-green-100 text-green-800 border border-green-200 text-xs px-2.5 py-1 rounded-full font-bold ${isToday ? 'animate-pulse' : ''}`}>
-                        <CheckCircle size={14}/> 出席
-                    </span>
-                );
-            case 'absent':
-                return (
-                    <span className="inline-flex items-center gap-1.5 bg-red-100 text-red-800 border border-red-200 text-xs px-2.5 py-1 rounded-full font-bold">
-                        <X size={14}/> 缺席
-                    </span>
-                );
-            default: // 'pending'
-                return (
-                    <span className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-500 border border-slate-200 text-xs px-2.5 py-1 rounded-full font-bold">
-                       <Circle size={14}/> 待點名
-                    </span>
-                );
+    // 使用 useEffect 來處理更新氣泡的顯示與消失
+    useEffect(() => {
+        if (act.id === lastUpdatedId) {
+            const timer = setTimeout(() => {
+                setLastUpdatedId(null);
+            }, 2000); // 氣泡顯示 2 秒
+            return () => clearTimeout(timer);
         }
+    }, [lastUpdatedId, act.id, setLastUpdatedId]);
+    
+    // 點擊事件處理函數
+    const handleClick = () => {
+        handleAttendanceChange(act.id, attendanceStatus, effectiveDate);
+        setLastUpdatedId(act.id);
     };
+
+    // 建立完整的狀態對應表 (文字 + 樣式)
+    const statusMap = {
+        pending: { text: '⚫ 待點', style: 'bg-slate-100 text-slate-600 border-slate-300' },
+        present: { text: '🟢 出席', style: 'bg-green-100 text-green-800 border-green-300' },
+        late:    { text: '🔵 遲到', style: 'bg-blue-100 text-blue-800 border-blue-300' },
+        absent:  { text: '🔴 缺席', style: 'bg-red-100 text-red-800 border-red-300' },
+        sick:    { text: '🟡 病假', style: 'bg-yellow-100 text-yellow-800 border-yellow-300' },
+        leave:   { text: '🟣 事假', style: 'bg-purple-100 text-purple-800 border-purple-300' },
+        unknown: { text: '⚪ 未知', style: 'bg-gray-200 text-gray-800 border-gray-400' }
+    };
+
+    // 安全地獲取當前狀態的顯示設定，如果找不到則退回 'pending'
+    const { text, style } = statusMap[attendanceStatus] || statusMap.pending;
 
     return (
         <td className="p-3.5 text-center">
-            <div className="relative group">
-                {getStatusIndicator()}
-                <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-max bg-slate-800 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                    <div className="flex gap-2">
-                         <button onClick={() => handleAttendanceChange(act.id, 'present', effectiveDate)} className="flex items-center gap-1 hover:text-green-400"><CheckCircle size={14}/>出席</button>
-                         <button onClick={() => handleAttendanceChange(act.id, 'absent', effectiveDate)} className="flex items-center gap-1 hover:text-red-400"><X size={14}/>缺席</button>
-                         <button onClick={() => handleAttendanceChange(act.id, 'pending', effectiveDate)} className="flex items-center gap-1 hover:text-slate-400"><Circle size={14}/>重設</button>
+            <div className="relative">
+                <span
+                    onClick={handleClick}
+                    className={`cursor-pointer inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-bold transition-all duration-300 transform hover:scale-110 ${style}`}
+                >
+                    {text}
+                </span>
+                {act.id === lastUpdatedId && (
+                    <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-yellow-400 text-yellow-900 text-[10px] px-2 py-0.5 rounded-full shadow-lg animate-bounce whitespace-nowrap z-10 font-bold">
+                        即時更新!
                     </div>
-                </div>
+                )}
             </div>
         </td>
     );
 };
+
 
 
 // -----------------------------------------------------------------------------
@@ -851,6 +852,7 @@ const App = () => {
 
   // DB Editing State
   const [editingId, setEditingId] = useState(null);
+  const [lastUpdatedId, setLastUpdatedId] = useState(null);
   const [editFormData, setEditFormData] = useState({});
 
   // ⭐ 修復 3：補全 Staff View 篩選 State，供教職員介面完整過濾與顯示
@@ -876,20 +878,33 @@ const App = () => {
   };
   const [staffDateFilter, setStaffDateFilter] = useState(getTodayString());
   // ==========================================
-  // 版本 1.5: 修改點名更新邏輯，確保教職員修改時同步寫入當日紀錄
-  const handleAttendanceChange = async (id, newStatus, targetDate) => {
+    // ===================================================================
+  //  V5.36 升級：融合 V4.7 的點擊循環邏輯 + V5.33 的多日期寫入
+  // ===================================================================
+  const handleAttendanceChange = async (id, currentStatus, targetDate) => {
+    // 定義點名狀態的循環順序
+    const a_status_flow = ['pending', 'present', 'absent'];
+    
+    // 找出目前狀態在循環中的位置
+    const currentIndex = a_status_flow.indexOf(currentStatus);
+    
+    // 計算下一個狀態 (如果找不到或已是最後一個，則回到第一個)
+    const nextIndex = (currentIndex === -1 || currentIndex === a_status_flow.length - 1) ? 0 : currentIndex + 1;
+    const newStatus = a_status_flow[nextIndex];
+
+    // 決定要更新的日期 (如果沒有傳入特定日期，就用今天)
+    const dateKey = targetDate || getTodayString();
+
     try {
-        // 若有傳入 targetDate（如前一日），則使用該日期；否則預設為今天
-        const dateKey = targetDate || getTodayString();
-        
-        await updateDoc(doc(db, "activities", id), { 
-            attendanceStatus: newStatus,
-            [`attendance.${dateKey}`]: newStatus
-        });
+      // 更新 Firestore 文件
+      await updateDoc(doc(db, "activities", id), {
+        [`attendance.${dateKey}`]: newStatus
+      });
     } catch (error) {
-        alert("更新點名狀態失敗: " + error.message);
+      alert("更新點名狀態失敗: " + error.message);
     }
-};
+  };
+
 
 // ==========================================
 
@@ -1516,7 +1531,7 @@ const App = () => {
                 </div>
 
                 <div className="mt-4 text-center text-xs text-slate-400 font-mono tracking-wider">
-                    version 5.35
+                    version 5.37
                 </div>
             </div>
         </div>
@@ -1750,7 +1765,14 @@ const App = () => {
                                         </td>
 
                                        {/* 版本 1.6: 使用帶有實時閃爍效果的組件 (並傳入日期篩選狀態) */}
-                                        <RealTimeAttendanceCell act={act} handleAttendanceChange={handleAttendanceChange} staffDateFilter={staffDateFilter} />
+                                       <RealTimeAttendanceCell 
+    act={act} 
+    handleAttendanceChange={handleAttendanceChange} 
+    staffDateFilter={staffDateFilter}
+    lastUpdatedId={lastUpdatedId}
+    setLastUpdatedId={setLastUpdatedId} 
+/>
+
 
 
                                         <td className="p-3.5 text-center">
