@@ -1,5 +1,5 @@
 // =============================================================================
-//  校園資訊 APP - version 5.28 (放學方式修復 + 教職員介面優化版)
+//  校園資訊 APP - version 5.29 (放學方式修復 + 教職員介面優化版)
 // =============================================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
@@ -1439,7 +1439,7 @@ const App = () => {
                 </div>
 
                 <div className="mt-4 text-center text-xs text-slate-400 font-mono tracking-wider">
-                    version 5.28
+                    version 5.29
                 </div>
             </div>
         </div>
@@ -1686,9 +1686,11 @@ else if (item.dayIds && item.dayIds.length > 0) {
                                         <td className="p-3.5 text-slate-600 text-xs space-y-0.5">
     <div>{act.dateText || '-'}</div>
     <div className="text-slate-400 font-bold">
-        {/* 修正：使用可選串聯 (?.) 安全地讀取 dateSpecificTimes，防止因 undefined 導致的渲染失敗 */}
-        // 修正：使用可選串聯 (?.) 安全地讀取 dateSpecificTimes，防止因 undefined 導致的渲染失敗
-        {(staffDateFilter && act.dateSpecificTimes?.[staffDateFilter]) ? act.dateSpecificTimes?.[staffDateFilter] : act.time || ''}
+        {/* 完美相容：如果 dateSpecificTimes 不存在，或該日期沒有特定時間，自動退回使用原本的 act.time */}
+        {(staffDateFilter && act.dateSpecificTimes && act.dateSpecificTimes[staffDateFilter]) 
+  ? act.dateSpecificTimes[staffDateFilter] 
+  : (act.time || '')}
+
     </div>
 </td>
 
@@ -1753,8 +1755,11 @@ else if (item.dayIds && item.dayIds.length > 0) {
 <div className="flex items-center text-slate-600 bg-slate-100 p-2 rounded-lg">
     <Clock size={20} className="mr-2 text-orange-500" />
     <span className="font-bold">
-    {/* 修正：使用可選串聯 (?.) 安全地讀取 dateSpecificTimes，防止因 undefined 導致的渲染失敗 */}
-    {item.dateSpecificTimes?.[dayItem.dateString] || item.time}
+    {/* 完美相容：先確保 dateSpecificTimes 存在，再用 dateString 撈取，否則一律 fallback 回 item.time */}
+    {(item.dateSpecificTimes && item.dateSpecificTimes[dayItem.dateString]) 
+  ? item.dateSpecificTimes[dayItem.dateString] 
+  : (item.time || '')}
+
 </span>
 
 </div><div className="flex items-center text-blue-800 bg-blue-50 p-2 rounded-lg"><MapPin size={20} className="mr-2 text-blue-500" /><span className="font-bold">{item.location}</span></div></div></div>))) : (<div className="text-slate-500 text-sm italic py-4 text-center border border-dashed border-slate-600 rounded-xl">沒有安排活動</div>)}</div></div>);
