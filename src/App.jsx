@@ -1,5 +1,5 @@
 // =============================================================================
-//  校園資訊 APP - VERSION 5.11 (放學方式修復 + 教職員介面優化版)
+//  校園資訊 APP - VERSION 5.12 (放學方式修復 + 教職員介面優化版)
 // =============================================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
@@ -8,8 +8,9 @@ import {
   Lock, Users, Shield, ArrowRight, LogOut, Key, PlusCircle, FileText, 
   Phone, CheckSquare, Square, RefreshCcw, X, Plus, Edit2, FileSpreadsheet, 
   BarChart, History, TrendingUp, Filter, Cloud, UserX, PieChart, Download, 
-  Activity, Save as SaveIcon, Layers, Maximize, Palette, ChevronDown, Circle 
+  Activity, Save as SaveIcon, Layers, Maximize, Palette, ChevronDown, Circle, Info 
 } from 'lucide-react';
+
 
 // =============================================================================
 //  FIREBASE IMPORTS & CONFIGURATION
@@ -303,9 +304,6 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                         
                         {filterPanelOpen && (
                             <div className="mt-4 p-4 bg-white border rounded-lg animate-in slide-in-from-top-2 max-h-[300px] overflow-y-auto">
-                                <div className="text-xs text-slate-500 mb-3 flex items-center">
-                                    <Info size={12} className="mr-1"/> 勾選分類名稱可全選該分類下的活動
-                                </div>
                                 {categoryStats.map(cat => {
                                     const actsInCat = activityStats.filter(a => a.category === cat.name);
                                     if(actsInCat.length === 0) return null;
@@ -1154,7 +1152,7 @@ const App = () => {
                 </div>
 
                 <div className="mt-4 text-center text-xs text-slate-400 font-mono tracking-wider">
-                    Version 5.11
+                    Version 5.12
                 </div>
             </div>
         </div>
