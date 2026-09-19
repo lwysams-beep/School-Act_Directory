@@ -1,5 +1,5 @@
 // =============================================================================
-//  校園資訊 APP - version 5.32 (放學方式修復 + 教職員介面優化版)
+//  校園資訊 APP - version 5.33 (放學方式修復 + 教職員介面優化版)
 // =============================================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
@@ -1116,29 +1116,35 @@ const App = () => {
   // DB MANAGEMENT LOGIC
   // ---------------------------------------------------------------------------
   const filteredDbActivities = useMemo(() => {
-    // 建立一個學生總表 Map，方便快速查找性別
     const studentSexMap = new Map(masterList.map(s => [`${s.classCode}-${s.chiName}`, s.sex]));
-    
+
     const enrichedActivities = activities.map(act => {
-        // 如果活動記錄本身沒有性別，就去 Map 裡查找並補上
-        if (!act.sex) {
-            const studentKey = `${act.verifiedClass}-${act.verifiedName}`;
-            const sexFromMaster = studentSexMap.get(studentKey);
-            if (sexFromMaster) {
-                return { ...act, sex: sexFromMaster };
-            }
-        }
-        return act;
+      // 安全地創建 studentKey，確保 verifiedClass 和 verifiedName 存在
+      const studentKey = (act.verifiedClass && act.verifiedName) ? `${act.verifiedClass}-${act.verifiedName}` : null;
+      let sexFromMaster = null;
+      if (studentKey) {
+        sexFromMaster = studentSexMap.get(studentKey);
+      }
+      
+      // 返回一個確保 sex 屬性存在的物件
+      return {
+        ...act,
+        sex: act.sex || sexFromMaster || undefined,
+      };
     });
 
     if (!dbSearchTerm) return enrichedActivities;
+
     const lower = dbSearchTerm.toLowerCase();
-    return enrichedActivities.filter(a => 
-        a.activity?.toLowerCase().includes(lower) || 
-        a.verifiedName?.includes(lower) || 
-        a.verifiedClass?.includes(lower)
-    );
-}, [activities, dbSearchTerm, masterList]);
+    return enrichedActivities.filter(a => {
+      // 在 filter 的每一步都進行安全檢查
+      const activityMatch = a.activity && a.activity.toLowerCase().includes(lower);
+      const nameMatch = a.verifiedName && a.verifiedName.includes(lower);
+      const classMatch = a.verifiedClass && a.verifiedClass.toLowerCase().includes(lower);
+      return activityMatch || nameMatch || classMatch;
+    });
+  }, [activities, dbSearchTerm, masterList]);
+
 
 
   const toggleDbSelect = (id) => {
@@ -1439,7 +1445,7 @@ const App = () => {
                 </div>
 
                 <div className="mt-4 text-center text-xs text-slate-400 font-mono tracking-wider">
-                    version 5.32
+                    version 5.33
                 </div>
             </div>
         </div>
@@ -1468,24 +1474,30 @@ const App = () => {
                         // ===================================================================
             //  V5.31 終極修正：建立絕對安全過濾區，根除渲染失敗問題
             // ===================================================================
-            let matchesDate = true; // 預設為 true，當沒有啟用日期篩選時，顯示所有資料
-
+                        // ==========================================
+            //  還原為 V5.29 的標準過濾邏輯
+            // ==========================================
+            let matchesDate = true;
             if (staffDateFilter) {
-                // STEP 1: 檢查是否有特定日期，這一步最安全，因為 includes 不會出錯
-                const hasSpecificDate = Array.isArray(item.specificDates) && item.specificDates.includes(staffDateFilter);
-
-                // STEP 2: 如果沒有特定日期，才檢查星期（dayIds），並確保 dayIds 是陣列
-                const hasMatchingDay = !hasSpecificDate && Array.isArray(item.dayIds) && (() => {
+                // 如果該活動有設定特定日期 (specificDates)
+                if (item.specificDates && item.specificDates.length > 0) {
+                    matchesDate = item.specificDates.includes(staffDateFilter);
+                } 
+                // 否則，檢查該活動的星期幾 (dayIds) 是否符合選擇的日期
+                else if (item.dayIds && item.dayIds.length > 0) {
                     const safeDateString = staffDateFilter.replace(/-/g, '/');
                     const filterDateObj = new Date(safeDateString);
-                    if (isNaN(filterDateObj.getTime())) return false; // 無效日期直接返回 false
-                    const filterDayOfWeek = filterDateObj.getDay();
-                    return item.dayIds.includes(filterDayOfWeek);
-                })();
-                
-                // STEP 3: 最終判斷：只要滿足其中一項，就為 true。否則為 false。
-                matchesDate = hasSpecificDate || hasMatchingDay;
+                    const filterDayOfWeek = filterDateObj.getDay(); // 0(日) 到 6(六)
+                    matchesDate = item.dayIds.includes(filterDayOfWeek);
+                }
+                // 對於舊數據，因為沒有 specificDates 和 dayIds，matchesDate 將保持 true，
+                // 但因為 useEffect 已經處理了 dateSpecificTimes，所以渲染時不會出錯。
+                // 為了絕對安全，我們在這裡明確將沒有任何日期定義的數據在篩選時排除。
+                else {
+                    matchesDate = false;
+                }
             }
+
 
 
             
