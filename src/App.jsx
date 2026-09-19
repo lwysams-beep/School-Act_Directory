@@ -1,5 +1,5 @@
 // =============================================================================
-//  校園資訊 APP - version 5.22 (放學方式修復 + 教職員介面優化版)
+//  校園資訊 APP - version 5.23 (放學方式修復 + 教職員介面優化版)
 // =============================================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
@@ -1425,7 +1425,7 @@ const App = () => {
                 </div>
 
                 <div className="mt-4 text-center text-xs text-slate-400 font-mono tracking-wider">
-                    version 5.22
+                    version 5.23
                 </div>
             </div>
         </div>
@@ -1832,7 +1832,6 @@ const App = () => {
                 </th>
                 <th className="p-3">學生</th>
                 <th className="p-3 w-20">性別</th>
-                <th className="p-3">電話</th>
                 <th className="p-3">活動名稱</th>
                 <th className="p-3">時間</th>
                 <th className="p-3">地點</th>
@@ -1879,15 +1878,6 @@ const App = () => {
                             </span>
                         )}
                         {!act.sex && <span className="text-slate-300">-</span>}
-                    </td>
-
-                    {/* 4. 電話 */}
-                    <td className="p-3 font-mono text-xs text-slate-600">
-                        {act.rawPhone ? (
-                            <a href={`tel:${act.rawPhone.split('/')[0].trim()}`} className="hover:text-blue-600 underline">
-                                {act.rawPhone}
-                            </a>
-                        ) : '-'}
                     </td>
 
                     {/* 判斷：行內編輯狀態 vs 一般瀏覽狀態 */}
