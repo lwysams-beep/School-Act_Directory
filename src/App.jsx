@@ -1,5 +1,5 @@
 // =============================================================================
-//  校園資訊 APP - version 5.18 (放學方式修復 + 教職員介面優化版)
+//  校園資訊 APP - version 5.19 (放學方式修復 + 教職員介面優化版)
 // =============================================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
@@ -289,7 +289,8 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                 }
             });
             
-            const gradeArr = Object.keys(gradeMap).map(g => ({ grade: `P.${g}`, total: gradeMap[g].totalHours, details: gradeMap[g].details }));
+            // 檔案 V5.17.txt, 第 338 行 (修正後)
+            const gradeArr = Object.keys(gradeMap).map(g => ({ grade: `P.${g}`, total: gradeMap[g].totalHours, details: gradeMap[g].byActivity }));
             const finalActStats = Object.values(actStats).sort((a, b) => b.hours - a.hours);
             const totalH = finalActStats.reduce((acc, cur) => acc + cur.hours, 0);
             const finalCatStats = Object.entries(catStats).map(([name, hours]) => ({ name, hours })).sort((a, b) => b.hours - a.hours);
@@ -339,37 +340,29 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
     }, [categoryStats, totalHours]);
     
     const filteredStudentList = useMemo(() => {
-        // 如果沒有選擇任何篩選條件，直接回傳原始的全年統計數據
         if (selectedActs.size === 0) return studentStats;
 
         const selectedActivityNames = new Set(Array.from(selectedActs));
 
-        // 【核心修正】這裡我們不再 filter 掉學生，而是為每一位學生計算篩選後的時數
         const studentDataWithFilteredHours = studentStats.map(student => {
-            // 找出該名學生有參與，且在我們篩選範圍內的活動
             const relevantActsForStudent = activities.filter(act => 
                 selectedActivityNames.has(act.activity) &&
                 act.verifiedClass === student.classCode && 
                 act.verifiedName === student.chiName
             );
             
-            // 計算這些活動的總時數
             const filteredHours = relevantActsForStudent.reduce((acc, act) => {
                 const dur = calculateDuration(act.time);
-                // 考慮到特定日期或多堂數的情況
                 const sessionCount = (act.specificDates && act.specificDates.length > 0) ? act.specificDates.length : 1;
                 return acc + (dur * sessionCount);
             }, 0);
             
-            // 回傳完整的學生物件，並附上計算出的「篩選後時數」
             return { ...student, filteredHours: filteredHours };
         });
 
-        // 永遠回傳完整的學生列表，而不是只回傳 filteredHours > 0 的學生
-        return studentDataWithFilteredHours;
+        return studentDataWithFilteredHours.filter(s => s.filteredHours > 0);
 
     }, [studentStats, activities, selectedActs]);
-
 
 
 
@@ -1273,7 +1266,7 @@ const App = () => {
                 </div>
 
                 <div className="mt-4 text-center text-xs text-slate-400 font-mono tracking-wider">
-                    version 5.18
+                    version 5.19
                 </div>
             </div>
         </div>
