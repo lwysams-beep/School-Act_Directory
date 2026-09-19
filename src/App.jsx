@@ -1,5 +1,5 @@
 // =============================================================================
-//  校園資訊 APP - version 5.34 (放學方式修復 + 教職員介面優化版)
+//  校園資訊 APP - version 5.35 (放學方式修復 + 教職員介面優化版)
 // =============================================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
@@ -707,6 +707,77 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
     );
 };
 
+// =============================================================================
+//  V5.35 終極修正：定義並實作絕對安全的 RealTimeAttendanceCell 元件
+// =============================================================================
+const getTodayStringForCell = () => {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+};
+
+const RealTimeAttendanceCell = ({ act, handleAttendanceChange, staffDateFilter }) => {
+    // 安全地獲取今天的日期字串
+    const todayStr = useMemo(() => getTodayStringForCell(), []);
+    
+    // 絕對安全的 effectiveDate 計算邏輯
+    const effectiveDate = useMemo(() => {
+        // 如果父元件有傳入 staffDateFilter，就用它
+        if (staffDateFilter) return staffDateFilter;
+        // 否則，使用今天的日期
+        return todayStr;
+    }, [staffDateFilter, todayStr]);
+
+    // 從 act.attendance 物件中安全地獲取狀態
+    const attendanceStatus = useMemo(() => {
+        // 關鍵防護：確保 act.attendance 是一個物件，如果不是，就當作空物件處理
+        const attendanceRecord = act.attendance || {};
+        // 從記錄中讀取當天的狀態，如果沒有，則預設為 'pending'
+        return attendanceRecord[effectiveDate] || 'pending';
+    }, [act.attendance, effectiveDate]);
+
+    const isToday = effectiveDate === todayStr;
+
+    const getStatusIndicator = () => {
+        switch (attendanceStatus) {
+            case 'present':
+                return (
+                    <span className={`inline-flex items-center gap-1.5 bg-green-100 text-green-800 border border-green-200 text-xs px-2.5 py-1 rounded-full font-bold ${isToday ? 'animate-pulse' : ''}`}>
+                        <CheckCircle size={14}/> 出席
+                    </span>
+                );
+            case 'absent':
+                return (
+                    <span className="inline-flex items-center gap-1.5 bg-red-100 text-red-800 border border-red-200 text-xs px-2.5 py-1 rounded-full font-bold">
+                        <X size={14}/> 缺席
+                    </span>
+                );
+            default: // 'pending'
+                return (
+                    <span className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-500 border border-slate-200 text-xs px-2.5 py-1 rounded-full font-bold">
+                       <Circle size={14}/> 待點名
+                    </span>
+                );
+        }
+    };
+
+    return (
+        <td className="p-3.5 text-center">
+            <div className="relative group">
+                {getStatusIndicator()}
+                <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-max bg-slate-800 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                    <div className="flex gap-2">
+                         <button onClick={() => handleAttendanceChange(act.id, 'present', effectiveDate)} className="flex items-center gap-1 hover:text-green-400"><CheckCircle size={14}/>出席</button>
+                         <button onClick={() => handleAttendanceChange(act.id, 'absent', effectiveDate)} className="flex items-center gap-1 hover:text-red-400"><X size={14}/>缺席</button>
+                         <button onClick={() => handleAttendanceChange(act.id, 'pending', effectiveDate)} className="flex items-center gap-1 hover:text-slate-400"><Circle size={14}/>重設</button>
+                    </div>
+                </div>
+            </div>
+        </td>
+    );
+};
 
 
 // -----------------------------------------------------------------------------
@@ -1445,7 +1516,7 @@ const App = () => {
                 </div>
 
                 <div className="mt-4 text-center text-xs text-slate-400 font-mono tracking-wider">
-                    version 5.34
+                    version 5.35
                 </div>
             </div>
         </div>
