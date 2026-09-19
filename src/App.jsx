@@ -1,5 +1,5 @@
 // =============================================================================
-//  校園資訊 APP - VERSION 4.8 (放學方式修復 + 教職員介面優化版)
+//  校園資訊 APP - VERSION 4.9 (放學方式修復 + 教職員介面優化版)
 // =============================================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
@@ -94,7 +94,7 @@ const parseMasterCSV = (csvText) => {
   };
 
 // 通用名單解析函式 (支援 "3B 20 温小文 自行回家 91400040" 或 "3B 20 温小文 自 91400040")
-const processBulkText = (text, actName, actTime, actLoc, actDateText, dayIds, dates) => {
+const processBulkText = (text, actName, actTime, actLoc, actDateText, dayIds, dates, dateSpecificTimes = {}) => {
     const lines = text.trim().split('\n');
     const newItems = [];
     const mixedClassRegex = /([1-6][A-E])\s*(\d{1,2})?/; 
@@ -143,6 +143,7 @@ const processBulkText = (text, actName, actTime, actLoc, actDateText, dayIds, da
                 dateText: actDateText,
                 dayIds: dayIds || [1], 
                 specificDates: dates || [], 
+                dateSpecificTimes: dateSpecificTimes,
                 forceConflict: false 
             });
         }
@@ -382,6 +383,8 @@ const App = () => {
   const [importDayIds, setImportDayIds] = useState([1]);
   const [importDates, setImportDates] = useState([]); 
   const [tempDateInput, setTempDateInput] = useState('');
+  const [importDateTimes, setImportDateTimes] = useState({}); // <-- 新增：儲存特定日期的時間 { "2025-02-09": "14:00-15:00" }
+  const [tempTimeInput, setTempTimeInput] = useState(''); // <-- 新增：輸入欄位的特定時間
   const dateInputRef = useRef(null); 
 
   // Admin UI State
@@ -621,8 +624,13 @@ const App = () => {
       if (!importDates.includes(dateString)) {
           const newDates = [...importDates, dateString].sort();
           setImportDates(newDates);
+          // 如果有填寫特定時間，就將它綁定到這個日期上
+          if (tempTimeInput.trim() !== '') {
+              setImportDateTimes(prev => ({ ...prev, [dateString]: tempTimeInput.trim() }));
+          }
       }
       setTempDateInput(''); 
+      setTempTimeInput(''); // <-- 清空時間輸入框
       if(dateInputRef.current) dateInputRef.current.focus();
   };
 
@@ -630,8 +638,15 @@ const App = () => {
       if (e.key === 'Enter') { e.preventDefault(); handleAddDate(); }
   };
 
-  const handleRemoveDate = (d) => setImportDates(prev => prev.filter(x => x !== d));
-  const handleClearDates = () => setImportDates([]);
+  const handleRemoveDate = (d) => {
+      setImportDates(prev => prev.filter(x => x !== d));
+      setImportDateTimes(prev => {
+          const newTimes = { ...prev };
+          delete newTimes[d];
+          return newTimes;
+      });
+  };
+  const handleClearDates = () => { setImportDates([]); setImportDateTimes({}); };
   const formatDisplayDate = (isoDate) => {
       if (!isoDate) return '';
       const parts = isoDate.split('-');
@@ -653,8 +668,10 @@ const App = () => {
           importLocation,
           finalDateText,
           currentDayIds,
-          importDates
+          importDates,
+          importDateTimes // <-- 新增傳入特定時間參數
       );
+
 
       if (newItems.length > 0) {
           setPendingImports(prev => [...prev, ...newItems]);
@@ -1026,7 +1043,7 @@ const App = () => {
                 </div>
 
                 <div className="mt-4 text-center text-xs text-slate-400 font-mono tracking-wider">
-                    Version 4.8
+                    Version 4.9
                 </div>
             </div>
         </div>
@@ -1266,9 +1283,13 @@ const App = () => {
                                         </td>
 
                                         <td className="p-3.5 text-slate-600 text-xs space-y-0.5">
-                                            <div>{act.dateText || '-'}</div>
-                                            <div className="text-slate-400">{act.time || ''}</div>
-                                        </td>
+    <div>{act.dateText || '-'}</div>
+    <div className="text-slate-400 font-bold">
+        {/* 降級相容：配合教職員日期篩選器，顯示當天確切時間 */}
+        {(staffDateFilter && act.dateSpecificTimes && act.dateSpecificTimes[staffDateFilter]) ? act.dateSpecificTimes[staffDateFilter] : act.time || ''}
+    </div>
+</td>
+
 
                                         <td className="p-3.5 text-slate-600">
                                             {act.location || '-'}
@@ -1325,7 +1346,14 @@ const App = () => {
            <div className="flex-1 px-8 pb-8 overflow-y-auto"><div className="space-y-6 mt-4">{upcomingDays.map((dayItem) => {
                const dayActivities = studentResult ? studentResult.filter(act => { if (act.specificDates && act.specificDates.length > 0) { return act.specificDates.includes(dayItem.dateString); } return act.dayIds && act.dayIds.includes(dayItem.dayId); }) : [];
                const isToday = dayItem.label === '今天';
-               return (<div key={dayItem.dateString} className={`rounded-3xl p-6 transition-all ${isToday ? 'bg-slate-700/80 ring-2 ring-green-500 shadow-[0_0_20px_rgba(34,197,94,0.3)]' : 'bg-slate-700/30'}`}><div className="flex items-center mb-4 border-b border-slate-600 pb-2"><div className={`text-2xl font-bold ${isToday ? 'text-green-400' : 'text-slate-200'}`}>{dayItem.fullLabel}</div>{isToday && <span className="ml-3 bg-green-600 text-white text-xs px-2 py-1 rounded-full animate-pulse">Today</span>}</div><div className="space-y-4">{dayActivities.length > 0 ? (dayActivities.map((item, idx) => (<div key={`${item.id}-${idx}`} className="bg-white text-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden"><div className="flex justify-between items-start mb-2"><h3 className="text-2xl font-bold text-slate-900">{item.activity}</h3></div><div className="grid grid-cols-2 gap-4 mt-3"><div className="flex items-center text-slate-600 bg-slate-100 p-2 rounded-lg"><Clock size={20} className="mr-2 text-orange-500" /><span className="font-bold">{item.time}</span></div><div className="flex items-center text-blue-800 bg-blue-50 p-2 rounded-lg"><MapPin size={20} className="mr-2 text-blue-500" /><span className="font-bold">{item.location}</span></div></div></div>))) : (<div className="text-slate-500 text-sm italic py-4 text-center border border-dashed border-slate-600 rounded-xl">沒有安排活動</div>)}</div></div>);
+               return (<div key={dayItem.dateString} className={`rounded-3xl p-6 transition-all ${isToday ? 'bg-slate-700/80 ring-2 ring-green-500 shadow-[0_0_20px_rgba(34,197,94,0.3)]' : 'bg-slate-700/30'}`}><div className="flex items-center mb-4 border-b border-slate-600 pb-2"><div className={`text-2xl font-bold ${isToday ? 'text-green-400' : 'text-slate-200'}`}>{dayItem.fullLabel}</div>{isToday && <span className="ml-3 bg-green-600 text-white text-xs px-2 py-1 rounded-full animate-pulse">Today</span>}</div><div className="space-y-4">{dayActivities.length > 0 ? (dayActivities.map((item, idx) => (<div key={`${item.id}-${idx}`} className="bg-white text-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden"><div className="flex justify-between items-start mb-2"><h3 className="text-2xl font-bold text-slate-900">{item.activity}</h3></div><div className="grid grid-cols-2 gap-4 mt-3">
+<div className="flex items-center text-slate-600 bg-slate-100 p-2 rounded-lg">
+    <Clock size={20} className="mr-2 text-orange-500" />
+    <span className="font-bold">
+        {/* 降級相容：優先讀取特定日期時間，若無則讀取預設時間 */}
+        {(item.dateSpecificTimes && item.dateSpecificTimes[dayItem.dateString]) ? item.dateSpecificTimes[dayItem.dateString] : item.time}
+    </span>
+</div><div className="flex items-center text-blue-800 bg-blue-50 p-2 rounded-lg"><MapPin size={20} className="mr-2 text-blue-500" /><span className="font-bold">{item.location}</span></div></div></div>))) : (<div className="text-slate-500 text-sm italic py-4 text-center border border-dashed border-slate-600 rounded-xl">沒有安排活動</div>)}</div></div>);
            })}</div>{(!studentResult) && (<div className="flex flex-col items-center justify-center h-40 mt-8 text-slate-400 bg-slate-700/30 rounded-2xl border border-dashed border-slate-600"><Calendar size={48} className="mb-2 opacity-50" /><p className="text-lg">請輸入班別及學號查詢</p></div>)}</div></div>
     );
  }
@@ -1797,7 +1825,19 @@ const App = () => {
                         <div className="space-y-3 mb-4">
                             <div><label className="text-xs text-slate-500 font-bold uppercase">活動名稱</label><input type="text" className="w-full p-2 border rounded" value={importActivity} onChange={e => setImportActivity(e.target.value)} /></div>
                             <div className="grid grid-cols-2 gap-2"><div><label className="text-xs text-slate-500 font-bold uppercase">時間</label><input type="text" className="w-full p-2 border rounded" value={importTime} onChange={e => setImportTime(e.target.value)} /></div><div><label className="text-xs text-slate-500 font-bold uppercase">地點</label><input type="text" className="w-full p-2 border rounded" value={importLocation} onChange={e => setImportLocation(e.target.value)} /></div></div>
-                            <div className="border border-slate-200 rounded p-3 bg-slate-50"><label className="text-xs text-slate-500 font-bold uppercase mb-2 block">選擇日期 (輸入 0209 代表 9月2日)</label><div className="flex gap-2 mb-2"><input type="text" ref={dateInputRef} placeholder="DDMM (如 0209)" className="flex-1 p-2 border rounded text-sm" value={tempDateInput} onChange={(e) => setTempDateInput(e.target.value)} onKeyDown={handleDateInputKeyDown} /><button onClick={handleAddDate} className="bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 flex items-center"><Plus size={16} /></button></div><div className="flex flex-wrap gap-2 mb-2">{importDates.map(date => (<span key={date} className="bg-white border border-blue-200 text-blue-800 text-xs px-2 py-1 rounded-full flex items-center shadow-sm">{formatDisplayDate(date)}<button onClick={() => handleRemoveDate(date)} className="ml-1 text-blue-400 hover:text-red-500"><X size={12} /></button></span>))}</div><div className="flex justify-between items-center text-xs"><span className="font-bold text-slate-600">已選: {importDates.length} 天 (共{importDates.length}堂)</span>{importDates.length > 0 && <button onClick={handleClearDates} className="text-red-400 hover:underline">清空</button>}</div></div>
+                            <div className="border border-slate-200 rounded p-3 bg-slate-50"><label className="text-xs text-slate-500 font-bold uppercase mb-2 block">選擇日期 (輸入 0209 代表 9月2日)</label><div className="flex gap-2 mb-2">
+    <input type="text" ref={dateInputRef} placeholder="DDMM (如 0209)" className="flex-1 p-2 border rounded text-sm" value={tempDateInput} onChange={(e) => setTempDateInput(e.target.value)} onKeyDown={handleDateInputKeyDown} />
+    <input type="text" placeholder="特定時間 (選填, 例如: 14:00-15:00)" className="flex-1 p-2 border rounded text-sm" value={tempTimeInput} onChange={(e) => setTempTimeInput(e.target.value)} onKeyDown={handleDateInputKeyDown} />
+    <button onClick={handleAddDate} className="bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 flex items-center"><Plus size={16} /></button>
+</div>
+<div className="flex flex-wrap gap-2 mb-2">
+    {importDates.map(date => (
+        <span key={date} className="bg-white border border-blue-200 text-blue-800 text-xs px-2 py-1 rounded-full flex items-center shadow-sm">
+            {formatDisplayDate(date)} {importDateTimes[date] ? `(${importDateTimes[date]})` : ''}
+            <button onClick={() => handleRemoveDate(date)} className="ml-1 text-blue-400 hover:text-red-500"><X size={12} /></button>
+        </span>
+    ))}
+</div><div className="flex justify-between items-center text-xs"><span className="font-bold text-slate-600">已選: {importDates.length} 天 (共{importDates.length}堂)</span>{importDates.length > 0 && <button onClick={handleClearDates} className="text-red-400 hover:underline">清空</button>}</div></div>
                             
                             <div>
                                 <label className="text-xs text-slate-500 font-bold uppercase mb-2 block">星期 (可多選)</label>
