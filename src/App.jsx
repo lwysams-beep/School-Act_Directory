@@ -1,5 +1,5 @@
 // =============================================================================
-//  校園資訊 APP - VERSION 5.16 (放學方式修復 + 教職員介面優化版)
+//  校園資訊 APP - VERSION 5.17 (放學方式修復 + 教職員介面優化版)
 // =============================================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
@@ -365,36 +365,7 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
 
 
 
-    const filteredActivityList = useMemo(() => { if (selectedActs.size === 0) return activityStats; return activityStats.filter(a => selectedActs.has(a.name)); }, [activityStats, selectedActs]);
-    const filteredTotalHours = useMemo(() => { if (selectedActs.size === 0) return totalHours; return filteredActivityList.reduce((acc, cur) => acc + cur.hours, 0); }, [filteredActivityList, totalHours, selectedActs]);
-    const getSafeColor = (idx) => CHART_COLORS[idx % CHART_COLORS.length] || '#cbd5e1';
-    const ghostPieGradient = useMemo(() => { if (totalHours === 0) return '#e2e8f0 0deg 360deg'; let currentDeg = 0; return activityStats.map((item, idx) => { const deg = (item.hours / (totalHours || 1)) * 360; const isSelected = selectedActs.size === 0 || selectedActs.has(item.name); const color = isSelected ? getSafeColor(idx) : '#f1f5f9'; const str = `${color} ${currentDeg}deg ${currentDeg + deg}deg`; currentDeg += deg; return str; }).join(', '); }, [activityStats, totalHours, selectedActs]);
-    const categoryPieGradient = useMemo(() => { if (totalHours === 0) return '#e2e8f0 0deg 360deg'; let currentDeg = 0; return categoryStats.map((item) => { const deg = (item.hours / (totalHours || 1)) * 360; const color = CATEGORY_COLORS[item.name] || '#94a3b8'; const str = `${color} ${currentDeg}deg ${currentDeg + deg}deg`; currentDeg += deg; return str; }).join(', '); }, [categoryStats, totalHours]);
-    const filteredStudentList = useMemo(() => {
-        // 如果沒有選擇任何篩選條件，直接回傳原始的全年統計
-        if (selectedActs.size === 0) return studentStats;
-
-        // 核心邏輯：重新計算篩選後的時數
-        const selectedActivitiesData = activities.filter(a => selectedActs.has(a.activity));
-
-        return studentStats.map(student => {
-            const relevantActs = selectedActivitiesData.filter(act => 
-                act.verifiedClass === student.classCode && 
-                act.verifiedName === student.chiName
-            );
-
-            // 只計算篩選範圍內的時數
-            const filteredHours = relevantActs.reduce((acc, act) => {
-                const dur = calculateDuration(act.time);
-                const sessionCount = (act.specificDates && act.specificDates.length > 0) ? act.specificDates.length : 1;
-                return acc + (dur * sessionCount);
-            }, 0);
-            
-            // 回傳包含「篩選後時數」的新學生物件
-            return { ...student, filteredHours: filteredHours };
-        }).filter(s => s.filteredHours > 0); // 只顯示在篩選範圍內有參與時數的學生
-
-    }, [studentStats, activities, selectedActs]);
+ 
 
     const exportGradeStats = () => { const rows = []; gradeDistribution.forEach(g => { Object.entries(g.details).forEach(([actName, hours]) => { if (selectedActs.size === 0 || selectedActs.has(actName)) { rows.push({ Grade: g.grade, Activity: actName, Hours: hours.toFixed(2) }); } }); }); exportToCSV(rows, 'Grade_Activity_Distribution'); };
     const exportCategoryStats = () => exportToCSV(categoryStats, 'Category_Distribution_Report');
@@ -1294,7 +1265,7 @@ const App = () => {
                 </div>
 
                 <div className="mt-4 text-center text-xs text-slate-400 font-mono tracking-wider">
-                    Version 5.16
+                    Version 5.17
                 </div>
             </div>
         </div>
