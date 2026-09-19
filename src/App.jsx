@@ -1,5 +1,5 @@
 // =============================================================================
-//  校園資訊 APP - version 5.33 (放學方式修復 + 教職員介面優化版)
+//  校園資訊 APP - version 5.34 (放學方式修復 + 教職員介面優化版)
 // =============================================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
@@ -1445,7 +1445,7 @@ const App = () => {
                 </div>
 
                 <div className="mt-4 text-center text-xs text-slate-400 font-mono tracking-wider">
-                    version 5.33
+                    version 5.34
                 </div>
             </div>
         </div>
@@ -1467,6 +1467,9 @@ const App = () => {
         const matchesDismissal = !staffDismissalFilter || 
         (staffDismissalFilter === '自' && item.dismissalMethod === '自') ||
         (staffDismissalFilter === '家' && item.dismissalMethod === '家');
+
+        const matchesActivity = !staffActivityFilter || item.activity === staffActivityFilter;
+
 
                     // ==========================================
             // 版本 5.30: 最終修正日期篩選，完美向下兼容
