@@ -292,16 +292,20 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                 {statsViewMode === 'activities' && (<div className="bg-white border rounded-xl overflow-hidden"><div className="p-4 bg-slate-50 border-b flex justify-between items-center"><h3 className="font-bold text-slate-700">活動統計列表</h3><button onClick={() => exportToCSV(filteredActivityList, 'Activity_Report')} className="text-sm bg-white border px-3 py-1 rounded hover:bg-slate-50 flex items-center text-blue-600 border-blue-200"><Download size={14} className="mr-1"/> 匯出 CSV</button></div><table className="w-full text-sm text-left"><thead className="bg-slate-100 text-slate-500 uppercase"><tr><th className="p-3">活動名稱</th><th className="p-3 w-48">類別 (可手動更改)</th><th className="p-3 text-right">總人次</th><th className="p-3 text-right">總學時</th></tr></thead><tbody className="divide-y">{filteredActivityList.map((a, i) => (<tr key={i} className="hover:bg-slate-50"><td className="p-3 font-medium flex items-center"><span className="w-2 h-2 rounded-full mr-2" style={{backgroundColor: getSafeColor(getActColorIndex(a.name))}}></span>{a.name}</td><td className="p-3"><div className="relative group/cat"><select className="w-full text-xs p-1 border rounded bg-slate-50 hover:bg-white focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer" value={a.category} disabled={updatingCategory} onChange={(e) => handleCategoryChange(a.name, e.target.value)}>{CATEGORY_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}</select>{updatingCategory && <span className="absolute right-0 top-0 text-[8px] text-blue-500">更新中...</span>}</div></td><td className="p-3 text-right">{a.count}</td><td className="p-3 text-right font-bold text-blue-600">{a.hours.toFixed(1)}</td></tr>))}</tbody></table></div>)}
                 {statsViewMode === 'logs' && (<div className="bg-white border rounded-xl overflow-hidden"><div className="p-4 bg-slate-50 border-b"><h3 className="font-bold text-slate-700">查詢日誌 (Audit Log)</h3></div><table className="w-full text-sm text-left"><thead className="bg-slate-100 text-slate-500"><tr><th className="p-3">日期</th><th className="p-3">時間</th><th className="p-3">查詢班別</th><th className="p-3">學生姓名</th><th className="p-3">結果</th></tr></thead><tbody>{queryLogs.length > 0 ? queryLogs.map((log, i) => (<tr key={i} className="border-b last:border-0 hover:bg-white"><td className="p-3 text-slate-600">{log.dateStr}</td><td className="p-3 font-mono text-slate-500 text-xs">{log.timeStr}</td><td className="p-3 font-bold text-slate-800">{log.class} ({log.classNo})</td><td className="p-3">{log.name}</td><td className="p-3">{log.success ? <span className="text-green-600 text-xs bg-green-100 px-2 py-1 rounded">成功</span> : <span className="text-red-500 text-xs">無記錄</span>}</td></tr>)) : (<tr><td colSpan="5" className="p-8 text-center text-slate-400">暫無查詢紀錄</td></tr>)}</tbody></table></div>)}
                 {statsViewMode === 'students' && (<div className="bg-white border rounded-xl overflow-hidden">
-                    {/* Part 1: 標題與篩選器 */}
+                    {/* Part 1: 標題與展開式 Checkbox 篩選器 */}
                     <div className="p-4 bg-slate-50 border-b">
                         <div className="flex justify-between items-center">
                             <h3 className="font-bold text-slate-700 flex items-center"><AlertTriangle className="mr-2 text-orange-500" size={18}/> 學生參與度監測</h3>
                             <button onClick={() => setFilterPanelOpen(!filterPanelOpen)} className="text-sm text-blue-600 font-bold flex items-center bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-100">
-                                <Filter size={14} className="mr-2"/>{filterPanelOpen ? '收合篩選器' : '展開篩選器'}
+                                <Filter size={14} className="mr-2"/>{filterPanelOpen ? '收合選項' : '展開選項'}
                             </button>
                         </div>
+                        
                         {filterPanelOpen && (
-                            <div className="mt-4 p-4 bg-white border rounded-lg animate-in slide-in-from-top-2">
+                            <div className="mt-4 p-4 bg-white border rounded-lg animate-in slide-in-from-top-2 max-h-[300px] overflow-y-auto">
+                                <div className="text-xs text-slate-500 mb-3 flex items-center">
+                                    <Info size={12} className="mr-1"/> 勾選分類名稱可全選該分類下的活動
+                                </div>
                                 {categoryStats.map(cat => {
                                     const actsInCat = activityStats.filter(a => a.category === cat.name);
                                     if(actsInCat.length === 0) return null;
@@ -313,15 +317,15 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                                         setSelectedActs(newSet);
                                     };
                                     return (
-                                        <div key={cat.name} className="mb-3 last:mb-0">
-                                            <label className="flex items-center font-bold text-slate-700 text-sm mb-2 cursor-pointer">
+                                        <div key={cat.name} className="mb-4 last:mb-0 pb-3 border-b border-slate-100 last:border-0 last:pb-0">
+                                            <label className="flex items-center font-bold text-slate-700 text-sm mb-2 cursor-pointer hover:text-purple-600 w-fit">
                                                 <input type="checkbox" checked={isAllSelected} onChange={handleCatToggle} className="w-4 h-4 mr-2 text-purple-600 rounded focus:ring-purple-500"/>
                                                 {cat.name}
                                             </label>
                                             <div className="flex flex-wrap gap-2 pl-6">
                                                 {actsInCat.map(act => (
-                                                    <label key={act.name} className="flex items-center text-xs text-slate-600 cursor-pointer bg-slate-100 px-2 py-1 rounded-md hover:bg-slate-200">
-                                                        <input type="checkbox" checked={selectedActs.has(act.name)} onChange={() => toggleSelection(act.name)} className="w-3 h-3 mr-1.5 text-blue-600 rounded focus:ring-blue-500"/>
+                                                    <label key={act.name} className={`flex items-center text-xs cursor-pointer px-2 py-1.5 rounded-md border transition-colors ${selectedActs.has(act.name) ? 'bg-blue-50 border-blue-200 text-blue-700 font-medium' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'}`}>
+                                                        <input type="checkbox" checked={selectedActs.has(act.name)} onChange={() => toggleSelection(act.name)} className="w-3.5 h-3.5 mr-1.5 text-blue-600 rounded focus:ring-blue-500"/>
                                                         {act.name}
                                                     </label>
                                                 ))}
@@ -332,10 +336,10 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                             </div>
                         )}
                     </div>
-                    {/* Part 2: 學生列表 */}
+                    {/* Part 2: 學生列表與匯出按鈕 */}
                     <div className="max-h-[500px] overflow-y-auto">
                         <table className="w-full text-sm text-left">
-                            <thead className="bg-slate-100 text-slate-500 uppercase sticky top-0">
+                            <thead className="bg-slate-100 text-slate-500 uppercase sticky top-0 shadow-sm">
                                 <tr>
                                     <th className="p-3">班別 (學號)</th>
                                     <th className="p-3">姓名</th>
@@ -349,8 +353,8 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                                            ClassNo: s.classNo,
                                            Name: s.chiName,
                                            Hours: (selectedActs.size > 0 ? s.filteredHours : s.hours).toFixed(1)
-                                       })), 'Student_Participation_Report')} className="text-xs bg-white border px-2 py-1 rounded hover:bg-slate-50 flex items-center text-blue-600 border-blue-200">
-                                            <Download size={12} className="mr-1"/> 匯出
+                                       })), 'Student_Participation_Report')} className="text-xs bg-white border px-2 py-1.5 rounded hover:bg-slate-50 flex items-center text-blue-600 border-blue-200 ml-auto whitespace-nowrap shadow-sm">
+                                            <Download size={14} className="mr-1"/> 匯出名單
                                        </button>
                                     </th>
                                 </tr>
@@ -359,11 +363,11 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                                 {filteredStudentList.map((s, i) => {
                                     const displayHours = selectedActs.size > 0 ? (s.filteredHours || 0) : s.hours;
                                     return (
-                                        <tr key={i} className={`hover:bg-slate-50 ${displayHours === 0 ? 'bg-red-50' : ''}`}>
+                                        <tr key={i} className={`hover:bg-slate-50 transition-colors ${displayHours === 0 ? 'bg-red-50/50' : ''}`}>
                                             <td className="p-3 text-slate-600">{s.classCode} ({s.classNo})</td>
                                             <td className="p-3 font-bold">{s.chiName}</td>
-                                            <td className="p-3 text-right font-bold text-blue-700">{displayHours.toFixed(1)}</td>
-                                            <td className="p-3 text-center">{displayHours === 0 ? <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded font-bold">無相關參與</span> : <span className="text-xs text-green-600">正常</span>}</td>
+                                            <td className={`p-3 text-right font-bold ${selectedActs.size > 0 ? 'text-blue-700' : ''}`}>{displayHours.toFixed(1)}</td>
+                                            <td className="p-3 text-center">{displayHours === 0 ? <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-full font-bold">無紀錄</span> : <span className="text-xs text-green-600">正常</span>}</td>
                                             <td></td>
                                         </tr>
                                     );
@@ -373,7 +377,6 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                     </div>
                 </div>)}
 
-<div className="max-h-[500px] overflow-y-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-100 text-slate-500 uppercase sticky top-0"><tr><th className="p-3">班別 (學號)</th><th className="p-3">姓名</th><th className="p-3 text-right">參與時數</th><th className="p-3 text-center">狀態</th></tr></thead><tbody className="divide-y">{filteredStudentList.map((s, i) => (<tr key={i} className={`hover:bg-slate-50 ${s.hours === 0 ? 'bg-red-50' : ''}`}><td className="p-3 text-slate-600">{s.classCode} ({s.classNo})</td><td className="p-3 font-bold">{s.chiName}</td><td className="p-3 text-right">{s.hours.toFixed(1)}</td><td className="p-3 text-center">{s.hours === 0 ? <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded font-bold">關注</span> : <span className="text-xs text-green-600">正常</span>}</td></tr>))}</tbody></table></div></div>)}
             </div>
         </div>
     );
