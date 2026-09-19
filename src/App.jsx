@@ -1,5 +1,5 @@
 // =============================================================================
-//  校園資訊 APP - version 5.27 (放學方式修復 + 教職員介面優化版)
+//  校園資訊 APP - version 5.28 (放學方式修復 + 教職員介面優化版)
 // =============================================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
@@ -851,49 +851,27 @@ const App = () => {
     return () => unsubscribe();
   }, []);
 
-  import re
-
-# 讀取您上傳的程式碼檔案
-with open('V5.25.txt', 'r', encoding='utf-8') as f:
-    code = f.read()
-
-# 找到目標 useEffect 區塊
-original_use_effect = """  useEffect(() => {
-    const q = query(collection(db, "activities"), orderBy("time")); 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const acts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setActivities(acts);
-    });
-    return () => unsubscribe();
-  }, []);"""
-
-# 定義修改後的程式碼，加入向下兼容的邏輯
-modified_use_effect = """  useEffect(() => {
+  useEffect(() => {
     const q = query(collection(db, "activities"), orderBy("time"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const acts = snapshot.docs.map(doc => {
         const data = doc.data();
+        
         // =====================================================================
-        //  向下兼容修正：確保舊資料也有 dateSpecificTimes 屬性 (即使是空物件)
-        //  這樣可以避免在其他地方因讀取 undefined 的屬性而導致渲染失敗。
+        // 💡 向下相容修正：確保舊資料也有 dateSpecificTimes 屬性 (即使是空物件)
+        // 這樣可以避免在其他地方因讀取 undefined 的屬性而導致渲染失敗。
         // =====================================================================
         if (!data.dateSpecificTimes) {
           data.dateSpecificTimes = {};
         }
+        
         return { id: doc.id, ...data };
       });
       setActivities(acts);
     });
     return () => unsubscribe();
-  }, []);"""
+  }, []);
 
-# 替換程式碼
-modified_code = code.replace(original_use_effect, modified_use_effect)
-
-# 輸出修改後的程式碼，供您複製使用
-print("```javascript")
-print(modified_use_effect)
-print("```")
 
 
   useEffect(() => {
@@ -1461,7 +1439,7 @@ print("```")
                 </div>
 
                 <div className="mt-4 text-center text-xs text-slate-400 font-mono tracking-wider">
-                    version 5.27
+                    version 5.28
                 </div>
             </div>
         </div>
