@@ -1,5 +1,5 @@
 // =============================================================================
-//  校園資訊 APP - version 5.21 (放學方式修復 + 教職員介面優化版)
+//  校園資訊 APP - version 5.22 (放學方式修復 + 教職員介面優化版)
 // =============================================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
@@ -229,15 +229,45 @@ const CATEGORY_COLORS = {
 // -----------------------------------------------------------------------------
 // 3. STATS VIEW COMPONENT
 // -----------------------------------------------------------------------------
+// =============================================================================
+// 3. STATS VIEW COMPONENT (V5.22 - 完整修復與功能增強版)
+// =============================================================================
 const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
-    const [filterPanelOpen, setFilterPanelOpen] = useState(true); // <-- 新增此行，預設打開篩選器
+    const [filterPanelOpen, setFilterPanelOpen] = useState(true);
     const [statsViewMode, setStatsViewMode] = useState('dashboard');
     const [selectedActs, setSelectedActs] = useState(new Set());
     const [updatingCategory, setUpdatingCategory] = useState(false);
 
-    const toggleSelection = (actName) => { if (!actName) return; const newSet = new Set(selectedActs); if (newSet.has(actName)) newSet.delete(actName); else newSet.add(actName); setSelectedActs(newSet); };
+    const toggleSelection = (actName) => { 
+        if (!actName) return; 
+        const newSet = new Set(selectedActs); 
+        if (newSet.has(actName)) newSet.delete(actName); 
+        else newSet.add(actName); 
+        setSelectedActs(newSet); 
+    };
+    
     const clearSelection = () => setSelectedActs(new Set());
-    const handleCategoryChange = async (activityName, newCategory) => { if (!window.confirm(`確定要將「${activityName}」的所有記錄分類更改為「${newCategory}」嗎？`)) return; setUpdatingCategory(true); try { const batch = writeBatch(db); const targetDocs = activities.filter(a => a.activity === activityName); targetDocs.forEach(item => { const docRef = doc(db, "activities", item.id); batch.update(docRef, { manualCategory: newCategory }); }); await batch.commit(); alert("分類更新成功！"); } catch (error) { console.error(error); alert("更新失敗，請檢查網絡"); } finally { setUpdatingCategory(false); } };
+
+    const handleCategoryChange = async (activityName, newCategory) => { 
+        if (!window.confirm(`確定要將「${activityName}」的所有記錄分類更改為「${newCategory}」嗎？`)) return; 
+        setUpdatingCategory(true); 
+        try { 
+            const batch = writeBatch(db); 
+            const targetDocs = activities.filter(a => a.activity === activityName); 
+            targetDocs.forEach(item => { 
+                const docRef = doc(db, "activities", item.id); 
+                batch.update(docRef, { manualCategory: newCategory }); 
+            }); 
+            await batch.commit(); 
+            alert("分類更新成功！"); 
+        } catch (error) { 
+            console.error(error); 
+            alert("更新失敗，請檢查網絡"); 
+        } finally { 
+            setUpdatingCategory(false); 
+        } 
+    };
+
     const { activityStats, gradeDistribution, categoryStats, studentStats, totalHours } = useMemo(() => {
         try {
             if (!masterList || masterList.length === 0 || !activities) {
@@ -246,8 +276,7 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
             const actStats = {};
             const stuStats = {};
             const catStats = {};
-            const gradeMap = { '1': {}, '2': {}, '3': {}, '4': {}, '5': {}, '6': {} };
-            Object.keys(gradeMap).forEach(g => gradeMap[g] = { totalHours: 0, byActivity: {} });
+            const gradeMap = { '1': { totalHours: 0, byActivity: {} }, '2': { totalHours: 0, byActivity: {} }, '3': { totalHours: 0, byActivity: {} }, '4': { totalHours: 0, byActivity: {} }, '5': { totalHours: 0, byActivity: {} }, '6': { totalHours: 0, byActivity: {} } };
 
             masterList.forEach(s => {
                 if (s && s.key) stuStats[s.key] = { ...s, count: 0, hours: 0, acts: [] };
@@ -273,9 +302,7 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                     stuStats[sKey].count += sessionCount;
                     stuStats[sKey].hours += totalItemHours;
                     if (!stuStats[sKey].acts.includes(actName)) stuStats[sKey].acts.push(actName);
-                    if (!stuStats[sKey].sex && item.sex) {
-                        stuStats[sKey].sex = item.sex;
-                    }
+                    if (!stuStats[sKey].sex && item.sex) stuStats[sKey].sex = item.sex;
                 }
 
                 const gradeStr = String(item.verifiedClass || '');
@@ -289,13 +316,12 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                 }
             });
             
-            // 檔案 V5.17.txt, 第 338 行 (修正後)
             const gradeArr = Object.keys(gradeMap).map(g => ({ grade: `P.${g}`, total: gradeMap[g].totalHours, details: gradeMap[g].byActivity }));
             const finalActStats = Object.values(actStats).sort((a, b) => b.hours - a.hours);
             const totalH = finalActStats.reduce((acc, cur) => acc + cur.hours, 0);
             const finalCatStats = Object.entries(catStats).map(([name, hours]) => ({ name, hours })).sort((a, b) => b.hours - a.hours);
             
-            return { activityStats: finalActStats, gradeDistribution: gradeArr, categoryStats: finalCatStats, studentStats: Object.values(stuStats).sort((a,b) => a.hours - b.hours), totalHours: totalH };
+            return { activityStats: finalActStats, gradeDistribution: gradeArr, categoryStats: finalCatStats, studentStats: Object.values(stuStats).sort((a,b) => b.hours - b.hours), totalHours: totalH };
         } catch (e) {
             console.error("Data Calculation Error:", e);
             return { activityStats: [], gradeDistribution: [], categoryStats: [], studentStats: [], totalHours: 0 };
@@ -306,44 +332,26 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
         if (selectedActs.size === 0) return activityStats; 
         return activityStats.filter(a => selectedActs.has(a.name)); 
     }, [activityStats, selectedActs]);
-
-    const filteredTotalHours = useMemo(() => { 
-        if (selectedActs.size === 0) return totalHours; 
-        return filteredActivityList.reduce((acc, cur) => acc + cur.hours, 0); 
-    }, [filteredActivityList, totalHours, selectedActs]);
-
-
-  }, [activityStats, selectedActs, totalHours];
-
-    // 🟢【新增】只計算已勾選活動的總時數和列表
+    
+    // 【修正】只計算已勾選活動的總時數和列表
     const filteredChartData = useMemo(() => {
         if (selectedActs.size === 0) {
-          return {
-            list: activityStats,
-            total: totalHours,
-          };
+          return { list: activityStats, total: totalHours };
         }
         const filteredList = activityStats.filter(a => selectedActs.has(a.name));
         const filteredTotal = filteredList.reduce((acc, cur) => acc + cur.hours, 0);
-        return {
-          list: filteredList,
-          total: filteredTotal,
-        };
-      }, [activityStats, selectedActs, totalHours]);
+        return { list: filteredList, total: filteredTotal };
+    }, [activityStats, selectedActs, totalHours]);
     
-      const getSafeColor = (idx) => CHART_COLORS[idx % CHART_COLORS.length] || '#cbd5e1';
-    
+    const getSafeColor = (idx) => CHART_COLORS[idx % CHART_COLORS.length] || '#cbd5e1';
 
-
-      // 🟢【修改】圓餅圖現在只會根據 filteredChartData 繪製，未勾選項目不計入
-    // 🟢【修改】圓餅圖現在只會根據 filteredChartData 繪製，未勾選項目不計入
+    // 【修正】圓餅圖根據 filteredChartData 繪製
     const ghostPieGradient = useMemo(() => {
         const { list, total } = filteredChartData;
-        if (total === 0) return '#e2e8f0 0deg 360deg';
+        if (total === 0 || list.length === 0) return '#e2e8f0 0deg 360deg';
     
         let currentDeg = 0;
         return list.map((item) => {
-          // 找到該活動在原始列表中的索引，以保持顏色一致
           const originalIndex = activityStats.findIndex(a => a.name === item.name);
           const deg = (item.hours / (total || 1)) * 360;
           const color = getSafeColor(originalIndex);
@@ -351,9 +359,7 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
           currentDeg += deg;
           return str;
         }).join(', ');
-      }, [filteredChartData, activityStats]);
-    
-
+    }, [filteredChartData, activityStats]);
 
     const categoryPieGradient = useMemo(() => { 
         if (totalHours === 0) return '#e2e8f0 0deg 360deg'; 
@@ -369,9 +375,7 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
     
     const filteredStudentList = useMemo(() => {
         if (selectedActs.size === 0) return studentStats;
-
         const selectedActivityNames = new Set(Array.from(selectedActs));
-
         const studentDataWithFilteredHours = studentStats.map(student => {
             const relevantActsForStudent = activities.filter(act => 
                 selectedActivityNames.has(act.activity) &&
@@ -385,21 +389,31 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                 return acc + (dur * sessionCount);
             }, 0);
             
-            return { ...student, filteredHours: filteredHours };
+            return { ...student, filteredHours };
         });
-
         return studentDataWithFilteredHours.filter(s => s.filteredHours > 0);
-
     }, [studentStats, activities, selectedActs]);
 
+    const exportGradeStats = () => { 
+        const rows = []; 
+        gradeDistribution.forEach(g => { 
+            const details = g.details || {};
+            Object.entries(details).forEach(([actName, hours]) => { 
+                if (selectedActs.size === 0 || selectedActs.has(actName)) { 
+                    rows.push({ Grade: g.grade, Activity: actName, Hours: hours.toFixed(2) }); 
+                } 
+            }); 
+        }); 
+        exportToCSV(rows, 'Grade_Activity_Distribution'); 
+    };
 
-
- 
-
-    const exportGradeStats = () => { const rows = []; gradeDistribution.forEach(g => { Object.entries(g.details).forEach(([actName, hours]) => { if (selectedActs.size === 0 || selectedActs.has(actName)) { rows.push({ Grade: g.grade, Activity: actName, Hours: hours.toFixed(2) }); } }); }); exportToCSV(rows, 'Grade_Activity_Distribution'); };
     const exportCategoryStats = () => exportToCSV(categoryStats, 'Category_Distribution_Report');
-    const maxGradeHours = useMemo(() => { return Math.max(...gradeDistribution.map(g => g.total)) || 1; }, [gradeDistribution]);
-    const getActColorIndex = (name) => { const idx = activityStats.findIndex(x => x.name === name); return idx >= 0 ? idx : 0; };
+    const maxGradeHours = useMemo(() => Math.max(...gradeDistribution.map(g => g.total)) || 1, [gradeDistribution]);
+    const getActColorIndex = (name) => {
+        const idx = activityStats.findIndex(x => x.name === name);
+        return idx >= 0 ? idx : -1;
+    };
+
     return (
         <div className="bg-white p-6 rounded-xl shadow-md min-h-[600px] flex flex-col">
             <div className="flex justify-between items-center mb-6 border-b pb-4">
@@ -414,318 +428,285 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                 <button onClick={() => setStatsViewMode('logs')} className={`px-4 py-2 rounded-lg flex items-center transition ${statsViewMode === 'logs' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}><History size={18} className="mr-2"/> 系統紀錄</button>
             </div>
             {selectedActs.size > 0 && (<div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex justify-between items-center animate-in slide-in-from-top-2"><div className="text-sm text-blue-800"><span className="font-bold flex items-center"><Filter size={16} className="mr-1"/> 關注模式: </span>{Array.from(selectedActs).join(', ')}</div><button onClick={clearSelection} className="text-xs bg-white text-slate-500 border px-2 py-1 rounded hover:bg-red-50 hover:text-red-500 transition">清除篩選 (顯示全校)</button></div>)}
+            
             <div className="flex-1 overflow-y-auto">
-                {statsViewMode === 'dashboard' && (<div className="flex flex-col space-y-12 pb-12"><div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col md:flex-row items-center md:items-start relative min-h-[400px]"><div className="absolute top-4 left-4 z-20"><button onClick={() => exportToCSV(filteredActivityList, 'Activity_Hours_Report')} className="text-xs bg-indigo-600 text-white border px-3 py-1.5 rounded flex items-center hover:bg-indigo-700 shadow-md transition"><Download size={14} className="mr-1"/> 匯出 CSV</button></div><div className="flex-1 flex flex-col items-center justify-center p-4 pt-10"><h3 className="font-bold text-slate-700 mb-6 flex items-center text-lg"><Clock className="mr-2 text-orange-500"/> 活動總時數分佈 (真實比例)</h3><div className="relative w-72 h-72 rounded-full shadow-2xl border-4 border-white transition-all duration-500" style={{ background: `conic-gradient(${ghostPieGradient})` }}><div className="absolute inset-0 m-auto w-36 h-36 bg-slate-50 rounded-full flex flex-col items-center justify-center shadow-inner"><div className="text-xs text-slate-400 mb-1">{selectedActs.size > 0 ? "已選 / 總計" : "總學時"}</div><div className="flex items-baseline">{selectedActs.size > 0 && <span className="text-2xl font-bold text-blue-600 mr-1">{filteredTotalHours.toFixed(0)}</span>}{selectedActs.size > 0 && <span className="text-slate-400">/</span>}<span className={`font-bold text-slate-800 ${selectedActs.size > 0 ? 'text-lg ml-1' : 'text-4xl'}`}>{totalHours.toFixed(0)}</span></div><span className="text-xs text-slate-400">Hours</span></div></div><p className="text-xs text-slate-400 mt-4">點擊右側圖例進行多項對比</p></div><div className="w-full md:w-80 h-96 border-l border-slate-200 pl-0 md:pl-6 overflow-y-auto">{/* 【修改】在圖例標題右側新增「全選/取消」按鈕 */}
-<h4 className="text-xs font-bold text-slate-400 uppercase mb-3 sticky top-0 bg-slate-50 py-2 z-10 flex justify-between items-center">
-    <span>圖例 (點選切換)</span>
-    <button
-        onClick={() => {
-            // 如果已選數量等於總數，則清空；否則全選
-            if (selectedActs.size === activityStats.length) {
-                setSelectedActs(new Set());
-            } else {
-                setSelectedActs(new Set(activityStats.map(a => a.name)));
-            }
-        }}
-        className="font-bold text-blue-600 hover:text-blue-800 text-[11px] bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-md"
-    >
-        {selectedActs.size === activityStats.length ? '取消全選' : '全選'}
-    </button>
-</h4>
-<span>圖例 (點選切換)</span>{selectedActs.size > 0 && <span className="text-blue-500">已選 {selectedActs.size} 項</span>}</div>
-                                {/* 🟢【修改】將圖例按鈕改為 Checkbox 核取方塊，並動態重新計算百分比 */}
-                                <div className="space-y-1">
-                  {activityStats.map((a, i) => {
-                    const isChecked = selectedActs.has(a.name);
-                    // 如果沒有任何勾選，則預設所有項目都視為有效作用狀態
-                    const isEffectivelyActive = selectedActs.size === 0 || isChecked;
-                    
-                    // 根據 filteredChartData 的總時數重新計算百分比
-                    const percentage = (a.hours / (filteredChartData.total || 1)) * 100;
-
-                    return (
-                      <label 
-                        key={i} 
-                        className={`w-full flex items-center justify-between p-2 rounded text-xs transition-all duration-200 cursor-pointer ${
-                          isEffectivelyActive ? 'bg-white shadow-sm' : 'bg-slate-50 opacity-60 hover:opacity-100 hover:bg-slate-100'
-                        }`}
-                      >
-                        <div className="flex items-center truncate">
-                          <input 
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={() => toggleSelection(a.name)}
-                            className="w-4 h-4 mr-2 text-blue-600 rounded focus:ring-blue-500 border-slate-300"
-                          />
-                          <span 
-                            className="w-3 h-3 rounded-full mr-2 flex-shrink-0" 
-                            style={{ backgroundColor: getSafeColor(i) }}
-                          ></span>
-                          <span className="truncate max-w-[120px]" title={a.name}>
-                            {a.name}
-                          </span>
-                        </div>
-                        {/* 只有在有效（勾選）狀態下才顯示重新計算後的百分比 */}
-                        {isEffectivelyActive && (
-                          <div className="font-bold text-slate-600">
-                            {percentage.toFixed(1)}%
-                          </div>
-                        )}
-                      </label>
-                    );
-                  })}
-                </div>
-                </div>
-                </div>
-                )}{/* ========================================================================================= */}
-{/* 【新增區塊】課程範疇分佈 (圓餅圖) 與 各級總時數分佈 (棒形圖)                             */}
-{/* ========================================================================================= */}
-<div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col md:flex-row items-center md:items-start relative min-h-[300px] mt-12">
-    <div className="absolute top-4 left-4 z-20">
-        <button onClick={exportCategoryStats} className="text-xs bg-indigo-600 text-white border px-3 py-1.5 rounded flex items-center hover:bg-indigo-700 shadow-md transition">
-            <Download size={14} className="mr-1"/> 匯出 CSV
-        </button>
-    </div>
-    <div className="flex-1 flex flex-col items-center justify-center p-4 pt-10">
-        <h3 className="font-bold text-slate-700 mb-6 flex items-center text-lg"><Palette className="mr-2 text-purple-500"/> 課程範疇分佈 (可手動修正)</h3>
-        <div className="relative w-64 h-64 rounded-full shadow-xl border-4 border-white" style={{ background: `conic-gradient(${categoryPieGradient})` }}>
-            <div className="absolute inset-0 m-auto w-32 h-32 bg-slate-50 rounded-full flex flex-col items-center justify-center shadow-inner">
-                <span className="text-lg font-bold text-slate-600">分類統計</span>
-            </div>
-        </div>
-        <p className="text-xs text-slate-400 mt-4">前往「活動列表」即可手動更改分類</p>
-    </div>
-    <div className="w-full md:w-64 p-4">
-        <h4 className="text-xs font-bold text-slate-400 uppercase mb-3">類別圖例</h4>
-        <div className="space-y-2">
-            {categoryStats.map((cat, i) => (
-                <div key={i} className="flex items-center justify-between p-2 bg-white rounded shadow-sm">
-                    <div className="flex items-center">
-                        <span className="w-3 h-3 rounded-full mr-2" style={{backgroundColor: CATEGORY_COLORS[cat.name] || '#94a3b8'}}></span>
-                        <span className="text-xs font-bold">{cat.name}</span>
-                    </div>
-                    <div className="text-xs font-mono">{((cat.hours/(totalHours||1))*100).toFixed(1)}%</div>
-                </div>
-            ))}
-        </div>
-    </div>
-</div>
-
-<div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 relative flex flex-col h-[600px] mt-12">
-    <div className="flex flex-col md:flex-row justify-between items-start mb-6">
-        <div className="flex items-center space-x-4 mb-2 md:mb-0">
-            <button onClick={exportGradeStats} className="text-xs bg-indigo-600 text-white border px-3 py-1.5 rounded flex items-center hover:bg-indigo-700 shadow-md transition">
-                <Download size={14} className="mr-1"/> 匯出 CSV
-            </button>
-        </div>
-        <div className="text-right">
-            <h3 className="font-bold text-slate-700 text-lg flex items-center justify-end"><TrendingUp className="mr-2 text-green-500"/> 各級總時數分佈 (固定比例)</h3>
-            <p className="text-xs text-slate-500 mt-1">{selectedActs.size > 0 ? '灰色: 該級總時數 | 彩色: 所選活動佔比' : '顯示全校所有活動堆疊'}</p>
-        </div>
-    </div>
-    <div className="flex-1 flex items-end justify-between space-x-8 border-b-2 border-slate-300 pb-0 px-4 mx-4 relative">
-        {gradeDistribution.map((g) => {
-            const maxScale = maxGradeHours;
-            const ghostHeightPct = (g.total / (maxScale || 1)) * 100;
-            const details = g.details || {};
-            const activeItems = Object.entries(details).filter(([name]) => selectedActs.size === 0 || selectedActs.has(name)).sort((a,b) => b[1] - a[1]);
-            const selectedTotalHours = activeItems.reduce((acc, cur) => acc + cur[1], 0);
-            const activeHeightPct = (selectedTotalHours / (maxScale || 1)) * 100;
-
-            return (
-                <div key={g.grade} className="flex flex-col items-center flex-1 h-full relative group">
-                    {selectedActs.size > 0 && (
-                        <div className="w-full absolute bottom-0 bg-slate-200 rounded-t-sm transition-all duration-700 pointer-events-none" style={{height: `${ghostHeightPct}%`}}/>
-                    )}
-                    <div className={`w-full absolute bottom-0 flex flex-col-reverse rounded-t-sm overflow-hidden transition-all duration-700 ${selectedActs.size > 0 ? 'w-4/5 z-10 shadow-lg left-1/2 -translate-x-1/2' : 'bg-slate-200'}`} style={{height: `${activeHeightPct}%`}}>
-                        {activeItems.map(([actName, hrs]) => {
-                            const colorIdx = getActColorIndex(actName);
-                            const color = getSafeColor(colorIdx);
-                            const pctOfStack = (hrs / (selectedTotalHours || 1)) * 100;
-                            return (<div key={actName} className="w-full relative" style={{height: `${pctOfStack}%`, backgroundColor: color}} />);
-                        })}
-                    </div>
-                    <div className="absolute w-full text-center -top-6 transition-all duration-500" style={{bottom: `${Math.max(ghostHeightPct, activeHeightPct) + 2}%`}}>
-                        <span className="text-xs font-bold text-slate-600 bg-white/80 px-1 rounded">{selectedActs.size > 0 ? selectedTotalHours.toFixed(0) : g.total.toFixed(0)}h</span>
-                    </div>
-                    <div className="hidden group-hover:block absolute bottom-1/2 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-xs p-3 rounded-lg shadow-xl z-50 w-48 pointer-events-none">
-                        <div className="font-bold border-b border-slate-600 pb-1 mb-1">{g.grade} 統計詳情</div>
-                        <div className="flex justify-between mb-1"><span>全級總時數:</span> <span className="font-mono">{g.total.toFixed(1)}h</span></div>
-                        {selectedActs.size > 0 && (<div className="flex justify-between text-yellow-400"><span>所選活動:</span> <span className="font-mono">{selectedTotalHours.toFixed(1)}h</span></div>)}
-                    </div>
-                    <div className="absolute -bottom-8 w-full text-center">
-                        <div className="text-sm font-bold text-slate-700">{g.grade}</div>
-                    </div>
-                </div>
-            );
-        })}
-        <div className="absolute left-0 top-0 h-full border-l border-dashed border-slate-300 pointer-events-none">
-            <span className="absolute top-0 left-1 text-[10px] text-slate-400 bg-slate-50 px-1">Max: {maxGradeHours.toFixed(0)}h</span>
-        </div>
-    </div>
-</div>
-
-                </div>
-)
-                {statsViewMode === 'activities' && (<div className="bg-white border rounded-xl overflow-hidden"><div className="p-4 bg-slate-50 border-b flex justify-between items-center"><h3 className="font-bold text-slate-700">活動統計列表</h3><button onClick={() => exportToCSV(filteredActivityList, 'Activity_Report')} className="text-sm bg-white border px-3 py-1 rounded hover:bg-slate-50 flex items-center text-blue-600 border-blue-200"><Download size={14} className="mr-1"/> 匯出 CSV</button></div><table className="w-full text-sm text-left"><thead className="bg-slate-100 text-slate-500 uppercase"><tr><th className="p-3">活動名稱</th><th className="p-3 w-48">類別 (可手動更改)</th><th className="p-3 text-right">總人次</th><th className="p-3 text-right">總學時</th></tr></thead><tbody className="divide-y">{filteredActivityList.map((a, i) => (<tr key={i} className="hover:bg-slate-50"><td className="p-3 font-medium flex items-center"><span className="w-2 h-2 rounded-full mr-2" style={{backgroundColor: getSafeColor(getActColorIndex(a.name))}}></span>{a.name}</td><td className="p-3"><div className="relative group/cat"><select className="w-full text-xs p-1 border rounded bg-slate-50 hover:bg-white focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer" value={a.category} disabled={updatingCategory} onChange={(e) => handleCategoryChange(a.name, e.target.value)}>{CATEGORY_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}</select>{updatingCategory && <span className="absolute right-0 top-0 text-[8px] text-blue-500">更新中...</span>}</div></td><td className="p-3 text-right">{a.count}</td><td className="p-3 text-right font-bold text-blue-600">{a.hours.toFixed(1)}</td></tr>))}</tbody></table></div>)}
-                {statsViewMode === 'logs' && (<div className="bg-white border rounded-xl overflow-hidden"><div className="p-4 bg-slate-50 border-b"><h3 className="font-bold text-slate-700">查詢日誌 (Audit Log)</h3></div><table className="w-full text-sm text-left"><thead className="bg-slate-100 text-slate-500"><tr><th className="p-3">日期</th><th className="p-3">時間</th><th className="p-3">查詢班別</th><th className="p-3">學生姓名</th><th className="p-3">結果</th></tr></thead><tbody>{queryLogs.length > 0 ? queryLogs.map((log, i) => (<tr key={i} className="border-b last:border-0 hover:bg-white"><td className="p-3 text-slate-600">{log.dateStr}</td><td className="p-3 font-mono text-slate-500 text-xs">{log.timeStr}</td><td className="p-3 font-bold text-slate-800">{log.class} ({log.classNo})</td><td className="p-3">{log.name}</td><td className="p-3">{log.success ? <span className="text-green-600 text-xs bg-green-100 px-2 py-1 rounded">成功</span> : <span className="text-red-500 text-xs">無記錄</span>}</td></tr>)) : (<tr><td colSpan="5" className="p-8 text-center text-slate-400">暫無查詢紀錄</td></tr>)}</tbody></table></div>)}
-                {statsViewMode === 'students' && (<div className="bg-white border rounded-xl overflow-hidden">
-                    {/* Part 1: 標題與展開式 Checkbox 篩選器 */}
-                    <div className="p-4 bg-slate-50 border-b">
-                        <div className="flex justify-between items-center">
-                            <h3 className="font-bold text-slate-700 flex items-center"><AlertTriangle className="mr-2 text-orange-500" size={18}/> 學生參與度監測</h3>
-                            <button onClick={() => setFilterPanelOpen(!filterPanelOpen)} className="text-sm text-blue-600 font-bold flex items-center bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-100">
-                                <Filter size={14} className="mr-2"/>{filterPanelOpen ? '收合選項' : '展開選項'}
-                            </button>
-                        </div>
-                        
-                        {filterPanelOpen && (
-                            <div className="mt-4 p-4 bg-white border rounded-lg animate-in slide-in-from-top-2 max-h-[300px] overflow-y-auto">
-                                {categoryStats.map(cat => {
-                                    const actsInCat = activityStats.filter(a => a.category === cat.name);
-                                    if(actsInCat.length === 0) return null;
-                                    const isAllSelected = actsInCat.every(a => selectedActs.has(a.name));
-                                    const handleCatToggle = () => {
-                                        const newSet = new Set(selectedActs);
-                                        if (isAllSelected) { actsInCat.forEach(a => newSet.delete(a.name)); } 
-                                        else { actsInCat.forEach(a => newSet.add(a.name)); }
-                                        setSelectedActs(newSet);
-                                    };
-                                    return (
-                                        <div key={cat.name} className="mb-4 last:mb-0 pb-3 border-b border-slate-100 last:border-0 last:pb-0">
-                                            <label className="flex items-center font-bold text-slate-700 text-sm mb-2 cursor-pointer hover:text-purple-600 w-fit">
-                                                <input type="checkbox" checked={isAllSelected} onChange={handleCatToggle} className="w-4 h-4 mr-2 text-purple-600 rounded focus:ring-purple-500"/>
-                                                {cat.name}
-                                            </label>
-                                            <div className="flex flex-wrap gap-2 pl-6">
-                                                {actsInCat.map(act => (
-                                                    <label key={act.name} className={`flex items-center text-xs cursor-pointer px-2 py-1.5 rounded-md border transition-colors ${selectedActs.has(act.name) ? 'bg-blue-50 border-blue-200 text-blue-700 font-medium' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'}`}>
-                                                        <input type="checkbox" checked={selectedActs.has(act.name)} onChange={() => toggleSelection(act.name)} className="w-3.5 h-3.5 mr-1.5 text-blue-600 rounded focus:ring-blue-500"/>
-                                                        {act.name}
-                                                    </label>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )
-                                })}
+                {statsViewMode === 'dashboard' && (
+                    <div className="flex flex-col space-y-12 pb-12">
+                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col md:flex-row items-center md:items-start relative min-h-[400px]">
+                            <div className="absolute top-4 left-4 z-20">
+                                <button onClick={() => exportToCSV(filteredActivityList, 'Activity_Hours_Report')} className="text-xs bg-indigo-600 text-white border px-3 py-1.5 rounded flex items-center hover:bg-indigo-700 shadow-md transition">
+                                    <Download size={14} className="mr-1"/> 匯出 CSV
+                                </button>
                             </div>
-                        )}
-                    </div>
-                    {/* Part 2: 學生列表與匯出按鈕 */}
-                    <div className="max-h-[500px] overflow-y-auto">
-                        <table className="w-full text-sm text-left">
-                            <thead className="bg-slate-100 text-slate-500 uppercase sticky top-0 shadow-sm">
-                                <tr>
-                                    <th className="p-3">班別 (學號)</th>
-                                    <th className="p-3">姓名</th>
-                                    <th className="p-3 text-right">
-                                        {selectedActs.size > 0 ? "篩選後時數" : "總參與時數"}
-                                    </th>
-                                    <th className="p-3 text-center">狀態</th>
-                                    <th className="p-3">
-                                       <button onClick={() => exportToCSV(filteredStudentList.map(s => ({
-                                           Class: s.classCode,
-                                           ClassNo: s.classNo,
-                                           Name: s.chiName,
-                                           Hours: (selectedActs.size > 0 ? s.filteredHours : s.hours).toFixed(1)
-                                       })), 'Student_Participation_Report')} className="text-xs bg-white border px-2 py-1.5 rounded hover:bg-slate-50 flex items-center text-blue-600 border-blue-200 ml-auto whitespace-nowrap shadow-sm">
-                                            <Download size={14} className="mr-1"/> 匯出名單
-                                       </button>
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y">
-                                {filteredStudentList.map((s, i) => {
-                                    const displayHours = selectedActs.size > 0 ? (s.filteredHours || 0) : s.hours;
+                            <div className="flex-1 flex flex-col items-center justify-center p-4 pt-10">
+                                <h3 className="font-bold text-slate-700 mb-6 flex items-center text-lg"><Clock className="mr-2 text-orange-500"/> 活動總時數分佈 (可篩選)</h3>
+                                <div className="relative w-72 h-72 rounded-full shadow-2xl border-4 border-white transition-all duration-500" style={{ background: `conic-gradient(${ghostPieGradient})` }}>
+                                    <div className="absolute inset-0 m-auto w-40 h-40 bg-slate-50 rounded-full flex flex-col items-center justify-center shadow-inner">
+                                        <div className="text-xs text-slate-400 mb-1">{selectedActs.size > 0 ? "篩選後總時數" : "全校總學時"}</div>
+                                        <div className="font-bold text-slate-800 text-4xl">
+                                          {filteredChartData.total.toFixed(0)}
+                                        </div>
+                                        <span className="text-xs text-slate-400">Hours</span>
+                                    </div>
+                                </div>
+                                <p className="text-xs text-slate-400 mt-4">點擊右側圖例進行篩選</p>
+                            </div>
+                            <div className="w-full md:w-80 h-96 border-l border-slate-200 pl-0 md:pl-6 overflow-y-auto">
+                                <h4 className="text-xs font-bold text-slate-400 uppercase mb-3 sticky top-0 bg-slate-50 py-2 z-10 flex justify-between items-center">
+                                    <span>圖例 (點選切換)</span>
+                                    <button
+                                        onClick={() => {
+                                            if (selectedActs.size > 0) {
+                                                setSelectedActs(new Set());
+                                            } else {
+                                                setSelectedActs(new Set(activityStats.map(a => a.name)));
+                                            }
+                                        }}
+                                        className="font-bold text-blue-600 hover:text-blue-800 text-[11px] bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-md"
+                                    >
+                                        {selectedActs.size > 0 ? '清除全部' : '全選'}
+                                    </button>
+                                </h4>
+                                <div className="space-y-1">
+                                    {activityStats.map((a, i) => {
+                                        const isChecked = selectedActs.has(a.name);
+                                        const isEffectivelyActive = selectedActs.size === 0 || isChecked;
+                                        const percentage = (a.hours / (filteredChartData.total || 1)) * 100;
+                                        return (
+                                            <label key={i} className={`w-full flex items-center justify-between p-2 rounded text-xs transition-all duration-200 cursor-pointer ${isEffectivelyActive ? 'bg-white shadow-sm' : 'bg-slate-50 opacity-50 hover:opacity-100'}`}>
+                                                <div className="flex items-center truncate">
+                                                    <input type="checkbox" checked={isChecked} onChange={() => toggleSelection(a.name)} className="w-4 h-4 mr-3 text-blue-600 rounded focus:ring-blue-500 border-slate-300"/>
+                                                    <span className="w-3 h-3 rounded-full mr-2 flex-shrink-0" style={{backgroundColor: getSafeColor(i)}}></span>
+                                                    <span className="truncate max-w-[120px]" title={a.name}>{a.name}</span>
+                                                </div>
+                                                {isEffectivelyActive && (
+                                                    <div className="font-bold text-slate-600">
+                                                        {percentage.toFixed(1)}%
+                                                    </div>
+                                                )}
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col md:flex-row items-center md:items-start relative min-h-[300px]">
+                            <div className="absolute top-4 left-4 z-20">
+                                <button onClick={exportCategoryStats} className="text-xs bg-indigo-600 text-white border px-3 py-1.5 rounded flex items-center hover:bg-indigo-700 shadow-md transition">
+                                    <Download size={14} className="mr-1"/> 匯出 CSV
+                                </button>
+                            </div>
+                            <div className="flex-1 flex flex-col items-center justify-center p-4 pt-10">
+                                <h3 className="font-bold text-slate-700 mb-6 flex items-center text-lg"><Palette className="mr-2 text-purple-500"/> 課程範疇分佈 (全校)</h3>
+                                <div className="relative w-64 h-64 rounded-full shadow-xl border-4 border-white" style={{ background: `conic-gradient(${categoryPieGradient})` }}>
+                                    <div className="absolute inset-0 m-auto w-32 h-32 bg-slate-50 rounded-full flex flex-col items-center justify-center shadow-inner">
+                                        <span className="text-lg font-bold text-slate-600">分類統計</span>
+                                    </div>
+                                </div>
+                                <p className="text-xs text-slate-400 mt-4">前往「活動列表」即可手動更改分類</p>
+                            </div>
+                            <div className="w-full md:w-64 p-4">
+                                <h4 className="text-xs font-bold text-slate-400 uppercase mb-3">類別圖例</h4>
+                                <div className="space-y-2">
+                                    {categoryStats.map((cat, i) => (
+                                        <div key={i} className="flex items-center justify-between p-2 bg-white rounded shadow-sm">
+                                            <div className="flex items-center">
+                                                <span className="w-3 h-3 rounded-full mr-2" style={{backgroundColor: CATEGORY_COLORS[cat.name] || '#94a3b8'}}></span>
+                                                <span className="text-xs font-bold">{cat.name}</span>
+                                            </div>
+                                            <div className="text-xs font-mono">{((cat.hours/(totalHours||1))*100).toFixed(1)}%</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 relative flex flex-col h-[600px]">
+                            <div className="flex flex-col md:flex-row justify-between items-start mb-6">
+                                <div className="flex items-center space-x-4 mb-2 md:mb-0">
+                                    <button onClick={exportGradeStats} className="text-xs bg-indigo-600 text-white border px-3 py-1.5 rounded flex items-center hover:bg-indigo-700 shadow-md transition">
+                                        <Download size={14} className="mr-1"/> 匯出 CSV
+                                    </button>
+                                </div>
+                                <div className="text-right">
+                                    <h3 className="font-bold text-slate-700 text-lg flex items-center justify-end"><TrendingUp className="mr-2 text-green-500"/> 各級總時數分佈</h3>
+                                    <p className="text-xs text-slate-500 mt-1">{selectedActs.size > 0 ? '灰色: 該級總時數 | 彩色: 所選活動佔比' : '顯示全校所有活動堆疊'}</p>
+                                </div>
+                            </div>
+                            <div className="flex-1 flex items-end justify-between space-x-8 border-b-2 border-slate-300 pb-0 px-4 mx-4 relative">
+                                {gradeDistribution.map((g) => {
+                                    const maxScale = maxGradeHours;
+                                    const ghostHeightPct = (g.total / (maxScale || 1)) * 100;
+                                    const details = g.details || {};
+                                    const activeItems = Object.entries(details).filter(([name]) => selectedActs.size === 0 || selectedActs.has(name)).sort((a,b) => b[1] - a[1]);
+                                    const selectedTotalHours = activeItems.reduce((acc, cur) => acc + cur[1], 0);
+                                    const activeHeightPct = (selectedTotalHours / (maxScale || 1)) * 100;
                                     return (
-                                        <tr key={i} className={`hover:bg-slate-50 transition-colors ${displayHours === 0 ? 'bg-red-50/50' : ''}`}>
-                                            <td className="p-3 text-slate-600">{s.classCode} ({s.classNo})</td>
-                                            <td className="p-3 font-bold">{s.chiName}</td>
-                                            <td className={`p-3 text-right font-bold ${selectedActs.size > 0 ? 'text-blue-700' : ''}`}>{displayHours.toFixed(1)}</td>
-                                            <td className="p-3 text-center">{displayHours === 0 ? <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-full font-bold">無紀錄</span> : <span className="text-xs text-green-600">正常</span>}</td>
-                                            <td></td>
-                                        </tr>
+                                        <div key={g.grade} className="flex flex-col items-center flex-1 h-full relative group">
+                                            {selectedActs.size > 0 && (<div className="w-full absolute bottom-0 bg-slate-200 rounded-t-sm transition-all duration-700 pointer-events-none" style={{height: `${ghostHeightPct}%`}}/>)}
+                                            <div className={`w-full absolute bottom-0 flex flex-col-reverse rounded-t-sm overflow-hidden transition-all duration-700 ${selectedActs.size > 0 ? 'w-4/5 z-10 shadow-lg left-1/2 -translate-x-1/2' : 'bg-slate-200'}`} style={{height: `${activeHeightPct}%`}}>
+                                                {activeItems.map(([actName, hrs]) => {
+                                                    const colorIdx = getActColorIndex(actName);
+                                                    const color = getSafeColor(colorIdx);
+                                                    const pctOfStack = (hrs / (selectedTotalHours || 1)) * 100;
+                                                    return (<div key={actName} className="w-full relative" style={{height: `${pctOfStack}%`, backgroundColor: color}} />);
+                                                })}
+                                            </div>
+                                            <div className="absolute w-full text-center -top-6 transition-all duration-500" style={{bottom: `${Math.max(ghostHeightPct, activeHeightPct) + 2}%`}}>
+                                                <span className="text-xs font-bold text-slate-600 bg-white/80 px-1 rounded">{selectedActs.size > 0 ? selectedTotalHours.toFixed(0) : g.total.toFixed(0)}h</span>
+                                            </div>
+                                            <div className="hidden group-hover:block absolute bottom-1/2 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-xs p-3 rounded-lg shadow-xl z-50 w-48 pointer-events-none">
+                                                <div className="font-bold border-b border-slate-600 pb-1 mb-1">{g.grade} 統計詳情</div>
+                                                <div className="flex justify-between mb-1"><span>全級總時數:</span> <span className="font-mono">{g.total.toFixed(1)}h</span></div>
+                                                {selectedActs.size > 0 && (<div className="flex justify-between text-yellow-400"><span>所選活動:</span> <span className="font-mono">{selectedTotalHours.toFixed(1)}h</span></div>)}
+                                            </div>
+                                            <div className="absolute -bottom-8 w-full text-center"><div className="text-sm font-bold text-slate-700">{g.grade}</div></div>
+                                        </div>
                                     );
                                 })}
+                                <div className="absolute left-0 top-0 h-full border-l border-dashed border-slate-300 pointer-events-none">
+                                    <span className="absolute top-0 left-1 text-[10px] text-slate-400 bg-slate-50 px-1">Max: {maxGradeHours.toFixed(0)}h</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                
+                {statsViewMode === 'activities' && (
+                    <div className="bg-white border rounded-xl overflow-hidden">
+                        <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
+                            <h3 className="font-bold text-slate-700">活動統計列表</h3>
+                            <button onClick={() => exportToCSV(filteredActivityList, 'Activity_Report')} className="text-sm bg-white border px-3 py-1 rounded hover:bg-slate-50 flex items-center text-blue-600 border-blue-200"><Download size={14} className="mr-1"/> 匯出 CSV</button>
+                        </div>
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-slate-100 text-slate-500 uppercase"><tr><th className="p-3">活動名稱</th><th className="p-3 w-48">類別 (可手動更改)</th><th className="p-3 text-right">總人次</th><th className="p-3 text-right">總學時</th></tr></thead>
+                            <tbody className="divide-y">
+                                {filteredActivityList.map((a, i) => (
+                                    <tr key={i} className="hover:bg-slate-50">
+                                        <td className="p-3 font-medium flex items-center">
+                                            <span className="w-2 h-2 rounded-full mr-2" style={{backgroundColor: getSafeColor(getActColorIndex(a.name))}}></span>
+                                            {a.name}
+                                        </td>
+                                        <td className="p-3">
+                                            <div className="relative group/cat">
+                                                <select className="w-full text-xs p-1 border rounded bg-slate-50 hover:bg-white focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer" value={a.category} disabled={updatingCategory} onChange={(e) => handleCategoryChange(a.name, e.target.value)}>
+                                                    {CATEGORY_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                                </select>
+                                                {updatingCategory && <span className="absolute right-0 top-0 text-[8px] text-blue-500">更新中...</span>}
+                                            </div>
+                                        </td>
+                                        <td className="p-3 text-right">{a.count}</td>
+                                        <td className="p-3 text-right font-bold text-blue-600">{a.hours.toFixed(1)}</td>
+                                    </tr>
+                                ))}
                             </tbody>
                         </table>
                     </div>
-                </div>)}
+                )}
 
-            </div>
-    );
-    
-
-// =============================================================================
-// 版本 1.6: 點名單元組件 (修正重複顯示，並完美綁定篩選日期與前線數據)
-// =============================================================================
-const RealTimeAttendanceCell = ({ act, handleAttendanceChange, staffDateFilter }) => {
-    const [flash, setFlash] = useState(false);
-    const prevStatus = useRef();
-
-    // 獲取今天日期的函數
-    const getTodayString = () => {
-        const today = new Date();
-        const yyyy = today.getFullYear();
-        const mm = String(today.getMonth() + 1).padStart(2, '0');
-        const dd = String(today.getDate()).padStart(2, '0');
-        return `${yyyy}-${mm}-${dd}`;
-    };
-
-    // 決定當下查詢的日期
-    const dateKey = staffDateFilter || getTodayString();
-    
-    // 正確讀取該日期的紀錄 (對應前線導師的 attendance 欄位)，如果沒有則顯示 'unmarked'
-    const currentStatus = (act.attendance && act.attendance[dateKey]) ? act.attendance[dateKey] : 'unmarked';
-
-    useEffect(() => {
-        // 當前線資料變動，且與上次不同時，觸發閃爍
-        if (prevStatus.current !== undefined && prevStatus.current !== currentStatus) {
-            setFlash(true);
-            const timer = setTimeout(() => setFlash(false), 3000); 
-            prevStatus.current = currentStatus;
-            return () => clearTimeout(timer);
-        }
-        prevStatus.current = currentStatus;
-    }, [currentStatus]);
-
-    return (
-        <td className={`p-3.5 text-center transition-all duration-500 ${flash ? 'bg-yellow-50' : ''}`}>
-            <div className="relative inline-block">
-                <select
-                    value={currentStatus}
-                    onChange={(e) => handleAttendanceChange(act.id, e.target.value, dateKey)}
-                    className={`border rounded-lg px-2 py-1 text-xs font-bold focus:outline-none cursor-pointer transition-all duration-500 ${
-                        flash ? 'ring-4 ring-yellow-400 scale-110 shadow-lg' : ''
-                    } ${
-                        currentStatus === 'present' ? 'bg-green-100 text-green-800 border-green-300' :
-                        currentStatus === 'late' ? 'bg-blue-100 text-blue-800 border-blue-300' :
-                        currentStatus === 'absent' ? 'bg-red-100 text-red-800 border-red-300' :
-                        currentStatus === 'sick' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
-                        currentStatus === 'leave' ? 'bg-purple-100 text-purple-800 border-purple-300' :
-                        currentStatus === 'unknown' ? 'bg-slate-200 text-slate-800 border-slate-300' :
-                        'bg-white text-slate-600 border-slate-300'
-                    }`}
-                >
-                    <option value="unmarked">⚫ 未點名</option>
-                    <option value="present">🟢 出席</option>
-                    <option value="late">🔵 遲到</option>
-                    <option value="absent">🔴 無故缺席</option>
-                    <option value="sick">🟡 病假</option>
-                    <option value="leave">🟣 事假</option>
-                    <option value="unknown">⚪ 未知</option>
-                </select>
+                {statsViewMode === 'logs' && (
+                    <div className="bg-white border rounded-xl overflow-hidden">
+                        <div className="p-4 bg-slate-50 border-b"><h3 className="font-bold text-slate-700">查詢日誌 (Audit Log)</h3></div>
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-slate-100 text-slate-500"><tr><th className="p-3">日期</th><th className="p-3">時間</th><th className="p-3">查詢班別</th><th className="p-3">學生姓名</th><th className="p-3">結果</th></tr></thead>
+                            <tbody>
+                                {queryLogs.length > 0 ? queryLogs.map((log, i) => (
+                                    <tr key={i} className="border-b last:border-0 hover:bg-white">
+                                        <td className="p-3 text-slate-600">{log.dateStr}</td>
+                                        <td className="p-3 font-mono text-slate-500 text-xs">{log.timeStr}</td>
+                                        <td className="p-3 font-bold text-slate-800">{log.class} ({log.classNo})</td>
+                                        <td className="p-3">{log.name}</td>
+                                        <td className="p-3">{log.success ? <span className="text-green-600 text-xs bg-green-100 px-2 py-1 rounded">成功</span> : <span className="text-red-500 text-xs">無記錄</span>}</td>
+                                    </tr>
+                                )) : (
+                                    <tr><td colSpan="5" className="p-8 text-center text-slate-400">暫無查詢紀錄</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
                 
-                {/* 閃爍時顯示的浮動提示 */}
-                {flash && (
-                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-yellow-400 text-yellow-900 text-[10px] px-2 py-0.5 rounded shadow-md animate-bounce whitespace-nowrap z-10 font-bold">
-                        即時更新!
+                {statsViewMode === 'students' && (
+                    <div className="bg-white border rounded-xl overflow-hidden">
+                        <div className="p-4 bg-slate-50 border-b">
+                            <div className="flex justify-between items-center">
+                                <h3 className="font-bold text-slate-700 flex items-center"><AlertTriangle className="mr-2 text-orange-500" size={18}/> 學生參與度監測</h3>
+                                <button onClick={() => setFilterPanelOpen(!filterPanelOpen)} className="text-sm text-blue-600 font-bold flex items-center bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-100">
+                                    <Filter size={14} className="mr-2"/>{filterPanelOpen ? '收合選項' : '展開選項'}
+                                </button>
+                            </div>
+                            
+                            {filterPanelOpen && (
+                                <div className="mt-4 p-4 bg-white border rounded-lg animate-in slide-in-from-top-2 max-h-[300px] overflow-y-auto">
+                                    {categoryStats.map(cat => {
+                                        const actsInCat = activityStats.filter(a => a.category === cat.name);
+                                        if(actsInCat.length === 0) return null;
+                                        const isAllSelected = actsInCat.every(a => selectedActs.has(a.name));
+                                        const handleCatToggle = () => {
+                                            const newSet = new Set(selectedActs);
+                                            if (isAllSelected) { actsInCat.forEach(a => newSet.delete(a.name)); } 
+                                            else { actsInCat.forEach(a => newSet.add(a.name)); }
+                                            setSelectedActs(newSet);
+                                        };
+                                        return (
+                                            <div key={cat.name} className="mb-4 last:mb-0 pb-3 border-b border-slate-100 last:border-0 last:pb-0">
+                                                <label className="flex items-center font-bold text-slate-700 text-sm mb-2 cursor-pointer hover:text-purple-600 w-fit">
+                                                    <input type="checkbox" checked={isAllSelected} onChange={handleCatToggle} className="w-4 h-4 mr-2 text-purple-600 rounded focus:ring-purple-500"/>
+                                                    {cat.name}
+                                                </label>
+                                                <div className="flex flex-wrap gap-2 pl-6">
+                                                    {actsInCat.map(act => (
+                                                        <label key={act.name} className={`flex items-center text-xs cursor-pointer px-2 py-1.5 rounded-md border transition-colors ${selectedActs.has(act.name) ? 'bg-blue-50 border-blue-200 text-blue-700 font-medium' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'}`}>
+                                                            <input type="checkbox" checked={selectedActs.has(act.name)} onChange={() => toggleSelection(act.name)} className="w-3.5 h-3.5 mr-1.5 text-blue-600 rounded focus:ring-blue-500"/>
+                                                            {act.name}
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                        <div className="max-h-[500px] overflow-y-auto">
+                            <table className="w-full text-sm text-left">
+                                <thead className="bg-slate-100 text-slate-500 uppercase sticky top-0 shadow-sm">
+                                    <tr>
+                                        <th className="p-3">班別 (學號)</th>
+                                        <th className="p-3">姓名</th>
+                                        <th className="p-3 text-right">{selectedActs.size > 0 ? "篩選後時數" : "總參與時數"}</th>
+                                        <th className="p-3 text-center">狀態</th>
+                                        <th className="p-3">
+                                           <button onClick={() => exportToCSV(filteredStudentList.map(s => ({ Class: s.classCode, ClassNo: s.classNo, Name: s.chiName, Hours: (selectedActs.size > 0 ? s.filteredHours : s.hours).toFixed(1) })), 'Student_Participation_Report')} className="text-xs bg-white border px-2 py-1.5 rounded hover:bg-slate-50 flex items-center text-blue-600 border-blue-200 ml-auto whitespace-nowrap shadow-sm">
+                                                <Download size={14} className="mr-1"/> 匯出名單
+                                           </button>
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y">
+                                    {filteredStudentList.map((s, i) => {
+                                        const displayHours = selectedActs.size > 0 ? (s.filteredHours || 0) : s.hours;
+                                        return (
+                                            <tr key={i} className={`hover:bg-slate-50 transition-colors ${displayHours === 0 ? 'bg-red-50/50' : ''}`}>
+                                                <td className="p-3 text-slate-600">{s.classCode} ({s.classNo})</td>
+                                                <td className="p-3 font-bold">{s.chiName}</td>
+                                                <td className={`p-3 text-right font-bold ${selectedActs.size > 0 ? 'text-blue-700' : ''}`}>{displayHours.toFixed(1)}</td>
+                                                <td className="p-3 text-center">{displayHours === 0 ? <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-full font-bold">無紀錄</span> : <span className="text-xs text-green-600">正常</span>}</td>
+                                                <td></td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 )}
             </div>
-        </td>
+        </div>
     );
 };
+
 
 
 // -----------------------------------------------------------------------------
@@ -1444,7 +1425,7 @@ const App = () => {
                 </div>
 
                 <div className="mt-4 text-center text-xs text-slate-400 font-mono tracking-wider">
-                    version 5.21
+                    version 5.22
                 </div>
             </div>
         </div>
