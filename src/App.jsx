@@ -1,5 +1,5 @@
 // =============================================================================
-//  校園資訊 APP - version 5.25 (放學方式修復 + 教職員介面優化版)
+//  校園資訊 APP - version 5.26 (放學方式修復 + 教職員介面優化版)
 // =============================================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
@@ -1425,7 +1425,7 @@ const App = () => {
                 </div>
 
                 <div className="mt-4 text-center text-xs text-slate-400 font-mono tracking-wider">
-                    version 5.25
+                    version 5.26
                 </div>
             </div>
         </div>
@@ -1674,7 +1674,7 @@ else if (item.dayIds && item.dayIds.length > 0) {
     <div className="text-slate-400 font-bold">
         {/* 修正：使用可選串聯 (?.) 安全地讀取 dateSpecificTimes，防止因 undefined 導致的渲染失敗 */}
         // 修正：使用可選串聯 (?.) 安全地讀取 dateSpecificTimes，防止因 undefined 導致的渲染失敗
-        {(staffDateFilter && act.dateSpecificTimes?.[staffDateFilter]) ? act.dateSpecificTimes[staffDateFilter] : act.time || ''}
+        {(staffDateFilter && act.dateSpecificTimes?.[staffDateFilter]) ? act.dateSpecificTimes?.[staffDateFilter] : act.time || ''}
     </div>
 </td>
 
