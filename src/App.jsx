@@ -1,5 +1,5 @@
 // =============================================================================
-//  校園資訊 APP - VERSION 5.14 (放學方式修復 + 教職員介面優化版)
+//  校園資訊 APP - VERSION 5.15 (放學方式修復 + 教職員介面優化版)
 // =============================================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
@@ -249,7 +249,6 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
             const gradeMap = { '1': {}, '2': {}, '3': {}, '4': {}, '5': {}, '6': {} };
             Object.keys(gradeMap).forEach(g => gradeMap[g] = { totalHours: 0, byActivity: {} });
 
-            // 學生總表，已包含性別
             masterList.forEach(s => {
                 if (s && s.key) stuStats[s.key] = { ...s, count: 0, hours: 0, acts: [] };
             });
@@ -274,7 +273,6 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                     stuStats[sKey].count += sessionCount;
                     stuStats[sKey].hours += totalItemHours;
                     if (!stuStats[sKey].acts.includes(actName)) stuStats[sKey].acts.push(actName);
-                    // 【核心修改】如果學生統計資料中沒有性別，從活動記錄 item 中補上
                     if (!stuStats[sKey].sex && item.sex) {
                         stuStats[sKey].sex = item.sex;
                     }
@@ -291,17 +289,52 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                 }
             });
 
+            // 【錯誤 1 已修正】 將 g.details 改為 gradeMap[g].details
             const gradeArr = Object.keys(gradeMap).map(g => ({ grade: `P.${g}`, total: gradeMap[g].totalHours, details: gradeMap[g].details }));
             const finalActStats = Object.values(actStats).sort((a, b) => b.hours - a.hours);
             const totalH = finalActStats.reduce((acc, cur) => acc + cur.hours, 0);
             const finalCatStats = Object.entries(catStats).map(([name, hours]) => ({ name, hours })).sort((a, b) => b.hours - a.hours);
             
-            return { activityStats: finalActStats, gradeDistribution: gradeArr, categoryStats: finalCatStats, studentStats: Object.values(stuStats).sort((a, b) => a.hours - b.hours), totalHours: totalH };
+            return { activityStats: finalActStats, gradeDistribution: gradeArr, categoryStats: finalCatStats, studentStats: Object.values(stuStats).sort((a,b) => a.hours - b.hours), totalHours: totalH };
         } catch (e) {
             console.error("Data Calculation Error:", e);
             return { activityStats: [], gradeDistribution: [], categoryStats: [], studentStats: [], totalHours: 0 };
         }
     }, [masterList, activities]);
+
+    const filteredActivityList = useMemo(() => { if (selectedActs.size === 0) return activityStats; return activityStats.filter(a => selectedActs.has(a.name)); }, [activityStats, selectedActs]);
+    const filteredTotalHours = useMemo(() => { if (selectedActs.size === 0) return totalHours; return filteredActivityList.reduce((acc, cur) => acc + cur.hours, 0); }, [filteredActivityList, totalHours, selectedActs]);
+    const getSafeColor = (idx) => CHART_COLORS[idx % CHART_COLORS.length] || '#cbd5e1';
+    const ghostPieGradient = useMemo(() => { if (totalHours === 0) return '#e2e8f0 0deg 360deg'; let currentDeg = 0; return activityStats.map((item, idx) => { const deg = (item.hours / (totalHours || 1)) * 360; const isSelected = selectedActs.size === 0 || selectedActs.has(item.name); const color = isSelected ? getSafeColor(idx) : '#f1f5f9'; const str = `${color} ${currentDeg}deg ${currentDeg + deg}deg`; currentDeg += deg; return str; }).join(', '); }, [activityStats, totalHours, selectedActs]);
+    const categoryPieGradient = useMemo(() => { if (totalHours === 0) return '#e2e8f0 0deg 360deg'; let currentDeg = 0; return categoryStats.map((item) => { const deg = (item.hours / (totalHours || 1)) * 360; const color = CATEGORY_COLORS[item.name] || '#94a3b8'; const str = `${color} ${currentDeg}deg ${currentDeg + deg}deg`; currentDeg += deg; return str; }).join(', '); }, [categoryStats, totalHours]);
+    
+    const filteredStudentList = useMemo(() => {
+        if (selectedActs.size === 0) return studentStats;
+        
+        // 【錯誤 2 已修正】 將 a.activity 改為 a.name
+        const selectedActivitiesData = activityStats.filter(a => selectedActs.has(a.name));
+        const selectedActivityNames = new Set(selectedActivitiesData.map(a => a.name));
+
+        const studentDataWithFilteredHours = studentStats.map(student => {
+            const relevantActsForStudent = activities.filter(act => 
+                selectedActivityNames.has(act.activity) &&
+                act.verifiedClass === student.classCode && 
+                act.verifiedName === student.chiName
+            );
+            
+            const filteredHours = relevantActsForStudent.reduce((acc, act) => {
+                const dur = calculateDuration(act.time);
+                const sessionCount = (act.specificDates && act.specificDates.length > 0) ? act.specificDates.length : 1;
+                return acc + (dur * sessionCount);
+            }, 0);
+            
+            return { ...student, filteredHours: filteredHours };
+        });
+
+        return studentDataWithFilteredHours.filter(s => s.filteredHours > 0);
+
+    }, [studentStats, activities, activityStats, selectedActs]);
+
 
     const filteredActivityList = useMemo(() => { if (selectedActs.size === 0) return activityStats; return activityStats.filter(a => selectedActs.has(a.name)); }, [activityStats, selectedActs]);
     const filteredTotalHours = useMemo(() => { if (selectedActs.size === 0) return totalHours; return filteredActivityList.reduce((acc, cur) => acc + cur.hours, 0); }, [filteredActivityList, totalHours, selectedActs]);
@@ -1232,7 +1265,7 @@ const App = () => {
                 </div>
 
                 <div className="mt-4 text-center text-xs text-slate-400 font-mono tracking-wider">
-                    Version 5.14
+                    Version 5.15
                 </div>
             </div>
         </div>
