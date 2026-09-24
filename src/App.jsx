@@ -1,5 +1,5 @@
 // =============================================================================
-//  校園資訊 APP - version 5.37 (放學方式修復 + 教職員介面優化版)
+//  校園資訊 APP - version 5.38 (放學方式修復 + 教職員介面優化版)
 // =============================================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
@@ -237,6 +237,9 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
     const [statsViewMode, setStatsViewMode] = useState('dashboard');
     const [selectedActs, setSelectedActs] = useState(new Set());
     const [updatingCategory, setUpdatingCategory] = useState(false);
+    const [selectedCategories, setSelectedCategories] = useState(new Set());
+    const [showNoRecords, setShowNoRecords] = useState(false);
+
 
     const toggleSelection = (actName) => { 
         if (!actName) return; 
@@ -373,26 +376,44 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
         }).join(', '); 
     }, [categoryStats, totalHours]);
     
+        // =========================================================================
+    //  V5.40 學生列表升級：兼容「活動篩選」與「顯示零記錄」模式
+    // =========================================================================
     const filteredStudentList = useMemo(() => {
-        if (selectedActs.size === 0) return studentStats;
-        const selectedActivityNames = new Set(Array.from(selectedActs));
+        // 模式一：如果開啟「只顯示無記錄學生」
+        if (showNoRecords) {
+            // 從完整的 studentStats 中，精準找出 hours 為 0 的學生
+            return studentStats.filter(s => s.hours === 0);
+        }
+
+        // 模式二：常規篩選，根據「已選活動」過濾
+        if (selectedActs.size === 0) {
+            // 如果沒有篩選任何活動，則只顯示有參與過活動的學生
+            return studentStats.filter(s => s.hours > 0);
+        }
+        
+        // 如果有篩選活動，則計算篩選後的時數
         const studentDataWithFilteredHours = studentStats.map(student => {
             const relevantActsForStudent = activities.filter(act => 
-                selectedActivityNames.has(act.activity) &&
+                selectedActs.has(act.activity) &&
                 act.verifiedClass === student.classCode && 
                 act.verifiedName === student.chiName
             );
             
             const filteredHours = relevantActsForStudent.reduce((acc, act) => {
                 const dur = calculateDuration(act.time);
-                const sessionCount = (act.specificDates && act.specificDates.length > 0) ? act.specificDates.length : 1;
+                const sessionCount = (Array.isArray(act.specificDates) && act.specificDates.length > 0) ? act.specificDates.length : 1;
                 return acc + (dur * sessionCount);
             }, 0);
             
             return { ...student, filteredHours };
         });
+        
+        // 只返回在當前活動篩選下，時數大於 0 的學生
         return studentDataWithFilteredHours.filter(s => s.filteredHours > 0);
-    }, [studentStats, activities, selectedActs]);
+
+    }, [studentStats, activities, selectedActs, showNoRecords]); // <-- 注意依賴項的變化
+
 
     const exportGradeStats = () => { 
         const rows = []; 
@@ -629,15 +650,30 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                 
                 {statsViewMode === 'students' && (
                     <div className="bg-white border rounded-xl overflow-hidden">
+                        {/* ================================================================= */}
+                        {/* V5.40 升級：學生監測標題欄 (加入「顯示無記錄」開關)             */}
+                        {/* ================================================================= */}
                         <div className="p-4 bg-slate-50 border-b">
                             <div className="flex justify-between items-center">
-                                <h3 className="font-bold text-slate-700 flex items-center"><AlertTriangle className="mr-2 text-orange-500" size={18}/> 學生參與度監測</h3>
-                                <button onClick={() => setFilterPanelOpen(!filterPanelOpen)} className="text-sm text-blue-600 font-bold flex items-center bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-100">
-                                    <Filter size={14} className="mr-2"/>{filterPanelOpen ? '收合選項' : '展開選項'}
-                                </button>
+                                <h3 className="font-bold text-slate-700 flex items-center"><Users className="mr-2 text-slate-500" size={18}/> 學生參與度監測</h3>
+                                <div className="flex items-center gap-4">
+                                     <label className="flex items-center cursor-pointer">
+                                        <div className={`relative ${showNoRecords ? 'bg-red-500' : 'bg-slate-300'} w-11 h-6 rounded-full transition-colors`}>
+                                            <input type="checkbox" className="hidden" checked={showNoRecords} onChange={() => setShowNoRecords(!showNoRecords)} />
+                                            <div className={`absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${showNoRecords ? 'translate-x-5' : ''}`}></div>
+                                        </div>
+                                        <span className={`ml-2 text-sm font-bold ${showNoRecords ? 'text-red-600' : 'text-slate-600'}`}>
+                                            只顯示無記錄學生
+                                        </span>
+                                    </label>
+                                    <button onClick={() => setFilterPanelOpen(!filterPanelOpen)} disabled={showNoRecords} className="text-sm text-blue-600 font-bold flex items-center bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed">
+                                        <Filter size={14} className="mr-2"/>{filterPanelOpen ? '收合選項' : '展開選項'}
+                                    </button>
+                                </div>
                             </div>
                             
-                            {filterPanelOpen && (
+                            {/* 篩選面板：當「顯示無記錄」關閉時才顯示 */}
+                            {filterPanelOpen && !showNoRecords && (
                                 <div className="mt-4 p-4 bg-white border rounded-lg animate-in slide-in-from-top-2 max-h-[300px] overflow-y-auto">
                                     {categoryStats.map(cat => {
                                         const actsInCat = activityStats.filter(a => a.category === cat.name);
@@ -664,7 +700,7 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                                                     ))}
                                                 </div>
                                             </div>
-                                        )
+                                        );
                                     })}
                                 </div>
                             )}
@@ -678,7 +714,7 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                                         <th className="p-3 text-right">{selectedActs.size > 0 ? "篩選後時數" : "總參與時數"}</th>
                                         <th className="p-3 text-center">狀態</th>
                                         <th className="p-3">
-                                           <button onClick={() => exportToCSV(filteredStudentList.map(s => ({ Class: s.classCode, ClassNo: s.classNo, Name: s.chiName, Hours: (selectedActs.size > 0 ? s.filteredHours : s.hours).toFixed(1) })), 'Student_Participation_Report')} className="text-xs bg-white border px-2 py-1.5 rounded hover:bg-slate-50 flex items-center text-blue-600 border-blue-200 ml-auto whitespace-nowrap shadow-sm">
+                                           <button onClick={() => exportToCSV(filteredStudentList.map(s => ({ Class: s.classCode, ClassNo: s.classNo, Name: s.chiName, Hours: (showNoRecords ? 0 : (selectedActs.size > 0 ? s.filteredHours : s.hours)).toFixed(1) })), 'Student_Participation_Report')} className="text-xs bg-white border px-2 py-1.5 rounded hover:bg-slate-50 flex items-center text-blue-600 border-blue-200 ml-auto whitespace-nowrap shadow-sm">
                                                 <Download size={14} className="mr-1"/> 匯出名單
                                            </button>
                                         </th>
@@ -686,9 +722,9 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                                 </thead>
                                 <tbody className="divide-y">
                                     {filteredStudentList.map((s, i) => {
-                                        const displayHours = selectedActs.size > 0 ? (s.filteredHours || 0) : s.hours;
+                                        const displayHours = showNoRecords ? 0 : (selectedActs.size > 0 ? (s.filteredHours || 0) : s.hours);
                                         return (
-                                            <tr key={i} className={`hover:bg-slate-50 transition-colors ${displayHours === 0 ? 'bg-red-50/50' : ''}`}>
+                                            <tr key={s.key || i} className={`hover:bg-slate-50 transition-colors ${displayHours === 0 ? 'bg-red-50/50' : ''}`}>
                                                 <td className="p-3 text-slate-600">{s.classCode} ({s.classNo})</td>
                                                 <td className="p-3 font-bold">{s.chiName}</td>
                                                 <td className={`p-3 text-right font-bold ${selectedActs.size > 0 ? 'text-blue-700' : ''}`}>{displayHours.toFixed(1)}</td>
@@ -702,6 +738,7 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                         </div>
                     </div>
                 )}
+
             </div>
         </div>
     );
@@ -1582,7 +1619,7 @@ const handleAttendanceChangeDirectly = async (id, newStatus, targetDate) => {
                 </div>
 
                 <div className="mt-4 text-center text-xs text-slate-400 font-mono tracking-wider">
-                    version 5.37
+                    version 5.38
                 </div>
             </div>
         </div>
