@@ -271,65 +271,112 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
         } 
     };
 
-    const { activityStats, gradeDistribution, categoryStats, studentStats, totalHours } = useMemo(() => {
+        // =========================================================================
+    //  V5.41 核心升級：修復學生總數為 0，確保 masterList 完美載入
+    // =========================================================================
+    const {
+        activityStats,
+        gradeDistribution,
+        categoryStats,
+        studentStats, // 這裡會輸出完整的全校學生名單 (包含時數)
+        totalHours,
+        allCategoryStats
+    } = useMemo(() => {
         try {
-            if (!masterList || masterList.length === 0 || !activities) {
-                return { activityStats: [], gradeDistribution: [], categoryStats: [], studentStats: [], totalHours: 0 };
+            // 💡 安全防護：如果沒有學生名單，直接返回空值
+            if (!masterList || masterList.length === 0) {
+                return { activityStats: [], gradeDistribution: [], categoryStats: [], studentStats: [], totalHours: 0, allCategoryStats: [] };
             }
-            const actStats = {};
-            const stuStats = {};
-            const catStats = {};
-            const gradeMap = { '1': { totalHours: 0, byActivity: {} }, '2': { totalHours: 0, byActivity: {} }, '3': { totalHours: 0, byActivity: {} }, '4': { totalHours: 0, byActivity: {} }, '5': { totalHours: 0, byActivity: {} }, '6': { totalHours: 0, byActivity: {} } };
 
+            // 1. 初始化全校學生統計物件 (非常重要！確保所有學生都在名單內)
+            const stuStats = {};
             masterList.forEach(s => {
-                if (s && s.key) stuStats[s.key] = { ...s, count: 0, hours: 0, acts: [] };
+                if (s && s.key) {
+                    stuStats[s.key] = { ...s, count: 0, hours: 0, acts: [] };
+                }
             });
 
-            activities.forEach(item => {
+            // 2. 初始化其他統計物件
+            const actStats = {};
+            const catStats = {};
+            const gradeMap = { '1': {}, '2': {}, '3': {}, '4': {}, '5': {}, '6': {} };
+            Object.keys(gradeMap).forEach(g => gradeMap[g] = { totalHours: 0, byActivity: {} });
+
+            // 3. 全局範疇統計 (用於過濾器圖例)
+            const initialCatStats = {};
+
+            let totalH = 0;
+
+            // 4. 迴圈處理所有活動，並將數據累加到上述物件中
+            (activities || []).forEach(item => {
                 const dur = calculateDuration(item.time);
-                const sessionCount = (item.specificDates && item.specificDates.length > 0) ? item.specificDates.length : 1;
+                // 判斷次數 (相容 specificDates 和 dayIds)
+                const sessionCount = (Array.isArray(item.specificDates) && item.specificDates.length > 0) 
+                    ? item.specificDates.length 
+                    : (Array.isArray(item.dayIds) ? item.dayIds.length : 1);
+                
                 const totalItemHours = dur * sessionCount;
+                totalH += totalItemHours;
+
                 const actName = item.activity || "Unknown";
                 const category = item.manualCategory || detectCategory(actName);
 
+                // --- 累加全局範疇 ---
+                if (!initialCatStats[category]) initialCatStats[category] = 0;
+                initialCatStats[category] += totalItemHours;
+
+                // --- 累加活動統計 ---
                 if (!actStats[actName]) actStats[actName] = { name: actName, count: 0, hours: 0, category };
                 actStats[actName].count += sessionCount;
                 actStats[actName].hours += totalItemHours;
-                actStats[actName].category = category;
 
-                if (!catStats[category]) catStats[category] = 0;
-                catStats[category] += totalItemHours;
+                // --- 累加當前範疇統計 (如果目前沒有啟用範疇過濾，或者該活動符合過濾條件) ---
+                if (selectedCategories.size === 0 || selectedCategories.has(category)) {
+                    if (!catStats[category]) catStats[category] = 0;
+                    catStats[category] += totalItemHours;
 
-                const sKey = `${item.verifiedClass}-${item.verifiedName}`;
-                if (stuStats[sKey]) {
-                    stuStats[sKey].count += sessionCount;
-                    stuStats[sKey].hours += totalItemHours;
-                    if (!stuStats[sKey].acts.includes(actName)) stuStats[sKey].acts.push(actName);
-                    if (!stuStats[sKey].sex && item.sex) stuStats[sKey].sex = item.sex;
-                }
-
-                const gradeStr = String(item.verifiedClass || '');
-                if (gradeStr.length >= 2) {
-                    const grade = gradeStr.charAt(0);
-                    if (gradeMap[grade]) {
-                        gradeMap[grade].totalHours += totalItemHours;
-                        if (!gradeMap[grade].byActivity[actName]) gradeMap[grade].byActivity[actName] = 0;
-                        gradeMap[grade].byActivity[actName] += totalItemHours;
+                    // --- 累加學生時數 ---
+                    const sKey = `${item.verifiedClass}-${item.verifiedName}`;
+                    if (stuStats[sKey]) {
+                        stuStats[sKey].count += sessionCount;
+                        stuStats[sKey].hours += totalItemHours;
+                        if (!stuStats[sKey].acts.includes(actName)) stuStats[sKey].acts.push(actName);
+                        if (!stuStats[sKey].sex && item.sex) stuStats[sKey].sex = item.sex;
+                    }
+                    
+                    // --- 累加年級分佈 ---
+                    const gradeStr = String(item.verifiedClass || '');
+                    if (gradeStr.length >= 2) {
+                        const grade = gradeStr.charAt(0);
+                        if (gradeMap[grade]) {
+                            gradeMap[grade].totalHours += totalItemHours;
+                            if (!gradeMap[grade].byActivity[actName]) gradeMap[grade].byActivity[actName] = 0;
+                            gradeMap[grade].byActivity[actName] += totalItemHours;
+                        }
                     }
                 }
             });
-            
+
+            // 5. 格式化最終輸出
             const gradeArr = Object.keys(gradeMap).map(g => ({ grade: `P.${g}`, total: gradeMap[g].totalHours, details: gradeMap[g].byActivity }));
             const finalActStats = Object.values(actStats).sort((a, b) => b.hours - a.hours);
-            const totalH = finalActStats.reduce((acc, cur) => acc + cur.hours, 0);
             const finalCatStats = Object.entries(catStats).map(([name, hours]) => ({ name, hours })).sort((a, b) => b.hours - a.hours);
+            const allCatArr = Object.entries(initialCatStats).map(([name, hours]) => ({ name, hours })).sort((a, b) => b.hours - a.hours);
             
-            return { activityStats: finalActStats, gradeDistribution: gradeArr, categoryStats: finalCatStats, studentStats: Object.values(stuStats).sort((a,b) => b.hours - b.hours), totalHours: totalH };
+            return {
+                activityStats: finalActStats,
+                gradeDistribution: gradeArr,
+                categoryStats: finalCatStats,
+                studentStats: Object.values(stuStats), // 💡 這裡保證回傳完整的學生陣列！
+                totalHours: totalH,
+                allCategoryStats: allCatArr
+            };
         } catch (e) {
             console.error("Data Calculation Error:", e);
-            return { activityStats: [], gradeDistribution: [], categoryStats: [], studentStats: [], totalHours: 0 };
+            return { activityStats: [], gradeDistribution: [], categoryStats: [], studentStats: [], totalHours: 0, allCategoryStats: [] };
         }
-    }, [masterList, activities]);
+    }, [masterList, activities, selectedCategories]); 
+
 
     const filteredActivityList = useMemo(() => { 
         if (selectedActs.size === 0) return activityStats; 
@@ -379,35 +426,48 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
         // =========================================================================
     //  V5.40 學生列表升級：兼容「活動篩選」與「顯示零記錄」模式
     // =========================================================================
-    const filteredStudentList = useMemo(() => {
-        // 模式一：如果開啟「只顯示無記錄學生」
-        if (showNoRecords) {
-            // 從完整的 studentStats 中，精準找出 hours 為 0 的學生
-            return studentStats.filter(s => s.hours === 0);
-        }
-
-        // 模式二：常規篩選，根據「已選活動」過濾
-        if (selectedActs.size === 0) {
-            // 如果沒有篩選任何活動，則只顯示有參與過活動的學生
-            return studentStats.filter(s => s.hours > 0);
-        }
-        
-        // 如果有篩選活動，則計算篩選後的時數
-        const studentDataWithFilteredHours = studentStats.map(student => {
-            const relevantActsForStudent = activities.filter(act => 
-                selectedActs.has(act.activity) &&
-                act.verifiedClass === student.classCode && 
-                act.verifiedName === student.chiName
-            );
+        // 根據篩選條件衍生的數據
+        const filteredStudentList = useMemo(() => {
+            // 💡 模式一：只顯示無記錄學生 (hours 為 0)
+            if (showNoRecords) {
+                return studentStats
+                    .filter(s => s.hours === 0)
+                    .map(s => ({ ...s, filteredHours: 0 })); // 確保有 filteredHours 屬性供 UI 渲染
+            }
+    
+            // 💡 模式二：常規篩選 (依照選擇的活動來過濾時數)
+            if (selectedActs.size === 0) {
+                // 如果沒有選擇任何活動，就直接顯示所有有時數的學生
+                return studentStats
+                    .filter(s => s.hours > 0)
+                    .sort((a, b) => b.hours - a.hours);
+            }
+    
+            // 如果有選擇特定活動，則重新計算該學生在「選定活動」中的總時數
+            const listWithHours = studentStats.map(student => {
+                const relevantActsForStudent = activities.filter(act => 
+                    selectedActs.has(act.activity) &&
+                    act.verifiedClass === student.classCode && 
+                    act.verifiedName === student.chiName
+                );
+                
+                const filteredHours = relevantActsForStudent.reduce((acc, act) => {
+                    const dur = calculateDuration(act.time);
+                    const sessionCount = (Array.isArray(act.specificDates) && act.specificDates.length > 0) 
+                        ? act.specificDates.length : 1;
+                    return acc + (dur * sessionCount);
+                }, 0);
+                
+                return { ...student, filteredHours };
+            });
             
-            const filteredHours = relevantActsForStudent.reduce((acc, act) => {
-                const dur = calculateDuration(act.time);
-                const sessionCount = (Array.isArray(act.specificDates) && act.specificDates.length > 0) ? act.specificDates.length : 1;
-                return acc + (dur * sessionCount);
-            }, 0);
-            
-            return { ...student, filteredHours };
-        });
+            // 排除時數為 0 的學生，並由大到小排序
+            return listWithHours
+                .filter(s => s.filteredHours > 0)
+                .sort((a, b) => b.filteredHours - a.filteredHours);
+    
+        }, [studentStats, activities, selectedActs, showNoRecords]);
+    
         
         // 只返回在當前活動篩選下，時數大於 0 的學生
         return studentDataWithFilteredHours.filter(s => s.filteredHours > 0);
