@@ -463,7 +463,7 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
         // 只返回在當前活動篩選下，時數大於 0 的學生
         return studentDataWithFilteredHours.filter(s => s.filteredHours > 0);
 
-    }, [studentStats, activities, selectedActs, showNoRecords]; // <-- 注意依賴項的變化
+    }, [studentStats, activities, selectedActs, showNoRecords]); // <-- 注意依賴項的變化
 
 
     const exportGradeStats = () => { 
@@ -793,7 +793,7 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
             </div>
         </div>
     );
-;
+};
 
 // =============================================================================
 //  V5.35 終極修正：定義並實作絕對安全的 RealTimeAttendanceCell 元件
