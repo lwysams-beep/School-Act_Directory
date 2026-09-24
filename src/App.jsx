@@ -1,5 +1,5 @@
 // =============================================================================
-//  校園資訊 APP - version 5.38 (放學方式修復 + 教職員介面優化版)
+//  校園資訊 APP - version 5.39 (放學方式修復 + 教職員介面優化版)
 // =============================================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
@@ -1627,7 +1627,7 @@ const handleAttendanceChangeDirectly = async (id, newStatus, targetDate) => {
                 </div>
 
                 <div className="mt-4 text-center text-xs text-slate-400 font-mono tracking-wider">
-                    version 5.38
+                    version 5.39
                 </div>
             </div>
         </div>
