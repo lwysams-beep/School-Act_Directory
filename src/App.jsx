@@ -424,55 +424,46 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
     }, [categoryStats, totalHours]);
     
         // =========================================================================
-    //  V5.40 學生列表升級：兼容「活動篩選」與「顯示零記錄」模式
+    //  V5.42 語法修正版：學生列表過濾器
     // =========================================================================
-        // 根據篩選條件衍生的數據
-        const filteredStudentList = useMemo(() => {
-            // 💡 模式一：只顯示無記錄學生 (hours 為 0)
-            if (showNoRecords) {
-                return studentStats
-                    .filter(s => s.hours === 0)
-                    .map(s => ({ ...s, filteredHours: 0 })); // 確保有 filteredHours 屬性供 UI 渲染
-            }
-    
-            // 💡 模式二：常規篩選 (依照選擇的活動來過濾時數)
-            if (selectedActs.size === 0) {
-                // 如果沒有選擇任何活動，就直接顯示所有有時數的學生
-                return studentStats
-                    .filter(s => s.hours > 0)
-                    .sort((a, b) => b.hours - a.hours);
-            }
-    
-            // 如果有選擇特定活動，則重新計算該學生在「選定活動」中的總時數
-            const listWithHours = studentStats.map(student => {
-                const relevantActsForStudent = activities.filter(act => 
-                    selectedActs.has(act.activity) &&
-                    act.verifiedClass === student.classCode && 
-                    act.verifiedName === student.chiName
-                );
-                
-                const filteredHours = relevantActsForStudent.reduce((acc, act) => {
-                    const dur = calculateDuration(act.time);
-                    const sessionCount = (Array.isArray(act.specificDates) && act.specificDates.length > 0) 
-                        ? act.specificDates.length : 1;
-                    return acc + (dur * sessionCount);
-                }, 0);
-                
-                return { ...student, filteredHours };
-            });
+    const filteredStudentList = useMemo(() => {
+        // 模式一：如果開啟「只顯示無記錄學生」
+        if (showNoRecords) {
+            return studentStats.filter(s => s.hours === 0);
+        }
+
+        // 模式二：常規篩選
+        if (selectedActs.size === 0) {
+            return studentStats.filter(s => s.hours > 0).sort((a, b) => b.hours - a.hours);
+        }
+        
+        // 如果有篩選活動，則計算篩選後的時數
+        const studentDataWithFilteredHours = studentStats.map(student => {
+            const relevantActsForStudent = activities.filter(act => 
+                selectedActs.has(act.activity) &&
+                act.verifiedClass === student.classCode && 
+                act.verifiedName === student.chiName
+            );
             
-            // 排除時數為 0 的學生，並由大到小排序
-            return listWithHours
-                .filter(s => s.filteredHours > 0)
-                .sort((a, b) => b.filteredHours - a.filteredHours);
-    
-        }, [studentStats, activities, selectedActs, showNoRecords]);
+            const filteredHours = relevantActsForStudent.reduce((acc, act) => {
+                const dur = calculateDuration(act.time);
+                const sessionCount = (Array.isArray(act.specificDates) && act.specificDates.length > 0) ? act.specificDates.length : 1;
+                return acc + (dur * sessionCount);
+            }, 0);
+            
+            return { ...student, filteredHours };
+        });
+        
+        return studentDataWithFilteredHours.filter(s => s.filteredHours > 0).sort((a, b) => b.filteredHours - a.filteredHours);
+
+    }, [studentStats, activities, selectedActs, showNoRecords]);
+
     
         
         // 只返回在當前活動篩選下，時數大於 0 的學生
         return studentDataWithFilteredHours.filter(s => s.filteredHours > 0);
 
-    }, [studentStats, activities, selectedActs, showNoRecords]; // <-- 注意依賴項的變化
+    }, [studentStats, activities, selectedActs, showNoRecords],; // <-- 注意依賴項的變化
 
 
     const exportGradeStats = () => { 
@@ -802,7 +793,7 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
             </div>
         </div>
     );
-
+;
 
 // =============================================================================
 //  V5.35 終極修正：定義並實作絕對安全的 RealTimeAttendanceCell 元件
