@@ -1,5 +1,5 @@
 // =============================================================================
-//  校園資訊 APP - version 5.40 (放學方式修復 + 教職員介面優化版)
+//  校園資訊 APP - version 5.41 (放學方式修復 + 教職員介面優化版)
 // =============================================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
@@ -226,17 +226,12 @@ const CATEGORY_COLORS = {
     '其他 (Others)': '#94a3b8'
 };
 
-// -----------------------------------------------------------------------------
-// 3. STATS VIEW COMPONENT
-// -----------------------------------------------------------------------------
-// =============================================================================
-// 3. STATS VIEW COMPONENT (V5.22 - 完整修復與功能增強版)
-// =============================================================================
-// =============================================================================
-// 3. STATS VIEW COMPONENT (V5.38 - 學生總數與名單自動動態修復版)
-// =============================================================================
+
 // =============================================================================
 // 3. STATS VIEW COMPONENT (V5.40 - 全校學生名單與 0 時數篩選修復版)
+// =============================================================================
+// =============================================================================
+// 3. STATS VIEW COMPONENT (V5.50 - 三圖表全同步連動版)
 // =============================================================================
 const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
     const [filterPanelOpen, setFilterPanelOpen] = useState(true);
@@ -244,7 +239,7 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
     const [selectedActs, setSelectedActs] = useState(new Set());
     const [updatingCategory, setUpdatingCategory] = useState(false);
 
-    // 新增：學生時數篩選模式 ('all': 全部, 'hasHours': 僅有時數, 'zeroHours': 僅0時數)
+    // 學生時數篩選模式 ('all': 全部, 'hasHours': 僅有時數, 'zeroHours': 僅0時數)
     const [zeroHourFilter, setZeroHourFilter] = useState('all');
 
     const toggleSelection = (actName) => { 
@@ -277,7 +272,7 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
         } 
     };
 
-    // 核心數據計算模組（確保 0 時數學生與全校名單正確導入）
+    // 基礎數據計算模組
     const { activityStats, gradeDistribution, categoryStats, studentStats, totalHours } = useMemo(() => {
         try {
             const actStats = {};
@@ -292,7 +287,7 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                 '6': { totalHours: 0, byActivity: {} } 
             };
 
-            // 1. 強制將 Master List (全校名單) 寫入統計，預設時數為 0
+            // 1. 強制將 Master List (全校名單) 寫入統計
             if (masterList && Array.isArray(masterList) && masterList.length > 0) {
                 masterList.forEach(s => {
                     if (s) {
@@ -312,7 +307,7 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                 });
             }
 
-            // 2. 遍歷活動紀錄，累加時數（若學生不在 Master List 中，則動態建立）
+            // 2. 遍歷活動紀錄，累加時數
             if (activities && Array.isArray(activities)) {
                 activities.forEach(item => {
                     const dur = calculateDuration(item.time);
@@ -389,6 +384,7 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
     const zeroHourStudentCount = totalStudentCount - activeStudentCount;
     const participationRate = totalStudentCount > 0 ? ((activeStudentCount / totalStudentCount) * 100).toFixed(1) : '0.0';
 
+    // 【連動項目 1】：圖表 1 的篩選後活動列表與總時數
     const filteredActivityList = useMemo(() => { 
         if (selectedActs.size === 0) return activityStats; 
         return activityStats.filter(a => selectedActs.has(a.name)); 
@@ -402,9 +398,28 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
         const filteredTotal = filteredList.reduce((acc, cur) => acc + cur.hours, 0);
         return { list: filteredList, total: filteredTotal };
     }, [activityStats, selectedActs, totalHours]);
+
+    // 【連動項目 2】：圖表 2 (課程範疇分佈) 動態計算連動
+    const filteredCategoryStats = useMemo(() => {
+        const catMap = {};
+        const activeActs = selectedActs.size === 0 
+            ? activityStats 
+            : activityStats.filter(a => selectedActs.has(a.name));
+
+        activeActs.forEach(act => {
+            const cat = act.category || '未分類';
+            if (!catMap[cat]) catMap[cat] = 0;
+            catMap[cat] += act.hours;
+        });
+
+        return Object.entries(catMap)
+            .map(([name, hours]) => ({ name, hours }))
+            .sort((a, b) => b.hours - a.hours);
+    }, [activityStats, selectedActs]);
     
     const getSafeColor = (idx) => CHART_COLORS[idx % CHART_COLORS.length] || '#cbd5e1';
 
+    // 圖表 1 圓形圖漸層
     const ghostPieGradient = useMemo(() => {
         const { list, total } = filteredChartData;
         if (total === 0 || list.length === 0) return '#e2e8f0 0deg 360deg';
@@ -420,23 +435,24 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
         }).join(', ');
     }, [filteredChartData, activityStats]);
 
+    // 圖表 2 (課程範疇) 圓形圖漸層 (使用連動後的 filteredCategoryStats)
     const categoryPieGradient = useMemo(() => { 
-        if (totalHours === 0) return '#e2e8f0 0deg 360deg'; 
+        const total = filteredChartData.total;
+        if (total === 0 || filteredCategoryStats.length === 0) return '#e2e8f0 0deg 360deg'; 
         let currentDeg = 0; 
-        return categoryStats.map((item) => { 
-            const deg = (item.hours / (totalHours || 1)) * 360; 
+        return filteredCategoryStats.map((item) => { 
+            const deg = (item.hours / (total || 1)) * 360; 
             const color = CATEGORY_COLORS[item.name] || '#94a3b8'; 
             const str = `${color} ${currentDeg}deg ${currentDeg + deg}deg`; 
             currentDeg += deg; 
             return str; 
         }).join(', '); 
-    }, [categoryStats, totalHours]);
+    }, [filteredCategoryStats, filteredChartData.total]);
     
-    // 學生清單計算（整合活動條件與 0 時數篩選）
+    // 學生監測動態名單計算
     const filteredStudentList = useMemo(() => {
         let list = studentStats;
 
-        // 若選擇了特定活動，重新計算該些活動下的 filteredHours
         if (selectedActs.size > 0) {
             const selectedActivityNames = new Set(Array.from(selectedActs));
             list = studentStats.map(student => {
@@ -455,18 +471,15 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                 return { ...student, filteredHours };
             });
         } else {
-            // 未選擇活動時，filteredHours 即為總時數
             list = studentStats.map(student => ({ ...student, filteredHours: student.hours }));
         }
 
-        // 依據 zeroHourFilter 進行 0 時數過濾
         if (zeroHourFilter === 'hasHours') {
             return list.filter(s => s.filteredHours > 0);
         } else if (zeroHourFilter === 'zeroHours') {
             return list.filter(s => s.filteredHours === 0);
         }
         
-        // 'all': 回傳全校名單（含 0 時數）
         return list;
     }, [studentStats, activities, selectedActs, zeroHourFilter]);
 
@@ -483,7 +496,8 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
         exportToCSV(rows, 'Grade_Activity_Distribution'); 
     };
 
-    const exportCategoryStats = () => exportToCSV(categoryStats, 'Category_Distribution_Report');
+    // 匯出篩選後的類別統計
+    const exportCategoryStats = () => exportToCSV(filteredCategoryStats, 'Category_Distribution_Report');
     const maxGradeHours = useMemo(() => Math.max(...gradeDistribution.map(g => g.total)) || 1, [gradeDistribution]);
     const getActColorIndex = (name) => {
         const idx = activityStats.findIndex(x => x.name === name);
@@ -508,7 +522,7 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
 
             {selectedActs.size > 0 && (
                 <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex justify-between items-center animate-in slide-in-from-top-2">
-                    <div className="text-sm text-blue-800"><span className="font-bold flex items-center"><Filter size={16} className="mr-1"/> 關注模式: </span>{Array.from(selectedActs).join(', ')}</div>
+                    <div className="text-sm text-blue-800"><span className="font-bold flex items-center"><Filter size={16} className="mr-1"/> 關注模式 (已套用至下方所有圖表): </span>{Array.from(selectedActs).join(', ')}</div>
                     <button onClick={clearSelection} className="text-xs bg-white text-slate-500 border px-2 py-1 rounded hover:bg-red-50 hover:text-red-500 transition">清除篩選 (顯示全校)</button>
                 </div>
             )}
@@ -517,6 +531,7 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                 {/* 1. 數據概覽分頁 */}
                 {statsViewMode === 'dashboard' && (
                     <div className="flex flex-col space-y-12 pb-12">
+                        {/* 【圖表 1】：活動總時數分佈 */}
                         <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col md:flex-row items-center md:items-start relative min-h-[400px]">
                             <div className="absolute top-4 left-4 z-20">
                                 <button onClick={() => exportToCSV(filteredActivityList, 'Activity_Hours_Report')} className="text-xs bg-indigo-600 text-white border px-3 py-1.5 rounded flex items-center hover:bg-indigo-700 shadow-md transition">
@@ -524,7 +539,7 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                                 </button>
                             </div>
                             <div className="flex-1 flex flex-col items-center justify-center p-4 pt-10">
-                                <h3 className="font-bold text-slate-700 mb-6 flex items-center text-lg"><Clock className="mr-2 text-orange-500"/> 活動總時數分佈 (可篩選)</h3>
+                                <h3 className="font-bold text-slate-700 mb-6 flex items-center text-lg"><Clock className="mr-2 text-orange-500"/> 活動總時數分佈 (主要控制篩選器)</h3>
                                 <div className="relative w-72 h-72 rounded-full shadow-2xl border-4 border-white transition-all duration-500" style={{ background: `conic-gradient(${ghostPieGradient})` }}>
                                     <div className="absolute inset-0 m-auto w-40 h-40 bg-slate-50 rounded-full flex flex-col items-center justify-center shadow-inner">
                                         <div className="text-xs text-slate-400 mb-1">{selectedActs.size > 0 ? "篩選後總時數" : "全校總學時"}</div>
@@ -534,7 +549,7 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                                         <span className="text-xs text-slate-400">Hours</span>
                                     </div>
                                 </div>
-                                <p className="text-xs text-slate-400 mt-4">點擊右側圖例進行篩選</p>
+                                <p className="text-xs text-slate-400 mt-4">點擊右側圖例勾選活動，即可同步切換全頁圖表數據</p>
                             </div>
                             <div className="w-full md:w-80 h-96 border-l border-slate-200 pl-0 md:pl-6 overflow-y-auto">
                                 <h4 className="text-xs font-bold text-slate-400 uppercase mb-3 sticky top-0 bg-slate-50 py-2 z-10 flex justify-between items-center">
@@ -576,6 +591,7 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                             </div>
                         </div>
 
+                        {/* 【圖表 2】：課程範疇分佈 (同步連動修復) */}
                         <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col md:flex-row items-center md:items-start relative min-h-[300px]">
                             <div className="absolute top-4 left-4 z-20">
                                 <button onClick={exportCategoryStats} className="text-xs bg-indigo-600 text-white border px-3 py-1.5 rounded flex items-center hover:bg-indigo-700 shadow-md transition">
@@ -583,30 +599,43 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                                 </button>
                             </div>
                             <div className="flex-1 flex flex-col items-center justify-center p-4 pt-10">
-                                <h3 className="font-bold text-slate-700 mb-6 flex items-center text-lg"><Palette className="mr-2 text-purple-500"/> 課程範疇分佈 (全校)</h3>
-                                <div className="relative w-64 h-64 rounded-full shadow-xl border-4 border-white" style={{ background: `conic-gradient(${categoryPieGradient})` }}>
+                                <h3 className="font-bold text-slate-700 mb-6 flex items-center text-lg">
+                                    <Palette className="mr-2 text-purple-500"/> 課程範疇分佈 {selectedActs.size > 0 ? "(已同步篩選)" : "(全校)"}
+                                </h3>
+                                <div className="relative w-64 h-64 rounded-full shadow-xl border-4 border-white transition-all duration-500" style={{ background: `conic-gradient(${categoryPieGradient})` }}>
                                     <div className="absolute inset-0 m-auto w-32 h-32 bg-slate-50 rounded-full flex flex-col items-center justify-center shadow-inner">
-                                        <span className="text-lg font-bold text-slate-600">分類統計</span>
+                                        <div className="text-xs text-slate-400 mb-0.5">類別總學時</div>
+                                        <div className="text-xl font-bold text-slate-700">{filteredChartData.total.toFixed(0)}h</div>
                                     </div>
                                 </div>
-                                <p className="text-xs text-slate-400 mt-4">前往「活動列表」即可手動更改分類</p>
+                                <p className="text-xs text-slate-400 mt-4">已根據圖表 1 選擇之活動即時重新計算範疇比例</p>
                             </div>
                             <div className="w-full md:w-64 p-4">
-                                <h4 className="text-xs font-bold text-slate-400 uppercase mb-3">類別圖例</h4>
+                                <h4 className="text-xs font-bold text-slate-400 uppercase mb-3">類別圖例 (動態時數)</h4>
                                 <div className="space-y-2">
-                                    {categoryStats.map((cat, i) => (
-                                        <div key={i} className="flex items-center justify-between p-2 bg-white rounded shadow-sm">
-                                            <div className="flex items-center">
-                                                <span className="w-3 h-3 rounded-full mr-2" style={{backgroundColor: CATEGORY_COLORS[cat.name] || '#94a3b8'}}></span>
-                                                <span className="text-xs font-bold">{cat.name}</span>
+                                    {filteredCategoryStats.map((cat, i) => {
+                                        const catPercentage = (cat.hours / (filteredChartData.total || 1)) * 100;
+                                        return (
+                                            <div key={i} className="flex items-center justify-between p-2 bg-white rounded shadow-sm border border-slate-100">
+                                                <div className="flex items-center truncate mr-2">
+                                                    <span className="w-3 h-3 rounded-full mr-2 flex-shrink-0" style={{backgroundColor: CATEGORY_COLORS[cat.name] || '#94a3b8'}}></span>
+                                                    <span className="text-xs font-bold truncate">{cat.name}</span>
+                                                </div>
+                                                <div className="text-right flex-shrink-0">
+                                                    <div className="text-xs font-mono font-bold text-slate-700">{catPercentage.toFixed(1)}%</div>
+                                                    <div className="text-[10px] text-slate-400">{cat.hours.toFixed(1)}h</div>
+                                                </div>
                                             </div>
-                                            <div className="text-xs font-mono">{((cat.hours/(totalHours||1))*100).toFixed(1)}%</div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
+                                    {filteredCategoryStats.length === 0 && (
+                                        <div className="text-xs text-slate-400 text-center py-4">無對應類別數據</div>
+                                    )}
                                 </div>
                             </div>
                         </div>
 
+                        {/* 【圖表 3】：各級總時數分佈 (同步連動修復) */}
                         <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 relative flex flex-col h-[600px]">
                             <div className="flex flex-col md:flex-row justify-between items-start mb-6">
                                 <div className="flex items-center space-x-4 mb-2 md:mb-0">
@@ -615,8 +644,10 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                                     </button>
                                 </div>
                                 <div className="text-right">
-                                    <h3 className="font-bold text-slate-700 text-lg flex items-center justify-end"><TrendingUp className="mr-2 text-green-500"/> 各級總時數分佈</h3>
-                                    <p className="text-xs text-slate-500 mt-1">{selectedActs.size > 0 ? '灰色: 該級總時數 | 彩色: 所選活動佔比' : '顯示全校所有活動堆疊'}</p>
+                                    <h3 className="font-bold text-slate-700 text-lg flex items-center justify-end">
+                                        <TrendingUp className="mr-2 text-green-500"/> 各級總時數分佈 {selectedActs.size > 0 ? "(已同步篩選)" : "(全校)"}
+                                    </h3>
+                                    <p className="text-xs text-slate-500 mt-1">{selectedActs.size > 0 ? '灰色背景: 該級全校總時數 | 彩色柱體: 所選活動佔比' : '顯示全校所有活動堆疊分佈'}</p>
                                 </div>
                             </div>
                             <div className="flex-1 flex items-end justify-between space-x-8 border-b-2 border-slate-300 pb-0 px-4 mx-4 relative">
@@ -629,22 +660,31 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                                     const activeHeightPct = (selectedTotalHours / (maxScale || 1)) * 100;
                                     return (
                                         <div key={g.grade} className="flex flex-col items-center flex-1 h-full relative group">
-                                            {selectedActs.size > 0 && (<div className="w-full absolute bottom-0 bg-slate-200 rounded-t-sm transition-all duration-700 pointer-events-none" style={{height: `${ghostHeightPct}%`}}/>)}
+                                            {/* 灰色底圖 (呈現全級比例對照) */}
+                                            {selectedActs.size > 0 && (<div className="w-full absolute bottom-0 bg-slate-200/70 rounded-t-sm transition-all duration-700 pointer-events-none" style={{height: `${ghostHeightPct}%`}}/>)}
+                                            
+                                            {/* 彩色動態堆疊柱體 */}
                                             <div className={`w-full absolute bottom-0 flex flex-col-reverse rounded-t-sm overflow-hidden transition-all duration-700 ${selectedActs.size > 0 ? 'w-4/5 z-10 shadow-lg left-1/2 -translate-x-1/2' : 'bg-slate-200'}`} style={{height: `${activeHeightPct}%`}}>
                                                 {activeItems.map(([actName, hrs]) => {
                                                     const colorIdx = getActColorIndex(actName);
                                                     const color = getSafeColor(colorIdx);
                                                     const pctOfStack = (hrs / (selectedTotalHours || 1)) * 100;
-                                                    return (<div key={actName} className="w-full relative" style={{height: `${pctOfStack}%`, backgroundColor: color}} />);
+                                                    return (<div key={actName} className="w-full relative transition-all duration-300" style={{height: `${pctOfStack}%`, backgroundColor: color}} />);
                                                 })}
                                             </div>
+                                            
+                                            {/* 柱體上方數值標籤 */}
                                             <div className="absolute w-full text-center -top-6 transition-all duration-500" style={{bottom: `${Math.max(ghostHeightPct, activeHeightPct) + 2}%`}}>
-                                                <span className="text-xs font-bold text-slate-600 bg-white/80 px-1 rounded">{selectedActs.size > 0 ? selectedTotalHours.toFixed(0) : g.total.toFixed(0)}h</span>
+                                                <span className="text-xs font-bold text-slate-700 bg-white/90 px-1.5 py-0.5 rounded shadow-sm border border-slate-100">
+                                                    {selectedActs.size > 0 ? selectedTotalHours.toFixed(0) : g.total.toFixed(0)}h
+                                                </span>
                                             </div>
+
+                                            {/* Hover 提示視窗 */}
                                             <div className="hidden group-hover:block absolute bottom-1/2 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-xs p-3 rounded-lg shadow-xl z-50 w-48 pointer-events-none">
                                                 <div className="font-bold border-b border-slate-600 pb-1 mb-1">{g.grade} 統計詳情</div>
-                                                <div className="flex justify-between mb-1"><span>全級總時數:</span> <span className="font-mono">{g.total.toFixed(1)}h</span></div>
-                                                {selectedActs.size > 0 && (<div className="flex justify-between text-yellow-400"><span>所選活動:</span> <span className="font-mono">{selectedTotalHours.toFixed(1)}h</span></div>)}
+                                                <div className="flex justify-between mb-1 text-slate-300"><span>全級總學時:</span> <span className="font-mono">{g.total.toFixed(1)}h</span></div>
+                                                {selectedActs.size > 0 && (<div className="flex justify-between text-yellow-400 font-bold"><span>所選活動學時:</span> <span className="font-mono">{selectedTotalHours.toFixed(1)}h</span></div>)}
                                             </div>
                                             <div className="absolute -bottom-8 w-full text-center"><div className="text-sm font-bold text-slate-700">{g.grade}</div></div>
                                         </div>
@@ -714,10 +754,9 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                     </div>
                 )}
                 
-                {/* 4. 學生監測分頁 (包含概覽卡片 + 0 時數切換控制) */}
+                {/* 4. 學生監測分頁 */}
                 {statsViewMode === 'students' && (
                     <div className="space-y-6">
-                        {/* 頂部數據概覽卡片區塊 */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                             <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl flex items-center justify-between">
                                 <div>
@@ -749,7 +788,6 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                             </div>
                         </div>
 
-                        {/* 學生監測主要表格與控制模組 */}
                         <div className="bg-white border rounded-xl overflow-hidden shadow-sm">
                             <div className="p-4 bg-slate-50 border-b space-y-3">
                                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -757,7 +795,6 @@ const StatsView = ({ masterList, activities, queryLogs, onBack }) => {
                                         <AlertTriangle className="mr-2 text-orange-500" size={18}/> 學生參與度監測 (顯示 {filteredStudentList.length} 人)
                                     </h3>
                                     
-                                    {/* 0 時數學生篩選開關 */}
                                     <div className="flex items-center bg-white border rounded-lg p-1 space-x-1 self-start md:self-auto">
                                         <button 
                                             onClick={() => setZeroHourFilter('all')} 
@@ -1760,7 +1797,7 @@ const handleAttendanceChangeDirectly = async (id, newStatus, targetDate) => {
                 </div>
 
                 <div className="mt-4 text-center text-xs text-slate-400 font-mono tracking-wider">
-                    version 5.40
+                    version 5.41
                 </div>
             </div>
         </div>
